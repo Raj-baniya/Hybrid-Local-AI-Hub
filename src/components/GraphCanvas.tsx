@@ -1,4 +1,4 @@
-import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
+import { ReactFlow, Background, Controls, applyNodeChanges, type OnNodesChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import FileWatcherNode from "./nodes/FileWatcherNode";
@@ -10,6 +10,7 @@ import OllamaSelectorNode from "./nodes/OllamaSelectorNode";
 import ConditionalRouterNode from "./nodes/ConditionalRouterNode";
 import LocalFileWriterNode from "./nodes/LocalFileWriterNode";
 import LogTerminalNode from "./nodes/LogTerminalNode";
+import { useGraphStore } from "../lib/useGraphStore";
 
 const nodeTypes = {
   file_watcher: FileWatcherNode,
@@ -23,21 +24,52 @@ const nodeTypes = {
   log_terminal: LogTerminalNode,
 };
 
-const demoNodes: Node[] = [
-  { id: "n1", type: "text_input", position: { x: 0, y: 0 }, data: { label: "User Input" } },
-  { id: "n2", type: "ollama_selector", position: { x: 250, y: 0 }, data: { label: "LLM Model" } },
-  { id: "n3", type: "log_terminal", position: { x: 500, y: 0 }, data: { label: "Log Output" } },
-];
-const demoEdges: Edge[] = [
-  { id: "e1-2", source: "n1", target: "n2" },
-  { id: "e2-3", source: "n2", target: "n3" },
-];
-
 export default function GraphCanvas(): React.JSX.Element {
+  const graph = useGraphStore((s) => s.graph);
+  const setGraph = useGraphStore((s) => s.setGraph);
+
+  const flowNodes = graph.nodes.map((n) => ({
+    id: n.id,
+    type: n.type,
+    position: n.position,
+    data: { label: n.label, ...n.data },
+  }));
+
+  const flowEdges = graph.edges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    sourceHandle: e.sourceHandle,
+    targetHandle: e.targetHandle,
+    label: e.condition,
+  }));
+
+  const handleNodesChange: OnNodesChange = (changes) => {
+    const updatedNodes = applyNodeChanges(changes, flowNodes);
+    setGraph({
+      ...graph,
+      nodes: updatedNodes.map((n) => ({
+        id: n.id,
+        type: (n.type as any) || "text_input",
+        label: (n.data?.label as string) || n.id,
+        position: n.position,
+        data: n.data as any,
+      })),
+    });
+  };
+
   return (
-    <ReactFlow nodes={demoNodes} edges={demoEdges} nodeTypes={nodeTypes} fitView>
-      <Background />
-      <Controls />
-    </ReactFlow>
+    <div className="w-full h-full">
+      <ReactFlow
+        nodes={flowNodes}
+        edges={flowEdges}
+        nodeTypes={nodeTypes}
+        onNodesChange={handleNodesChange}
+        fitView
+      >
+        <Background />
+        <Controls />
+      </ReactFlow>
+    </div>
   );
 }
