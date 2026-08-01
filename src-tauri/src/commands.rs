@@ -144,7 +144,7 @@ struct OllamaGenerateRequest<'a> {
 
 #[derive(Deserialize)]
 struct OllamaGenerateResponse {
-    response: String, // this is the raw text the model produced
+    response: String,
     #[allow(dead_code)]
     done: bool,
     #[serde(default)]
@@ -174,4 +174,65 @@ pub async fn generate_graph(prompt: String) -> Result<String, String> {
         .map_err(|e| format!("Unexpected Ollama response shape: {e}"))?;
 
     Ok(parsed.response)
+}
+
+#[derive(Deserialize)]
+struct TagsResponse {
+    models: Vec<TagsModel>,
+}
+#[derive(Deserialize)]
+struct TagsModel {
+    name: String,
+}
+
+#[tauri::command]
+pub async fn list_ollama_models() -> Result<Vec<String>, String> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("http://localhost:11434/api/tags")
+        .send()
+        .await;
+
+    match resp {
+        Ok(r) => {
+            let parsed: TagsResponse = r
+                .json()
+                .await
+                .map_err(|e| format!("Unexpected Ollama /api/tags response shape: {e}"))?;
+            Ok(parsed.models.into_iter().map(|m| m.name).collect())
+        }
+        Err(_) => {
+            // Fallback list when Ollama isn't reachable during offline dev
+            Ok(vec![
+                "llama3.2:latest".to_string(),
+                "llama3.2-vision:latest".to_string(),
+                "qwen2.5:latest".to_string(),
+                "nomic-embed-text:latest".to_string(),
+            ])
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn pick_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let folder = app.dialog().file().blocking_pick_folder();
+    match folder {
+        Some(path) => Ok(path.to_string()),
+        None => Err("No folder selected".to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn pick_image<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let file = app
+        .dialog()
+        .file()
+        .add_filter("Image", &["png", "jpg", "jpeg", "webp"])
+        .blocking_pick_file();
+    match file {
+        Some(path) => Ok(path.to_string()),
+        None => Err("No image selected".to_string()),
+    }
 }

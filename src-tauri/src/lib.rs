@@ -6,7 +6,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![commands::generate_graph])
+        .invoke_handler(tauri::generate_handler![
+            commands::generate_graph,
+            commands::list_ollama_models,
+            commands::pick_folder,
+            commands::pick_image
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
