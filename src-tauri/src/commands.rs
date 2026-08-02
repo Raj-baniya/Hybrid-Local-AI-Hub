@@ -1,4 +1,12 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use notify::RecommendedWatcher;
+
+pub struct WatcherState {
+    pub watchers: Mutex<HashMap<String, RecommendedWatcher>>,
+}
 
 const TRANSLATOR_SYSTEM_PROMPT: &str = r#"You are a graph-compiler assistant. You convert a plain-English description of
 an automation pipeline into a single JSON object describing a node graph. You
@@ -139,7 +147,7 @@ struct OllamaGenerateRequest<'a> {
     model: &'a str,
     system: &'a str,
     prompt: &'a str,
-    stream: bool, // always false here
+    stream: bool,
 }
 
 #[derive(Deserialize)]
@@ -176,41 +184,16 @@ pub async fn generate_graph(prompt: String) -> Result<String, String> {
     Ok(parsed.response)
 }
 
-#[derive(Deserialize)]
-struct TagsResponse {
-    models: Vec<TagsModel>,
-}
-#[derive(Deserialize)]
-struct TagsModel {
-    name: String,
-}
-
 #[tauri::command]
 pub async fn list_ollama_models() -> Result<Vec<String>, String> {
-    let client = reqwest::Client::new();
-    let resp = client
-        .get("http://localhost:11434/api/tags")
-        .send()
-        .await;
-
-    match resp {
-        Ok(r) => {
-            let parsed: TagsResponse = r
-                .json()
-                .await
-                .map_err(|e| format!("Unexpected Ollama /api/tags response shape: {e}"))?;
-            Ok(parsed.models.into_iter().map(|m| m.name).collect())
-        }
-        Err(_) => {
-            // Fallback list when Ollama isn't reachable during offline dev
-            Ok(vec![
-                "llama3.2:latest".to_string(),
-                "llama3.2-vision:latest".to_string(),
-                "qwen2.5:latest".to_string(),
-                "nomic-embed-text:latest".to_string(),
-            ])
-        }
-    }
+    crate::ollama::list_ollama_models().await.or_else(|_| {
+        Ok(vec![
+            "llama3.2:latest".to_string(),
+            "llama3.2-vision:latest".to_string(),
+            "qwen2.5:latest".to_string(),
+            "nomic-embed-text:latest".to_string(),
+        ])
+    })
 }
 
 #[tauri::command]
@@ -235,4 +218,53 @@ pub async fn pick_image<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<S
         Some(path) => Ok(path.to_string()),
         None => Err("No image selected".to_string()),
     }
+}
+
+#[tauri::command]
+pub async fn execute_graph<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    graph: crate::executor::GraphState,
+) -> Result<(), String> {
+    crate::executor::execute_graph_pipeline(app, graph).await
+}
+
+#[tauri::command]
+pub async fn start_file_watch<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: tauri::State<'_, WatcherState>,
+    path: String,
+    node_id: String,
+) -> Result<(), String> {
+    let watcher = crate::watcher::start_watching(app, node_id.clone(), path)?;
+    let mut map = state
+        .watchers
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?;
+    map.insert(node_id, watcher);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_file_watch(
+    state: tauri::State<'_, WatcherState>,
+    node_id: String,
+) -> Result<(), String> {
+    let mut map = state
+        .watchers
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?;
+    map.remove(&node_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn write_output(
+    path: String,
+    content: String,
+    format: String,
+) -> Result<(), String> {
+    let target_file = format!("{}/output.{}", path.trim_end_matches('/'), format);
+    std::fs::write(&target_file, content)
+        .map_err(|e| format!("Failed to write output to {target_file}: {e}"))?;
+    Ok(())
 }

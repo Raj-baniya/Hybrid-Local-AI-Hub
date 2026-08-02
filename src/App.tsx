@@ -3,6 +3,8 @@ import "./App.css";
 import ChatPanel from "./components/ChatPanel";
 import NodePalette from "./components/NodePalette";
 import GraphCanvas from "./components/GraphCanvas";
+import ExecutionToolbar from "./components/ExecutionToolbar";
+import LogTerminal from "./components/LogTerminal";
 
 export default function App(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<"chat" | "palette">("chat");
@@ -42,8 +44,12 @@ export default function App(): React.JSX.Element {
         </div>
       </aside>
 
-      <main className="flex-1 relative bg-neutral-950">
-        <GraphCanvas />
+      <main className="flex-1 flex flex-col relative bg-neutral-950 overflow-hidden">
+        <ExecutionToolbar />
+        <div className="flex-1 relative overflow-hidden">
+          <GraphCanvas />
+        </div>
+        <LogTerminal />
       </main>
     </div>
   );

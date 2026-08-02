@@ -6,12 +6,7 @@ authors = ["Raj Baniya"]
 edition = "2021"
 license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -30,3 +25,4 @@ tokio = { version = "1", features = ["full"] }
 notify = "6"
 lopdf = "0.32"
 anyhow = "1"
+uuid = { version = "1", features = ["v4"] }
