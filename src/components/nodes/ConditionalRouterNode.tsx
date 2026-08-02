@@ -6,39 +6,38 @@ export default function ConditionalRouterNode({ id, data, selected }: HubNodePro
   const status = useExecutionStore((s) => s.nodeStatuses[id]);
 
   let statusRing = "";
-  if (status === "running") statusRing = "ring-2 ring-amber-400 animate-pulse";
-  if (status === "success") statusRing = "ring-2 ring-emerald-500";
-  if (status === "error") statusRing = "ring-2 ring-red-500";
+  if (status === "running") statusRing = "ring-4 ring-amber-400 animate-pulse";
+  if (status === "success") statusRing = "ring-4 ring-emerald-500";
+  if (status === "error") statusRing = "ring-4 ring-rose-500";
 
   return (
-    <div className={`rounded-lg border px-3 py-2 bg-violet-950 border-violet-700 min-w-[170px] relative ${selected ? "ring-2 ring-violet-400" : statusRing}`}>
-      <Handle type="target" position={Position.Left} className="!bg-violet-400 w-2.5 h-2.5" />
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-300">Inference & Logic</div>
-      <div className="text-xs font-medium text-white mb-1">{data.label || "Conditional Router"}</div>
-      <div className="text-[10px] text-violet-300/80 font-mono">
-        Condition: {String(data.condition_type || "has_image")}
+    <div className={`rounded-lg border-2 border-slate-900 px-4 py-3 bg-violet-600 min-w-[180px] shadow-sm text-white relative ${selected ? "ring-4 ring-slate-900" : statusRing}`}>
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!w-3.5 !h-3.5 !bg-slate-900 !border-2 !border-white hover:!scale-125 transition-transform"
+      />
+      <div className="text-[10px] font-bold uppercase tracking-wider text-violet-100">Logic Router</div>
+      <div className="text-xs font-bold text-white mb-2">{data.label || "Conditional Router"}</div>
+      
+      <div className="flex justify-between items-center text-[10px] font-bold border-t-2 border-slate-900 pt-1.5 mt-1">
+        <span className="text-emerald-200">TRUE ▶</span>
+        <span className="text-rose-200">FALSE ▶</span>
       </div>
 
-      <div className="absolute right-2 top-[28%] text-[9px] font-semibold text-emerald-400 pointer-events-none">
-        TRUE
-      </div>
       <Handle
         type="source"
         position={Position.Right}
         id="true"
-        style={{ top: "32%" }}
-        className="!bg-emerald-400 w-2.5 h-2.5"
+        style={{ top: "65%" }}
+        className="!w-3.5 !h-3.5 !bg-emerald-400 !border-2 !border-slate-900 hover:!scale-125 transition-transform"
       />
-
-      <div className="absolute right-2 top-[68%] text-[9px] font-semibold text-rose-400 pointer-events-none">
-        FALSE
-      </div>
       <Handle
         type="source"
         position={Position.Right}
         id="false"
-        style={{ top: "72%" }}
-        className="!bg-rose-400 w-2.5 h-2.5"
+        style={{ top: "85%" }}
+        className="!w-3.5 !h-3.5 !bg-rose-400 !border-2 !border-slate-900 hover:!scale-125 transition-transform"
       />
     </div>
   );

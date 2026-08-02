@@ -1,1 +1,45 @@
+@import "@xyflow/react/dist/style.css";
 @import "tailwindcss";
+
+html, body, #root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #f8fafc;
+}
+
+.react-flow {
+  width: 100% !important;
+  height: 100% !important;
+  background-color: #ffffff !important;
+}
+
+.react-flow__controls {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 0.375rem;
+  overflow: hidden;
+  border: 2px solid #09090b !important;
+  background-color: #ffffff !important;
+}
+
+.react-flow__controls-button {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #09090b !important;
+  color: #09090b !important;
+  fill: #09090b !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: #e2e8f0 !important;
+}
+
+.react-flow__controls-button svg {
+  fill: #09090b !important;
+}
+
+.react-flow__edge-path {
+  stroke: #09090b !important;
+  stroke-width: 2.5 !important;
+}

@@ -6,15 +6,19 @@ export default function TextInputNode({ id, data, selected }: HubNodeProps) {
   const status = useExecutionStore((s) => s.nodeStatuses[id]);
 
   let statusRing = "";
-  if (status === "running") statusRing = "ring-2 ring-amber-400 animate-pulse";
-  if (status === "success") statusRing = "ring-2 ring-emerald-500";
-  if (status === "error") statusRing = "ring-2 ring-red-500";
+  if (status === "running") statusRing = "ring-4 ring-amber-400 animate-pulse";
+  if (status === "success") statusRing = "ring-4 ring-emerald-500";
+  if (status === "error") statusRing = "ring-4 ring-rose-500";
 
   return (
-    <div className={`rounded-lg border px-3 py-2 bg-emerald-950 border-emerald-700 min-w-[160px] ${selected ? "ring-2 ring-emerald-400" : statusRing}`}>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">Ingestion</div>
-      <div className="text-xs font-medium text-white">{data.label || "Text Input"}</div>
-      <Handle type="source" position={Position.Right} />
+    <div className={`rounded-lg border-2 border-slate-900 px-4 py-3 bg-emerald-600 min-w-[170px] shadow-sm text-white relative ${selected ? "ring-4 ring-slate-900" : statusRing}`}>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-100">Ingestion</div>
+      <div className="text-xs font-bold text-white">{data.label || "Text Input"}</div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!w-3.5 !h-3.5 !bg-slate-900 !border-2 !border-white hover:!scale-125 transition-transform"
+      />
     </div>
   );
 }
