@@ -19,6 +19,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::generate_graph,
             commands::list_ollama_models,
+            commands::pull_model,
+            commands::save_agent_file,
             commands::pick_folder,
             commands::pick_image,
             commands::execute_graph,

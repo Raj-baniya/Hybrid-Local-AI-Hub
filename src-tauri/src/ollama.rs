@@ -129,3 +129,52 @@ pub async fn generate(
         Err(_) => Ok(format!("Processed pipeline step ({model}): Completed successfully.")),
     }
 }
+
+#[derive(Serialize)]
+struct PullRequest<'a> {
+    model: &'a str,
+    stream: bool,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct PullProgress {
+    pub status: String,
+    #[serde(default)]
+    pub completed: Option<u64>,
+    #[serde(default)]
+    pub total: Option<u64>,
+}
+
+pub async fn pull_model<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    model: String,
+) -> Result<(), String> {
+    use futures_util::StreamExt;
+    use tauri::Emitter;
+
+    let client = reqwest::Client::new();
+    let body = PullRequest {
+        model: &model,
+        stream: true,
+    };
+
+    let resp = client
+        .post("http://localhost:11434/api/pull")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Ollama not reachable at localhost:11434: {e}"))?;
+
+    let mut stream = resp.bytes_stream();
+
+    while let Some(chunk_result) = stream.next().await {
+        if let Ok(chunk) = chunk_result {
+            for line in chunk.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
+                if let Ok(progress) = serde_json::from_slice::<PullProgress>(line) {
+                    let _ = app.emit("model-pull-progress", (model.clone(), progress));
+                }
+            }
+        }
+    }
+    Ok(())
+}

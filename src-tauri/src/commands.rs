@@ -165,7 +165,6 @@ pub async fn generate_graph(prompt: String) -> Result<String, String> {
             }
         }
         Err(_) => {
-            // Ollama not reachable: Fall back to local pattern-matching graph compiler
             Ok(fallback_graph_compiler(&prompt))
         }
     }
@@ -181,6 +180,36 @@ pub async fn list_ollama_models() -> Result<Vec<String>, String> {
             "nomic-embed-text:latest".to_string(),
         ])
     })
+}
+
+#[tauri::command]
+pub async fn pull_model<R: tauri::Runtime>(app: tauri::AppHandle<R>, model: String) -> Result<(), String> {
+    crate::ollama::pull_model(app, model).await
+}
+
+#[tauri::command]
+pub async fn save_agent_file<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    default_filename: String,
+    content: String,
+) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let file_path = app
+        .dialog()
+        .file()
+        .set_file_name(&default_filename)
+        .add_filter("JSON Agent Pipeline", &["json"])
+        .blocking_save_file();
+
+    match file_path {
+        Some(path) => {
+            let path_str = path.to_string();
+            std::fs::write(&path_str, content)
+                .map_err(|e| format!("Failed to save agent file: {e}"))?;
+            Ok(path_str)
+        }
+        None => Err("Save cancelled".to_string()),
+    }
 }
 
 #[tauri::command]

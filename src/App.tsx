@@ -2,12 +2,13 @@ import { useState } from "react";
 import "./App.css";
 import ChatPanel from "./components/ChatPanel";
 import NodePalette from "./components/NodePalette";
+import ModelManagerPanel from "./components/ModelManagerPanel";
 import GraphCanvas from "./components/GraphCanvas";
 import ExecutionToolbar from "./components/ExecutionToolbar";
 import LogTerminal from "./components/LogTerminal";
 
 export default function App(): React.JSX.Element {
-  const [activeTab, setActiveTab] = useState<"chat" | "palette">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "palette" | "models">("chat");
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 font-sans select-none">
@@ -17,30 +18,47 @@ export default function App(): React.JSX.Element {
           <button
             type="button"
             onClick={() => setActiveTab("chat")}
-            className={`flex-1 py-1.5 text-center rounded transition-colors cursor-pointer ${
+            className={`flex-1 py-1.5 text-center rounded transition-colors cursor-pointer truncate ${
               activeTab === "chat"
                 ? "bg-white text-violet-800 font-bold border-2 border-slate-900 shadow-xs"
                 : "text-slate-700 hover:text-slate-900"
             }`}
           >
-            Chat Assistant (AI)
+            Chat AI
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("palette")}
-            className={`flex-1 py-1.5 text-center rounded transition-colors cursor-pointer ${
+            className={`flex-1 py-1.5 text-center rounded transition-colors cursor-pointer truncate ${
               activeTab === "palette"
                 ? "bg-white text-sky-800 font-bold border-2 border-slate-900 shadow-xs"
                 : "text-slate-700 hover:text-slate-900"
             }`}
           >
-            Node Palette (Manual)
+            Palette
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("models")}
+            className={`flex-1 py-1.5 text-center rounded transition-colors cursor-pointer truncate ${
+              activeTab === "models"
+                ? "bg-white text-emerald-800 font-bold border-2 border-slate-900 shadow-xs"
+                : "text-slate-700 hover:text-slate-900"
+            }`}
+          >
+            Models
           </button>
         </div>
 
         {/* Tab Content */}
         <div className="flex-1 overflow-hidden">
-          {activeTab === "chat" ? <ChatPanel /> : <NodePalette />}
+          {activeTab === "chat" ? (
+            <ChatPanel />
+          ) : activeTab === "palette" ? (
+            <NodePalette />
+          ) : (
+            <ModelManagerPanel />
+          )}
         </div>
       </aside>
 

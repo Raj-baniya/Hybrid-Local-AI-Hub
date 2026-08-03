@@ -1698,3 +1698,5 @@ SERVICE, with a one-line reason for any FAIL or UNTESTED item, plus a
 separate short list of which Phase D steps (if any) were completed. Do
 not re-explain the architecture — this report is a checklist, not a summary.
 ```
+
+---
