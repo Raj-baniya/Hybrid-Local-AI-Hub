@@ -196,7 +196,7 @@ function CanvasContent(): React.JSX.Element {
     const updatedFlowEdges = applyEdgeChanges(changes, flowEdges);
     setGraph({
       ...currentGraph,
-      edges: updatedEdges.map((e) => ({
+      edges: updatedFlowEdges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
