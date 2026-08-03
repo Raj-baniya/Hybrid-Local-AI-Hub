@@ -31,6 +31,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
 
   const node = graph.nodes.find((n) => n.id === selectedNodeId);
   if (!node) return null;
+  const nodeData = node.data ?? {};
 
   const updateDataField = (key: string, val: unknown) => {
     const updatedNodes = graph.nodes.map((n) =>
@@ -112,7 +113,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
             <div className="flex gap-1.5">
               <input
                 type="text"
-                value={(node.data.watch_path as string) || ""}
+                value={(nodeData.watch_path as string) || ""}
                 onChange={(e) => updateDataField("watch_path", e.target.value)}
                 placeholder="/path/to/folder"
                 className="flex-1 bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-medium"
@@ -134,7 +135,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
             <div className="flex gap-1.5">
               <input
                 type="text"
-                value={(node.data.image_path as string) || ""}
+                value={(nodeData.image_path as string) || ""}
                 onChange={(e) => updateDataField("image_path", e.target.value)}
                 placeholder="/path/to/image.png"
                 className="flex-1 bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-medium"
@@ -154,7 +155,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
           <div>
             <label className="block text-slate-700 mb-1 font-bold">Default Text</label>
             <textarea
-              value={(node.data.default_text as string) || ""}
+              value={(nodeData.default_text as string) || ""}
               onChange={(e) => updateDataField("default_text", e.target.value)}
               placeholder="Enter text..."
               className="w-full h-24 bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white resize-none font-medium"
@@ -166,7 +167,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
           <div>
             <label className="block text-slate-700 mb-1 font-bold">Model</label>
             <select
-              value={(node.data.model as string) || ollamaModels[0]}
+              value={(nodeData.model as string) || ollamaModels[0]}
               onChange={(e) => updateDataField("model", e.target.value)}
               className="w-full bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-bold"
             >
@@ -185,7 +186,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
               <label className="block text-slate-700 mb-1 font-bold">Collection Name</label>
               <input
                 type="text"
-                value={(node.data.collection_name as string) || "my_collection"}
+                value={(nodeData.collection_name as string) || "my_collection"}
                 onChange={(e) => updateDataField("collection_name", e.target.value)}
                 className="w-full bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-bold"
               />
@@ -193,7 +194,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
             <div>
               <label className="block text-slate-700 mb-1 font-bold">Mode</label>
               <select
-                value={(node.data.mode as string) || "write"}
+                value={(nodeData.mode as string) || "write"}
                 onChange={(e) => updateDataField("mode", e.target.value)}
                 className="w-full bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-bold"
               >
@@ -209,7 +210,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
             <div>
               <label className="block text-slate-700 mb-1 font-bold">Condition Type</label>
               <select
-                value={(node.data.condition_type as string) || "has_image"}
+                value={(nodeData.condition_type as string) || "has_image"}
                 onChange={(e) => updateDataField("condition_type", e.target.value)}
                 className="w-full bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-bold"
               >
@@ -218,12 +219,12 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
                 <option value="custom">Custom Expression</option>
               </select>
             </div>
-            {node.data.condition_type === "custom" && (
+            {nodeData.condition_type === "custom" && (
               <div>
                 <label className="block text-slate-700 mb-1 font-bold">Expression</label>
                 <input
                   type="text"
-                  value={(node.data.expression as string) || ""}
+                  value={(nodeData.expression as string) || ""}
                   onChange={(e) => updateDataField("expression", e.target.value)}
                   placeholder="e.g. text.includes('urgent')"
                   className="w-full bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-medium"
@@ -240,7 +241,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
               <div className="flex gap-1.5">
                 <input
                   type="text"
-                  value={(node.data.output_path as string) || ""}
+                  value={(nodeData.output_path as string) || ""}
                   onChange={(e) => updateDataField("output_path", e.target.value)}
                   placeholder="/output/dir"
                   className="flex-1 bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-medium"
@@ -257,7 +258,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
             <div>
               <label className="block text-slate-700 mb-1 font-bold">Format</label>
               <select
-                value={(node.data.format as string) || "md"}
+                value={(nodeData.format as string) || "md"}
                 onChange={(e) => updateDataField("format", e.target.value)}
                 className="w-full bg-slate-50 border-2 border-slate-900 rounded p-2 text-slate-900 focus:outline-none focus:border-violet-600 focus:bg-white font-bold"
               >
