@@ -9,6 +9,7 @@ import {
   type OnNodesChange,
   type OnEdgesChange,
   type Connection,
+  type Edge,
   useReactFlow,
   ReactFlowProvider,
 } from "@xyflow/react";
@@ -196,13 +197,13 @@ function CanvasContent(): React.JSX.Element {
     const updatedFlowEdges = applyEdgeChanges(changes, flowEdges);
     setGraph({
       ...currentGraph,
-      edges: updatedEdges.map((e) => ({
+      edges: updatedFlowEdges.map((e: Edge) => ({
         id: e.id,
         source: e.source,
         target: e.target,
         sourceHandle: e.sourceHandle || undefined,
         targetHandle: e.targetHandle || undefined,
-        condition: (e.label as string) || undefined,
+        condition: typeof e.label === "string" ? e.label : undefined,
       })),
     });
   };
