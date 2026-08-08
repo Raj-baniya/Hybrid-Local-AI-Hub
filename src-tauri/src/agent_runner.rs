@@ -1,6 +1,6 @@
 /// agent_runner.rs
 /// Multi-agent orchestration engine for Hybrid Local AI Hub.
-/// Implements the AutoAgent orchestration protocol: agent handoffs, XML tool-calling,
+/// Implements the multi-agent orchestration protocol: agent handoffs, XML tool-calling,
 /// self-play retry loops, and multi-round agent trajectories — all 100% offline via local Ollama LLMs.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -80,7 +80,7 @@ pub struct WorkflowSpec {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// XML Tool-Call Parser (Transformed Tool-Use Paradigm from AutoAgent paper)
+// XML Tool-Call Parser (Transformed Tool-Use Paradigm)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Parses transformed XML tool calls from local LLM output.

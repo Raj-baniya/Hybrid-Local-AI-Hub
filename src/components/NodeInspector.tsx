@@ -156,7 +156,7 @@ const NODE_CATALOG: Record<string, NodeDoc> = {
 
   orchestrator_agent: {
     icon: "🎯",
-    title: "AutoAgent Orchestrator",
+    title: "Master Orchestrator",
     category: "Agent",
     desc: "Master supervisor agent that analyzes high-level user tasks, creates sub-task execution plans, and coordinates worker agents.",
     processes: [

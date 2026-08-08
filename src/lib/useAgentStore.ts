@@ -1,6 +1,6 @@
 /**
  * useAgentStore.ts
- * Zustand store for AutoAgent modes in Hybrid Local AI Hub.
+ * Zustand store for agent modes in Hybrid Local AI Hub.
  * Manages agent trajectories, workflow specs, and created agent/tool state.
  */
 import { create } from "zustand";

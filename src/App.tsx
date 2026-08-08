@@ -6,9 +6,9 @@ import ModelManagerPanel from "./components/ModelManagerPanel";
 import GraphCanvas from "./components/GraphCanvas";
 import ExecutionToolbar from "./components/ExecutionToolbar";
 import LogTerminal from "./components/LogTerminal";
-import AutoAgentUserMode from "./components/AutoAgentUserMode";
-import AutoAgentAgentEditor from "./components/AutoAgentAgentEditor";
-import AutoAgentWorkflowEditor from "./components/AutoAgentWorkflowEditor";
+import UserMode from "./components/UserMode";
+import AgentEditor from "./components/AgentEditor";
+import WorkflowEditor from "./components/WorkflowEditor";
 import { useAgentStore, type AgentMode } from "./lib/useAgentStore";
 import { useGraphStore } from "./lib/useGraphStore";
 import { invoke } from "@tauri-apps/api/core";
@@ -244,9 +244,9 @@ export default function App(): React.JSX.Element {
 
         {/* Sidebar Content */}
         <div className="flex-1 overflow-hidden">
-          {activeMode === "user_mode" && <AutoAgentUserMode />}
-          {activeMode === "agent_editor" && <AutoAgentAgentEditor />}
-          {activeMode === "workflow_editor" && <AutoAgentWorkflowEditor />}
+          {activeMode === "user_mode" && <UserMode />}
+          {activeMode === "agent_editor" && <AgentEditor />}
+          {activeMode === "workflow_editor" && <WorkflowEditor />}
           {activeMode === "canvas" && <CanvasSidebarPanel />}
         </div>
 

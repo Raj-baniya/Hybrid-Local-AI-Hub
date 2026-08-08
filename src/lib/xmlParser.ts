@@ -176,7 +176,7 @@ export function parseWorkflowSpec(xml: string): ParsedWorkflowSpec {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Transformed XML Tool Call Parser (AutoAgent paper protocol)
+// Transformed XML Tool Call Parser (XML Tool-Use Protocol)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

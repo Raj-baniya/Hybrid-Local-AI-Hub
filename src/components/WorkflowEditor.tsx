@@ -1,5 +1,5 @@
 /**
- * AutoAgentWorkflowEditor.tsx
+ * WorkflowEditor.tsx
  * Workflow Editor — Hybrid Local AI Hub.
  * Real execution only — NO simulation fallbacks.
  * 100% offline via local Ollama + Tauri backend.
@@ -136,7 +136,7 @@ function WorkflowStepCard({ step, index }: { step: TrajectoryStep; index: number
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AutoAgentWorkflowEditor(): React.JSX.Element {
+export default function WorkflowEditor(): React.JSX.Element {
   const {
     workflowRequirement, setWorkflowRequirement,
     workflowSpecXml, setWorkflowSpecXml,

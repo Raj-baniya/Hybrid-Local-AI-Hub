@@ -384,7 +384,7 @@ pub async fn load_agent_file<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Res
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AutoAgent Mode Commands — Hybrid Local AI Hub Zero-Code Agent Framework
+// User Mode & Agent Commands — Hybrid Local AI Hub Framework
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// User Mode (Deep Research): Runs a multi-agent task with Orchestrator + Sub-agents.
@@ -396,7 +396,7 @@ pub async fn run_autoagent_task<R: tauri::Runtime>(
 ) -> Result<crate::agent_runner::AgentRunResult, String> {
     let model_name = model.unwrap_or_else(|| "qwen2.5vl:7b".to_string());
 
-    let orchestrator_prompt = r#"You are the Orchestrator Agent of Hybrid Local AI Hub — a fully autonomous, zero-code, offline AI system inspired by AutoAgent.
+    let orchestrator_prompt = r#"You are the Orchestrator Agent of Hybrid Local AI Hub — a fully autonomous, zero-code, offline AI system.
 Your role: analyze the user's task, break it down, and coordinate specialized sub-agents to complete it.
 
 Sub-Agents you can delegate to:
@@ -506,7 +506,7 @@ pub async fn profile_agent_requirement(
     let model_name = model.unwrap_or_else(|| "qwen2.5vl:7b".to_string());
 
     let profiling_prompt = format!(
-        r#"You are an Agent Profiling specialist for Hybrid Local AI Hub — an AutoAgent-inspired, fully offline, zero-code AI framework.
+        r#"You are an Agent Profiling specialist for Hybrid Local AI Hub — a fully offline, zero-code AI framework.
 Your job: given a user's requirement, design a complete, executable agent specification.
 
 Output a complete XML specification in this EXACT format (no deviations):

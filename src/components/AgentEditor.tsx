@@ -1,7 +1,7 @@
 /**
- * AutoAgentAgentEditor.tsx
+ * AgentEditor.tsx
  * Agent Editor (Zero-Code Agent & Tool Creation) for Hybrid Local AI Hub.
- * Inspired by AutoAgent (HKUDS): Agent Profiling → Tool Creation → Live Execution & JSON/XML Export.
+ * Agent Profiling → Tool Creation → Live Execution & JSON/XML Export.
  * 100% offline via local Ollama LLMs. Real execution only — no mocks.
  */
 import { useState, useRef, useEffect } from "react";
@@ -691,7 +691,7 @@ function StepDone(): React.JSX.Element {
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AutoAgentAgentEditor(): React.JSX.Element {
+export default function AgentEditor(): React.JSX.Element {
   const { agentEditorStep } = useAgentStore();
 
   const stepIndex = ["requirement", "profiling", "tools", "done"].indexOf(agentEditorStep);

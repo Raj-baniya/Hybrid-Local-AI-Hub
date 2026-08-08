@@ -1,8 +1,8 @@
 /**
- * AutoAgentUserMode.tsx
+ * UserMode.tsx
  * User Mode (Deep Research Agents) for Hybrid Local AI Hub.
  * Implements multi-agent orchestration: Orchestrator → Local File Agent / Coding Agent.
- * 100% offline via local Ollama LLMs. Inspired by AutoAgent (HKUDS).
+ * 100% offline via local Ollama LLMs.
  */
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -124,7 +124,7 @@ const SAMPLE_TASKS = [
   },
 ];
 
-export default function AutoAgentUserMode(): React.JSX.Element {
+export default function UserMode(): React.JSX.Element {
   const {
     userModeTask,
     setUserModeTask,

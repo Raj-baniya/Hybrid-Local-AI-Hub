@@ -31,7 +31,7 @@ pub fn run() {
             commands::start_file_watch,
             commands::stop_file_watch,
             commands::write_output,
-            // AutoAgent Mode commands — Hybrid Local AI Hub Zero-Code Framework
+            // Agent Mode commands — Hybrid Local AI Hub Zero-Code Framework
             commands::run_autoagent_task,
             commands::profile_agent_requirement,
             commands::create_and_test_tool,

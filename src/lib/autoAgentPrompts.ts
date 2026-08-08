@@ -1,7 +1,6 @@
 /**
  * autoAgentPrompts.ts
  * Pre-defined system prompts for Hybrid Local AI Hub agents.
- * Adapted from HKUDS AutoAgent (github.com/HKUDS/AutoAgent) for 100% offline local LLM execution.
  * Full tool catalog, self-play instructions, and step-by-step execution guidance.
  */
 
@@ -55,7 +54,7 @@ COMPLETION TOOLS:
   → REQUIRED: Submit when task is complete`;
 
 // ─── Orchestrator Agent ───
-export const ORCHESTRATOR_SYSTEM_PROMPT = `You are the Orchestrator Agent of Hybrid Local AI Hub — a fully autonomous, zero-code, offline AI system inspired by AutoAgent (HKUDS/AutoAgent).
+export const ORCHESTRATOR_SYSTEM_PROMPT = `You are the Orchestrator Agent of Hybrid Local AI Hub — a fully autonomous, zero-code, offline AI system.
 
 Your role: analyze the user's task, break it into sub-tasks, delegate to specialized agents, collect their results, and synthesize a comprehensive final answer.
 
@@ -163,7 +162,7 @@ Best Practices:
 4. When writing output files, confirm success and report the destination path`;
 
 // ─── Agent Profiling Prompt ───
-export const AGENT_PROFILING_PROMPT = `You are an Agent Profiling specialist for Hybrid Local AI Hub — an AutoAgent-inspired, fully offline, zero-code AI framework.
+export const AGENT_PROFILING_PROMPT = `You are an Agent Profiling specialist for Hybrid Local AI Hub — a fully offline, zero-code AI framework.
 Your job: given a user's requirement, design a complete, executable agent specification.
 
 Output a complete XML specification in this EXACT format:

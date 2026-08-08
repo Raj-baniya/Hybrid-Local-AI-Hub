@@ -7,7 +7,7 @@
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_DB-purple?style=flat-square)](https://www.trychroma.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
-A **100% offline**, privacy-first, free & open-source, cross-platform desktop framework and visual AI workflow hub built with **Tauri v2 + React 19 + TypeScript + Rust**. Inspired by [HKUDS AutoAgent](https://github.com/HKUDS/AutoAgent.git), **Hybrid Local AI Hub** empowers non-technical users and developers to create, customize, and orchestrate complex LLM agents, tools, and workflows through **Natural Language Alone** — running entirely on local hardware with zero cloud dependencies or subscription costs.
+A **100% offline**, privacy-first, free & open-source, cross-platform desktop framework and visual AI workflow hub built with **Tauri v2 + React 19 + TypeScript + Rust**. **Hybrid Local AI Hub** empowers non-technical users and developers to create, customize, and orchestrate complex LLM agents, tools, and workflows through **Natural Language Alone** — running entirely on local hardware with zero cloud dependencies or subscription costs.
 
 ---
 
@@ -65,7 +65,7 @@ graph TD
 - **Inline Python Tool Generator**: Automatically generates Python function code using local Ollama LLMs, executes test cases in the local sandbox, and registers tools to `./user_tools/`.
 
 ### 3. ⚡ `Workflow Editor` (Event-Driven Multi-Agent Workflows)
-Supports 4 core workflow patterns from AutoAgent paper:
+Supports 4 core workflow patterns:
 1. **Sequential**: Linear event pipeline where output of step $N$ feeds input of step $N+1$.
 2. **If-Else Branching**: First agent evaluates a condition, then routes execution to the matching branch.
 3. **Parallelization + Majority Voting**: Multiple agents solve the task concurrently; a vote aggregator determines consensus.
