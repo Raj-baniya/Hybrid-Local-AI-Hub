@@ -10,6 +10,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useAgentStore, type TrajectoryStep } from "../lib/useAgentStore";
 import { useGraphStore } from "../lib/useGraphStore";
 import { autoLayout } from "../lib/autoLayout";
+import { synthesizeDynamicGraph } from "../lib/dynamicGraphSynthesizer";
 
 function AgentIcon({ agentName }: { agentName: string }) {
   const lower = agentName.toLowerCase();
@@ -135,6 +136,7 @@ export default function AutoAgentUserMode(): React.JSX.Element {
     isUserModeRunning,
     setIsUserModeRunning,
     selectedModel,
+    setActiveMode,
   } = useAgentStore();
 
   const { addNewGraphTab } = useGraphStore();
@@ -196,31 +198,57 @@ export default function AutoAgentUserMode(): React.JSX.Element {
   };
 
   const handleLoadToCanvas = () => {
-    if (!userModeResult) return;
-    // Convert the trajectory into a visual graph
-    const nodes = userModeResult.trajectory
-      .filter((s) => s.action === "thinking" || s.action === "result")
-      .map((s, i) => ({
-        id: `agent_${i}`,
-        type: "log_terminal" as const,
-        label: `${s.agent_name}: ${s.action}`,
-        position: { x: i * 280, y: 0 },
-        data: { label: `${s.agent_name}: ${s.action}`, content: s.content },
-      }));
+    const promptText = userModeTask.trim() || "Multi-Agent Automation Task";
+    const title = `User Mode: ${promptText.slice(0, 30)}...`;
 
-    const edges = nodes.slice(1).map((_, i) => ({
-      id: `e_${i}`,
-      source: nodes[i].id,
-      target: nodes[i + 1].id,
-    }));
+    let generatedGraph;
+    try {
+      generatedGraph = synthesizeDynamicGraph(promptText);
+      generatedGraph.meta = { title };
+    } catch {
+      const inputId = `in_${Date.now()}`;
+      const agentId = `ag_${Date.now()}`;
+      const writerId = `wr_${Date.now()}`;
 
-    const layoutedNodes = autoLayout(nodes, edges);
-    addNewGraphTab({
-      version: 1,
-      nodes: layoutedNodes,
-      edges,
-      meta: { title: `User Mode: ${userModeTask.slice(0, 40)}...` },
-    });
+      const nodes = [
+        {
+          id: inputId,
+          type: "text_input" as const,
+          label: "Task Input",
+          position: { x: 50, y: 100 },
+          data: { default_text: promptText },
+        },
+        {
+          id: agentId,
+          type: "orchestrator_agent" as const,
+          label: "Orchestrator Agent",
+          position: { x: 340, y: 100 },
+          data: { model: selectedModel, prompt: promptText },
+        },
+        {
+          id: writerId,
+          type: "local_file_writer" as const,
+          label: "Report / Output Writer",
+          position: { x: 630, y: 100 },
+          data: { output_path: "./outputs", format: "md" },
+        },
+      ];
+
+      const edges = [
+        { id: `e1_${inputId}_${agentId}`, source: inputId, target: agentId },
+        { id: `e2_${agentId}_${writerId}`, source: agentId, target: writerId },
+      ];
+
+      generatedGraph = {
+        version: 1,
+        nodes: autoLayout(nodes, edges),
+        edges,
+        meta: { title },
+      };
+    }
+
+    addNewGraphTab(generatedGraph);
+    setActiveMode("canvas");
   };
 
   return (

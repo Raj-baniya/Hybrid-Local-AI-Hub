@@ -488,26 +488,52 @@ function StepDone(): React.JSX.Element {
   // ── Load Agent to Canvas ────────────────────────────────────────────────
   const handleLoadToCanvas = () => {
     if (!primaryAgent) return;
-    const node = {
-      id: `agent_${Date.now()}`,
-      type: "ollama_selector" as const,
-      label: primaryAgent.name,
-      position: { x: 100, y: 100 },
-      data: {
-        label: primaryAgent.name,
-        model: selectedModel,
-        system_prompt: primaryAgent.instruction,
-      },
-    };
 
-    const layouted = autoLayout([node], []);
+    const inputId = `ag_in_${Date.now()}`;
+    const agentNodeId = `ag_llm_${Date.now()}`;
+    const writerId = `ag_out_${Date.now()}`;
+
+    const nodes = [
+      {
+        id: inputId,
+        type: "text_input" as const,
+        label: "Agent Task Input",
+        position: { x: 50, y: 100 },
+        data: { default_text: agentRequirement || "Task for " + primaryAgent.name },
+      },
+      {
+        id: agentNodeId,
+        type: "ollama_selector" as const,
+        label: primaryAgent.name,
+        position: { x: 340, y: 100 },
+        data: {
+          label: primaryAgent.name,
+          model: selectedModel,
+          system_prompt: primaryAgent.instruction,
+        },
+      },
+      {
+        id: writerId,
+        type: "local_file_writer" as const,
+        label: "Result Output Writer",
+        position: { x: 630, y: 100 },
+        data: { output_path: "./agent_outputs", format: "md" },
+      },
+    ];
+
+    const edges = [
+      { id: `e1_${inputId}_${agentNodeId}`, source: inputId, target: agentNodeId },
+      { id: `e2_${agentNodeId}_${writerId}`, source: agentNodeId, target: writerId },
+    ];
+
+    const layouted = autoLayout(nodes, edges);
     addNewGraphTab({
       version: 1,
       nodes: layouted,
-      edges: [],
+      edges,
       meta: { title: primaryAgent.name },
     });
-    setStatusMsg({ text: `📊 Loaded ${primaryAgent.name} into Canvas!`, type: "ok" });
+    useAgentStore.getState().setActiveMode("canvas");
   };
 
   const statusColors = {

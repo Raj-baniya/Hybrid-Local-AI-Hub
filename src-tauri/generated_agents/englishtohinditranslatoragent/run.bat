@@ -1,0 +1,3 @@
+@echo off
+echo Running EnglishToHindiTranslatorAgent...
+python "%~dp0agent.py" %*

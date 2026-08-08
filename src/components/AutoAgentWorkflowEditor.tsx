@@ -246,18 +246,40 @@ export default function AutoAgentWorkflowEditor(): React.JSX.Element {
 
   const handleLoadToCanvas = () => {
     if (!parsedWorkflowSpec) return;
-    const nodes = parsedWorkflowSpec.events.map((e, i) => ({
-      id: `wf_${i}`,
-      type: "ollama_selector" as const,
-      label: `${e.agent}: ${e.name}`,
-      position: { x: i * 280, y: 0 },
-      data: { label: `${e.agent}: ${e.name}`, model: selectedModel, system_prompt: e.action },
-    }));
-    const edges = nodes.slice(1).map((_, i) => ({
-      id: `wf_e${i}`,
-      source: nodes[i].id,
+
+    const inputId = `wf_in_${Date.now()}`;
+    const writerId = `wf_out_${Date.now()}`;
+
+    const nodes = [
+      {
+        id: inputId,
+        type: "text_input" as const,
+        label: "Workflow Task Input",
+        position: { x: 0, y: 100 },
+        data: { default_text: workflowInput || workflowRequirement },
+      },
+      ...parsedWorkflowSpec.events.map((e, i) => ({
+        id: `wf_${i}`,
+        type: "ollama_selector" as const,
+        label: `${e.agent}: ${e.name}`,
+        position: { x: (i + 1) * 280, y: 100 },
+        data: { label: `${e.agent}: ${e.name}`, model: selectedModel, system_prompt: e.action },
+      })),
+      {
+        id: writerId,
+        type: "local_file_writer" as const,
+        label: "Final Workflow Writer",
+        position: { x: (parsedWorkflowSpec.events.length + 1) * 280, y: 100 },
+        data: { output_path: "./workflow_outputs", format: "md" },
+      },
+    ];
+
+    const edges = nodes.slice(0, -1).map((n, i) => ({
+      id: `wf_e_${i}`,
+      source: n.id,
       target: nodes[i + 1].id,
     }));
+
     const layoutedNodes = autoLayout(nodes, edges);
     addNewGraphTab({
       version: 1,
@@ -265,6 +287,7 @@ export default function AutoAgentWorkflowEditor(): React.JSX.Element {
       edges,
       meta: { title: parsedWorkflowSpec.title },
     });
+    useAgentStore.getState().setActiveMode("canvas");
   };
 
   const patternInfo = PATTERNS.find((p) => p.id === (parsedWorkflowSpec?.pattern ?? selectedPattern));
