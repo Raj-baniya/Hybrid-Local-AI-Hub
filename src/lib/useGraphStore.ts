@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { GraphState } from "./graphSchema";
 
 const defaultInitialGraph: GraphState = {
+  version: 1,
   nodes: [
     { id: "n1", type: "file_watcher", label: "Watch Inbox", position: { x: 50, y: 100 }, data: { watch_path: "/sample/inbox" } },
     { id: "n2", type: "local_embedder", label: "Embed Text", position: { x: 300, y: 100 }, data: { model: "nomic-embed-text" } },
@@ -75,6 +76,7 @@ export const useGraphStore = create<GraphStore>((set) => ({
   createBlankTab: () =>
     set((state) => {
       const newBlankGraph: GraphState = {
+        version: 1,
         nodes: [],
         edges: [],
         meta: {

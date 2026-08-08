@@ -11,7 +11,55 @@ export const NodeTypeEnum = z.enum([
   "conditional_router",
   "local_file_writer",
   "log_terminal",
+  "orchestrator_agent",
+  "local_file_agent",
+  "coding_agent",
+  "web_surfer_agent",
+  "vote_aggregator",
+  "evaluator_optimizer",
 ]);
+
+export type NodeType = z.infer<typeof NodeTypeEnum>;
+
+// Per-node-type data schemas
+export const FileWatcherDataSchema = z.object({
+  watch_path: z.string().optional().default(""),
+});
+
+export const TextInputDataSchema = z.object({
+  default_text: z.string().optional().default(""),
+});
+
+export const ImageInputDataSchema = z.object({
+  image_path: z.string().optional(),
+});
+
+export const LocalEmbedderDataSchema = z.object({
+  model: z.string().optional().default("nomic-embed-text"),
+});
+
+export const ChromaDbStoreDataSchema = z.object({
+  collection_name: z.string().optional().default("default_collection"),
+  mode: z.enum(["read", "write"]).optional().default("write"),
+});
+
+export const OllamaSelectorDataSchema = z.object({
+  model: z.string().optional().default("llama3.2"),
+  temperature: z.number().optional().default(0.7),
+  system_prompt: z.string().optional(),
+});
+
+export const ConditionalRouterDataSchema = z.object({
+  condition_type: z.enum(["has_image", "has_text", "custom"]).optional().default("has_text"),
+  expression: z.string().optional().default(""),
+});
+
+export const LocalFileWriterDataSchema = z.object({
+  output_path: z.string().optional().default(""),
+  format: z.enum(["md", "txt", "json"]).optional().default("md"),
+});
+
+export const LogTerminalDataSchema = z.object({});
 
 export const GraphNodeSchema = z.object({
   id: z.string(),
@@ -27,10 +75,11 @@ export const GraphEdgeSchema = z.object({
   target: z.string(),
   sourceHandle: z.string().optional(),
   targetHandle: z.string().optional(),
-  condition: z.string().optional(), // for conditional_router branches, e.g. "if_image"
+  condition: z.string().optional(), // for conditional_router branches, e.g. "true" / "false"
 });
 
 export const GraphStateSchema = z.object({
+  version: z.number().default(1),
   nodes: z.array(GraphNodeSchema),
   edges: z.array(GraphEdgeSchema),
   meta: z.object({
@@ -40,3 +89,4 @@ export const GraphStateSchema = z.object({
 });
 
 export type GraphState = z.infer<typeof GraphStateSchema>;
+

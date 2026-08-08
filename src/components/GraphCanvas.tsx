@@ -52,6 +52,12 @@ const VALID_NODE_TYPES = new Set([
   "conditional_router",
   "local_file_writer",
   "log_terminal",
+  "orchestrator_agent",
+  "local_file_agent",
+  "coding_agent",
+  "web_surfer_agent",
+  "vote_aggregator",
+  "evaluator_optimizer",
 ]);
 
 function getDefaultDataForType(type: NodeType): Record<string, unknown> {

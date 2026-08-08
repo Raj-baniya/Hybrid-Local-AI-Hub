@@ -27,3 +27,4 @@ notify = "6"
 lopdf = "0.32"
 anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
+regex = "1"

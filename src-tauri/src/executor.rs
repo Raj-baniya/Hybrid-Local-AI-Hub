@@ -342,7 +342,7 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                 let model = node_data
                     .get("model")
                     .and_then(|v| v.as_str())
-                    .unwrap_or("llama3.2");
+                    .unwrap_or("qwen2.5vl:7b");
 
                 let mut prompt_parts: Vec<String> = Vec::new();
 
@@ -464,3 +464,106 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_dag_topological_sort() {
+        let graph = GraphState {
+            nodes: vec![
+                GraphNode {
+                    id: "n1".to_string(),
+                    r#type: "text_input".to_string(),
+                    label: "Input".to_string(),
+                    position: Position { x: 0.0, y: 0.0 },
+                    data: None,
+                },
+                GraphNode {
+                    id: "n2".to_string(),
+                    r#type: "local_embedder".to_string(),
+                    label: "Embedder".to_string(),
+                    position: Position { x: 250.0, y: 0.0 },
+                    data: None,
+                },
+                GraphNode {
+                    id: "n3".to_string(),
+                    r#type: "chromadb_store".to_string(),
+                    label: "ChromaDB".to_string(),
+                    position: Position { x: 500.0, y: 0.0 },
+                    data: None,
+                },
+            ],
+            edges: vec![
+                GraphEdge {
+                    id: "e1".to_string(),
+                    source: "n1".to_string(),
+                    target: "n2".to_string(),
+                    source_handle: None,
+                    target_handle: None,
+                    condition: None,
+                },
+                GraphEdge {
+                    id: "e2".to_string(),
+                    source: "n2".to_string(),
+                    target: "n3".to_string(),
+                    source_handle: None,
+                    target_handle: None,
+                    condition: None,
+                },
+            ],
+        };
+
+        let sorted = topological_sort(&graph).expect("Should sort valid DAG");
+        assert_eq!(sorted.len(), 3);
+        assert_eq!(sorted[0].id, "n1");
+        assert_eq!(sorted[1].id, "n2");
+        assert_eq!(sorted[2].id, "n3");
+    }
+
+    #[test]
+    fn test_cycle_rejection_topological_sort() {
+        let graph = GraphState {
+            nodes: vec![
+                GraphNode {
+                    id: "n1".to_string(),
+                    r#type: "text_input".to_string(),
+                    label: "Input".to_string(),
+                    position: Position { x: 0.0, y: 0.0 },
+                    data: None,
+                },
+                GraphNode {
+                    id: "n2".to_string(),
+                    r#type: "ollama_selector".to_string(),
+                    label: "LLM".to_string(),
+                    position: Position { x: 250.0, y: 0.0 },
+                    data: None,
+                },
+            ],
+            edges: vec![
+                GraphEdge {
+                    id: "e1".to_string(),
+                    source: "n1".to_string(),
+                    target: "n2".to_string(),
+                    source_handle: None,
+                    target_handle: None,
+                    condition: None,
+                },
+                GraphEdge {
+                    id: "e2".to_string(),
+                    source: "n2".to_string(),
+                    target: "n1".to_string(),
+                    source_handle: None,
+                    target_handle: None,
+                    condition: None,
+                },
+            ],
+        };
+
+        let result = topological_sort(&graph);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Cycle detected"));
+    }
+}
+
