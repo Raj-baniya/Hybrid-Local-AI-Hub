@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -62,24 +61,6 @@ must follow these rules exactly:
    "expression" value for a custom condition).
 "#;
 
-#[derive(Serialize)]
-struct OllamaGenerateRequest<'a> {
-    model: &'a str,
-    system: &'a str,
-    prompt: &'a str,
-    stream: bool,
-    format: &'a str,
-}
-
-#[derive(Deserialize)]
-struct OllamaGenerateResponse {
-    response: String,
-    #[allow(dead_code)]
-    done: bool,
-    #[serde(default)]
-    #[allow(dead_code)]
-    model: Option<String>,
-}
 
 fn fallback_graph_compiler(prompt: &str) -> String {
     let lower = prompt.to_lowercase();
@@ -213,29 +194,29 @@ pub async fn generate_graph(
     model: Option<String>,
     system_prompt_override: Option<String>,
 ) -> Result<String, String> {
-    let client = reqwest::Client::new();
-    let model_to_use = model.as_deref().unwrap_or("qwen2.5vl:7b");
-    let system_to_use = system_prompt_override.as_deref().unwrap_or(TRANSLATOR_SYSTEM_PROMPT);
+    let model_to_use = model.as_deref().unwrap_or("qwen2.5vl:7b").to_string();
+    let system_to_use = system_prompt_override
+        .as_deref()
+        .unwrap_or(TRANSLATOR_SYSTEM_PROMPT)
+        .to_string();
 
-    let body = OllamaGenerateRequest {
-        model: model_to_use,
-        system: system_to_use,
-        prompt: &prompt,
-        stream: false,
-        format: "json",
-    };
-
-    let resp = client
-        .post("http://localhost:11434/api/generate")
-        .json(&body)
-        .send()
-        .await;
-
-    match resp {
-        Ok(res) => {
-            if let Ok(parsed) = res.json::<OllamaGenerateResponse>().await {
-                Ok(parsed.response)
+    // Use the shared Ollama client (120s timeout, connection-pooled)
+    match crate::ollama::generate_with_system(&model_to_use, &system_to_use, &prompt).await {
+        Ok(response) => {
+            // Try to parse as valid JSON first
+            if serde_json::from_str::<serde_json::Value>(&response).is_ok() {
+                Ok(response)
             } else {
+                // Extract JSON from response if LLM wrapped it in text
+                if let Some(start) = response.find('{') {
+                    if let Some(end) = response.rfind('}') {
+                        let json_slice = &response[start..=end];
+                        if serde_json::from_str::<serde_json::Value>(json_slice).is_ok() {
+                            return Ok(json_slice.to_string());
+                        }
+                    }
+                }
+                // Fall back to rule-based compiler if JSON is unparseable
                 Ok(fallback_graph_compiler(&prompt))
             }
         }
@@ -255,7 +236,6 @@ pub async fn list_ollama_models() -> Result<Vec<String>, String> {
             "qwen2.5:latest".to_string(),
             "llama3.2:latest".to_string(),
             "llama3.2-vision:latest".to_string(),
-            "qwen2.5:latest".to_string(),
             "nomic-embed-text:latest".to_string(),
         ])
     })
@@ -358,9 +338,14 @@ pub async fn write_output(
     content: String,
     format: String,
 ) -> Result<(), String> {
-    let target_file = format!("{}/output.{}", path.trim_end_matches('/'), format);
+    let dir = if path.trim().is_empty() { "." } else { path.trim_end_matches('/').trim_end_matches('\\') };
+    let target_file = std::path::Path::new(dir).join(format!("output.{format}"));
+    if let Some(parent) = target_file.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create output directory: {e}"))?;
+    }
     std::fs::write(&target_file, content)
-        .map_err(|e| format!("Failed to write output to {target_file}: {e}"))?;
+        .map_err(|e| format!("Failed to write output to '{}': {e}", target_file.display()))?;
     Ok(())
 }
 
@@ -551,27 +536,40 @@ Generate the complete XML agent specification:"#
         .await
         .unwrap_or_default();
 
-    // Validation loop: verify the XML has required fields, fix if not (up to 2 rounds)
+    // Validation loop: verify the XML has all required fields, fix if not (up to 2 rounds)
     for _validation_round in 0..2 {
+        let has_agents = response.contains("<agents>");
         let has_name = response.contains("<name>");
+        let has_description = response.contains("<description>");
         let has_instruction = response.contains("<instruction>");
         let has_tools = response.contains("<tool>");
-        let has_agents = response.contains("<agents>");
+        let has_output = response.contains("<output>");
 
-        if has_name && has_instruction && has_tools && has_agents {
+        if has_agents && has_name && has_description && has_instruction && has_tools && has_output {
             break; // Valid spec
         }
 
         // Fix incomplete spec
+        let missing: Vec<&str> = [
+            (!has_name).then_some("<name>"),
+            (!has_description).then_some("<description>"),
+            (!has_instruction).then_some("<instruction>"),
+            (!has_tools).then_some("<tool>"),
+            (!has_output).then_some("<output>"),
+        ].iter().flatten().copied().collect();
+
         let fix_prompt = format!(
-            "The following agent specification is incomplete or malformed. Fix it to include all required XML fields: <agents>, <agent>, <name>, <description>, <instruction>, <tools>, <tool>, <output>.
+            "The following agent specification is incomplete or malformed. \
+             Missing required XML fields: {}.\
+             Fix it to include all required XML fields: <agents>, <agent>, <name>, <description>, <instruction>, <tools>, <tool>, <output>.
 
 Incomplete spec:
 {response}
 
 Original requirement: {requirement}
 
-Output only the corrected complete XML spec:"
+Output only the corrected complete XML spec:",
+            missing.join(", ")
         );
         response = crate::ollama::generate(&model_name, &fix_prompt, None)
             .await
@@ -745,10 +743,14 @@ if __name__ == '__main__':
         }
     }
 
-    // Register tool regardless of test result (user can still use it)
-    let register_msg = crate::python_sandbox::register_tool(&tool_name, &clean_code, "./user_tools")
-        .await
-        .unwrap_or_else(|e| format!("Registration note: {e}"));
+    // Register tool only if it has usable code (success or at least non-empty)
+    let register_msg = if final_test_result.success || !clean_code.trim().is_empty() {
+        crate::python_sandbox::register_tool(&tool_name, &clean_code, "./user_tools")
+            .await
+            .unwrap_or_else(|e| format!("Registration note: {e}"))
+    } else {
+        format!("Tool '{tool_name}' not registered — all test attempts failed and code is empty.")
+    };
 
     Ok(serde_json::json!({
         "tool_name": tool_name,
@@ -810,7 +812,8 @@ pub async fn get_generated_agents() -> Result<Vec<serde_json::Value>, String> {
                 let agent_code_preview = if has_agent_py {
                     tokio::fs::read_to_string(&agent_py)
                         .await
-                        .map(|c| c[..c.len().min(500)].to_string())
+                        // Safe UTF-8 slicing via chars() — avoids panic on multi-byte chars
+                        .map(|c| c.chars().take(500).collect::<String>())
                         .unwrap_or_default()
                 } else {
                     String::new()

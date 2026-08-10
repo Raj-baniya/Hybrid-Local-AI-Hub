@@ -17,6 +17,8 @@ interface NodeStatusEventPayload {
   message?: string;
 }
 
+const MAX_LOG_ENTRIES = 500;
+
 interface ExecutionStore {
   isRunning: boolean;
   nodeStatuses: Record<string, NodeExecutionStatus>;
@@ -28,8 +30,11 @@ interface ExecutionStore {
   resetExecution: () => void;
 }
 
+// Hold the cleanup function so we can call it if needed (HMR, tests, etc.)
+let _unlistenNodeStatus: (() => void) | null = null;
+
 export const useExecutionStore = create<ExecutionStore>((set) => {
-  // Listen for Tauri backend node execution events
+  // Register Tauri node-status event listener once, store unlisten for cleanup
   if (typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__)) {
     listen<NodeStatusEventPayload>("node-status", (event) => {
       const { node_id, status, message } = event.payload;
@@ -39,7 +44,7 @@ export const useExecutionStore = create<ExecutionStore>((set) => {
         timestamp: now,
         nodeId: node_id,
         status: status || "running",
-        message: message || `Node ${node_id} status: ${status}`,
+        message: message || `Node ${node_id}: ${status}`,
       };
 
       set((state) => ({
@@ -47,8 +52,13 @@ export const useExecutionStore = create<ExecutionStore>((set) => {
           ...state.nodeStatuses,
           [node_id]: status,
         },
-        logs: [newEntry, ...state.logs],
+        // Cap at MAX_LOG_ENTRIES to prevent unbounded memory growth
+        logs: [newEntry, ...state.logs].slice(0, MAX_LOG_ENTRIES),
       }));
+    }).then((unlisten) => {
+      _unlistenNodeStatus = unlisten;
+    }).catch(() => {
+      // Tauri not ready yet — harmless in browser/dev mode
     });
   }
 
@@ -66,7 +76,7 @@ export const useExecutionStore = create<ExecutionStore>((set) => {
           timestamp: now,
           nodeId,
           status,
-          message: message || `Node ${nodeId} status: ${status}`,
+          message: message || `Node ${nodeId}: ${status}`,
         };
 
         return {
@@ -74,7 +84,7 @@ export const useExecutionStore = create<ExecutionStore>((set) => {
             ...state.nodeStatuses,
             [nodeId]: status,
           },
-          logs: [newEntry, ...state.logs],
+          logs: [newEntry, ...state.logs].slice(0, MAX_LOG_ENTRIES),
         };
       }),
     addLog: (nodeId, message, status = "running") =>
@@ -87,8 +97,16 @@ export const useExecutionStore = create<ExecutionStore>((set) => {
           status,
           message,
         };
-        return { logs: [newEntry, ...state.logs] };
+        return { logs: [newEntry, ...state.logs].slice(0, MAX_LOG_ENTRIES) };
       }),
     resetExecution: () => set({ nodeStatuses: {}, logs: [], isRunning: false }),
   };
 });
+
+/** Call this to clean up the Tauri event listener (e.g. in tests or HMR). */
+export function cleanupExecutionStore() {
+  if (_unlistenNodeStatus) {
+    _unlistenNodeStatus();
+    _unlistenNodeStatus = null;
+  }
+}

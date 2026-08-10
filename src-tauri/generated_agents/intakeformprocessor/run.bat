@@ -1,0 +1,3 @@
+@echo off
+echo Running IntakeFormProcessor...
+python "%~dp0agent.py" %*

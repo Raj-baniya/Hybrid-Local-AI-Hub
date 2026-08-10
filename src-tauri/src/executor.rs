@@ -5,6 +5,34 @@ use tauri::{AppHandle, Emitter};
 use crate::chroma;
 use crate::ollama;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Base64 encoding helper (stdlib-only, no external crate required)
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let combined = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((combined >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((combined >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 {
+            result.push(CHARS[((combined >> 6) & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+        if chunk.len() > 2 {
+            result.push(CHARS[(combined & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+    result
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NodePayload {
     pub source_node_id: String,
@@ -12,6 +40,9 @@ pub struct NodePayload {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_path: Option<String>,
+    /// Base64-encoded image bytes for vision LLM calls.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_base64: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embedding: Option<Vec<f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -125,6 +156,7 @@ fn merge_upstream_payloads(
     let mut merged_texts: Vec<String> = Vec::new();
     let mut merged_chunks: Vec<String> = Vec::new();
     let mut first_image: Option<String> = None;
+    let mut first_image_base64: Option<String> = None;
     let mut first_embedding: Option<Vec<f32>> = None;
     let mut has_image = false;
     let mut has_text = false;
@@ -141,6 +173,9 @@ fn merge_upstream_payloads(
             }
             if first_image.is_none() && payload.image_path.is_some() {
                 first_image = payload.image_path.clone();
+            }
+            if first_image_base64.is_none() && payload.image_base64.is_some() {
+                first_image_base64 = payload.image_base64.clone();
             }
             if first_embedding.is_none() && payload.embedding.is_some() {
                 first_embedding = payload.embedding.clone();
@@ -170,6 +205,7 @@ fn merge_upstream_payloads(
         source_node_id: current_node_id.to_string(),
         text: joined_text.clone(),
         image_path: first_image,
+        image_base64: first_image_base64,
         embedding: first_embedding,
         context_chunks: chunks_opt,
         has_image,
@@ -217,6 +253,7 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                     source_node_id: node.id.clone(),
                     text: text_val,
                     image_path: None,
+                    image_base64: None,
                     embedding: None,
                     context_chunks: None,
                     has_image: false,
@@ -229,11 +266,34 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                let has_img = img_path.is_some();
+                // Read image bytes and base64-encode for vision LLM calls
+                let (image_base64, has_img) = if let Some(ref path) = img_path {
+                    match std::fs::read(path) {
+                        Ok(bytes) => {
+                            let encoded = base64_encode(&bytes);
+                            (Some(encoded), true)
+                        }
+                        Err(e) => {
+                            let _ = app.emit(
+                                "node-status",
+                                NodeStatusEvent {
+                                    node_id: node.id.clone(),
+                                    status: "error".to_string(),
+                                    message: Some(format!("Failed to read image '{path}': {e}")),
+                                },
+                            );
+                            (None, false)
+                        }
+                    }
+                } else {
+                    (None, false)
+                };
+
                 Ok(NodePayload {
                     source_node_id: node.id.clone(),
                     text: None,
                     image_path: img_path,
+                    image_base64,
                     embedding: None,
                     context_chunks: None,
                     has_image: has_img,
@@ -246,21 +306,42 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
 
-                let text_content = if !watch_path.is_empty() && std::path::Path::new(watch_path).is_file() {
-                    std::fs::read_to_string(watch_path).ok()
-                } else {
-                    None
-                };
+                if watch_path.is_empty() {
+                    let _ = app.emit(
+                        "node-status",
+                        NodeStatusEvent {
+                            node_id: node.id.clone(),
+                            status: "error".to_string(),
+                            message: Some("File Watcher: no watch_path configured. Set a file or folder path in the node.".to_string()),
+                        },
+                    );
+                    return Err("File Watcher: watch_path is empty. Configure a valid file path.".to_string());
+                }
 
-                let has_t = text_content.is_some();
+                if !std::path::Path::new(watch_path).is_file() {
+                    let _ = app.emit(
+                        "node-status",
+                        NodeStatusEvent {
+                            node_id: node.id.clone(),
+                            status: "error".to_string(),
+                            message: Some(format!("File Watcher: path '{watch_path}' does not exist or is not a file.")),
+                        },
+                    );
+                    return Err(format!("File Watcher: path '{watch_path}' not found."));
+                }
+
+                let text_content = std::fs::read_to_string(watch_path)
+                    .map_err(|e| format!("File Watcher: failed to read '{watch_path}': {e}"))?;
+
                 Ok(NodePayload {
                     source_node_id: node.id.clone(),
-                    text: text_content,
+                    text: Some(text_content),
                     image_path: None,
+                    image_base64: None,
                     embedding: None,
                     context_chunks: None,
                     has_image: false,
-                    has_text: has_t,
+                    has_text: true,
                 })
             }
             "local_embedder" => {
@@ -274,6 +355,7 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                     source_node_id: node.id.clone(),
                     text: merged_input.text,
                     image_path: merged_input.image_path,
+                    image_base64: merged_input.image_base64,
                     embedding: Some(vec),
                     context_chunks: merged_input.context_chunks,
                     has_image: merged_input.has_image,
@@ -359,11 +441,31 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                     prompt_parts.join("\n\n")
                 };
 
-                let response_text = ollama::generate(model, &final_prompt, None).await?;
+                // Pass base64 image if present (vision models)
+                let image_b64 = merged_input.image_base64.clone();
+
+                // Non-fatal: LLM error on one node should not abort the whole pipeline
+                let response_text = match ollama::generate(model, &final_prompt, image_b64).await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let err_msg = format!("[ollama_selector '{model}' error] {e}");
+                        let _ = app.emit(
+                            "node-status",
+                            NodeStatusEvent {
+                                node_id: node.id.clone(),
+                                status: "error".to_string(),
+                                message: Some(err_msg.clone()),
+                            },
+                        );
+                        err_msg
+                    }
+                };
+
                 Ok(NodePayload {
                     source_node_id: node.id.clone(),
                     text: Some(response_text),
                     image_path: merged_input.image_path,
+                    image_base64: merged_input.image_base64,
                     embedding: None,
                     context_chunks: merged_input.context_chunks,
                     has_image: merged_input.has_image,
@@ -401,11 +503,14 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                 let out_dir = node_data
                     .get("output_path")
                     .and_then(|v| v.as_str())
-                    .unwrap_or(".");
+                    .unwrap_or("");
                 let format = node_data
                     .get("format")
                     .and_then(|v| v.as_str())
                     .unwrap_or("md");
+
+                // Use current working dir if output_path is empty
+                let effective_dir = if out_dir.trim().is_empty() { "." } else { out_dir };
 
                 let content = merged_input
                     .text
@@ -413,19 +518,21 @@ pub async fn execute_graph_pipeline<R: tauri::Runtime>(
                     .unwrap_or_else(|| "Pipeline Output Result".to_string());
 
                 let file_name = format!("output_{}.{}", uuid::Uuid::new_v4(), format);
-                let target_path = std::path::Path::new(out_dir).join(file_name);
+                let target_path = std::path::Path::new(effective_dir).join(file_name);
 
                 if let Some(parent) = target_path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create output directory '{}': {e}", parent.display()))?;
                 }
 
                 std::fs::write(&target_path, content)
-                    .map_err(|e| format!("Failed to write output file at {}: {e}", target_path.display()))?;
+                    .map_err(|e| format!("Failed to write output file at '{}': {e}", target_path.display()))?;
 
                 Ok(NodePayload {
                     source_node_id: node.id.clone(),
                     text: Some(format!("Saved to {}", target_path.display())),
                     image_path: None,
+                    image_base64: None,
                     embedding: None,
                     context_chunks: None,
                     has_image: false,

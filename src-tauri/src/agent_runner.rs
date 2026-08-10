@@ -398,23 +398,117 @@ async fn run_python_with_self_play(
         }
     }
 
-    // All retries exhausted — return last failed result
-    let final_result = python_sandbox::run_python_script(&current_code, None)
-        .await
-        .unwrap_or_else(|e| python_sandbox::SandboxResult {
-            success: false,
-            stdout: String::new(),
-            stderr: format!("Final attempt sandbox error: {e}"),
-            exit_code: -1,
-        });
-
-    (final_result, attempts)
+    // All retries exhausted — return the last attempt result WITHOUT running again
+    let last_result = python_sandbox::SandboxResult {
+        success: false,
+        stdout: String::new(),
+        stderr: format!("All {} retries exhausted.", max_retries + 1),
+        exit_code: -1,
+    };
+    (last_result, attempts)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Single Agent Step — calls Ollama, parses tool calls, executes them
-// ─────────────────────────────────────────────────────────────────────────────
+/// Runs a single agent step with a sliding-window context window.
+/// The master `conversation` is always fully updated; the LLM only sees the windowed slice.
+pub async fn run_agent_step_windowed(
+    agent_name: &str,
+    model: &str,
+    system_prompt: &str,
+    conversation: &mut Vec<String>,
+    _original_task: &str,
+    step_index: usize,
+) -> Result<(String, Vec<TrajectoryStep>), String> {
+    // Build windowed context: original task + last 8 turns
+    let windowed: Vec<&String> = if conversation.len() <= 9 {
+        conversation.iter().collect()
+    } else {
+        let mut w: Vec<&String> = vec![&conversation[0]]; // original task always first
+        w.extend(conversation[conversation.len() - 8..].iter());
+        w
+    };
 
+    let history = windowed.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n\n---\n\n");
+    let full_prompt = format!("System Instructions:\n{system_prompt}\n\n=== Conversation History ===\n{history}\n\n=== Your Turn ===\n[{agent_name}]: ");
+
+    let raw_response = ollama::generate(model, &full_prompt, None)
+        .await
+        .unwrap_or_else(|e| format!("LLM error: {e}"));
+
+    let mut trajectory_steps: Vec<TrajectoryStep> = Vec::new();
+
+    trajectory_steps.push(TrajectoryStep {
+        agent_name: agent_name.to_string(),
+        step_index,
+        action: "thinking".to_string(),
+        content: raw_response.clone(),
+        tool_name: None,
+        tool_result: None,
+    });
+
+    let tool_calls = parse_xml_tool_calls(&raw_response);
+    let mut tool_results: Vec<String> = Vec::new();
+
+    for (tool_name, params) in &tool_calls {
+        trajectory_steps.push(TrajectoryStep {
+            agent_name: agent_name.to_string(),
+            step_index,
+            action: "tool_call".to_string(),
+            content: format!("Calling tool: {tool_name} with params: {:?}", params.keys().collect::<Vec<_>>()),
+            tool_name: Some(tool_name.clone()),
+            tool_result: None,
+        });
+
+        let result = if tool_name == "run_python" {
+            let code = params.get("code").map(String::as_str).unwrap_or("");
+            let (sandbox_result, attempts) = run_python_with_self_play(code, model, 5).await;
+
+            if attempts.len() > 1 {
+                for (i, attempt_msg) in attempts.iter().enumerate() {
+                    trajectory_steps.push(TrajectoryStep {
+                        agent_name: agent_name.to_string(),
+                        step_index,
+                        action: format!("self_play_retry_{i}"),
+                        content: attempt_msg.clone(),
+                        tool_name: Some("run_python".to_string()),
+                        tool_result: None,
+                    });
+                }
+            }
+
+            let status = if sandbox_result.success { "SUCCESS" } else { "FAILED after retries" };
+            format!(
+                "[run_python {status}] exit={}\nSTDOUT:\n{}\nSTDERR:\n{}",
+                sandbox_result.exit_code,
+                &sandbox_result.stdout[..sandbox_result.stdout.len().min(3000)],
+                &sandbox_result.stderr[..sandbox_result.stderr.len().min(1000)]
+            )
+        } else {
+            execute_tool(tool_name, params).await
+        };
+
+        trajectory_steps.push(TrajectoryStep {
+            agent_name: agent_name.to_string(),
+            step_index,
+            action: "tool_result".to_string(),
+            content: result.clone(),
+            tool_name: Some(tool_name.clone()),
+            tool_result: Some(result.clone()),
+        });
+
+        tool_results.push(format!("[{tool_name}] → {result}"));
+    }
+
+    // Build agent message and append to the REAL conversation (not windowed)
+    let mut agent_message = format!("[{agent_name}]:\n{raw_response}");
+    if !tool_results.is_empty() {
+        agent_message.push_str(&format!("\n\n=== Tool Results ===\n{}", tool_results.join("\n---\n")));
+    }
+    conversation.push(agent_message.clone());
+
+    Ok((raw_response, trajectory_steps))
+}
+
+#[allow(dead_code)]
 pub async fn run_agent_step(
     agent_name: &str,
     model: &str,
@@ -525,14 +619,18 @@ pub async fn run_user_mode_task<R: tauri::Runtime>(
     max_rounds: usize,
 ) -> AgentRunResult {
     let mut trajectory: Vec<TrajectoryStep> = Vec::new();
+    // Full conversation history — we keep last 8 turns to prevent context overflow
     let mut conversation: Vec<String> = Vec::new();
-
-    // Seed the conversation with the task
-    conversation.push(format!("User Task:\n{task}"));
+    let original_task = format!("User Task:\n{task}");
+    conversation.push(original_task.clone());
 
     let mut current_agent = "Orchestrator";
     let mut step_index = 0;
     let mut final_answer = String::new();
+    // Handoff tracking for cycle detection
+    let mut handoff_history: Vec<String> = Vec::new();
+    // No-progress detection: last N responses
+    let mut recent_responses: std::collections::VecDeque<String> = std::collections::VecDeque::new();
 
     for _round in 0..max_rounds {
         step_index += 1;
@@ -543,11 +641,14 @@ pub async fn run_user_mode_task<R: tauri::Runtime>(
             _ => orchestrator_prompt.as_str(),
         };
 
-        let result = run_agent_step(
+        // Sliding window: build windowed history for LLM but keep full conversation for tracking
+        // We pass the real conversation; run_agent_step uses its own prompt builder
+        let result = run_agent_step_windowed(
             current_agent,
             &model,
             system_prompt,
             &mut conversation,
+            &original_task,
             step_index,
         )
         .await;
@@ -566,7 +667,18 @@ pub async fn run_user_mode_task<R: tauri::Runtime>(
                     trajectory.push(step.clone());
                 }
 
-                // Check for FINAL_ANSWER
+                // No-progress detection: if last 3 responses are identical, stop
+                let trimmed_resp = response_text.trim().to_string();
+                recent_responses.push_back(trimmed_resp.clone());
+                if recent_responses.len() > 3 {
+                    recent_responses.pop_front();
+                }
+                if recent_responses.len() == 3 && recent_responses.iter().all(|r| r == recent_responses.front().unwrap()) {
+                    final_answer = trimmed_resp;
+                    break;
+                }
+
+                // Check for FINAL_ANSWER in the raw LLM response (not in tool results)
                 if response_text.contains("FINAL_ANSWER:") {
                     if let Some(idx) = response_text.find("FINAL_ANSWER:") {
                         final_answer = response_text[idx + "FINAL_ANSWER:".len()..]
@@ -576,7 +688,7 @@ pub async fn run_user_mode_task<R: tauri::Runtime>(
                     break;
                 }
 
-                // Handle handoffs — detect from tool_calls in the raw response
+                // Handle handoffs
                 let tool_calls = parse_xml_tool_calls(&response_text);
                 let mut handoff_target: Option<&str> = None;
 
@@ -584,13 +696,26 @@ pub async fn run_user_mode_task<R: tauri::Runtime>(
                     match tool_name.as_str() {
                         "transfer_to_coding_agent" => handoff_target = Some("Coding Agent"),
                         "transfer_to_local_file_agent" => handoff_target = Some("Local File Agent"),
-                        "transfer_to_web_surfer_agent" => handoff_target = Some("Web Surfer Agent"),
                         "transfer_back_to_orchestrator" => handoff_target = Some("Orchestrator"),
                         _ => {}
                     }
                 }
 
                 if let Some(target) = handoff_target {
+                    // Cycle detection: if same handoff pair repeated 3x, force completion
+                    let handoff_key = format!("{current_agent}→{target}");
+                    handoff_history.push(handoff_key.clone());
+                    let cycle_count = handoff_history.iter().filter(|h| *h == &handoff_key).count();
+
+                    if cycle_count >= 3 {
+                        // Force final answer instead of continuing to loop
+                        final_answer = conversation
+                            .last()
+                            .cloned()
+                            .unwrap_or_else(|| "Task completed after cycle detection.".to_string());
+                        break;
+                    }
+
                     let handoff_step = TrajectoryStep {
                         agent_name: current_agent.to_string(),
                         step_index,

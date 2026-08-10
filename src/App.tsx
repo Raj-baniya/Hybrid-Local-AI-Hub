@@ -136,30 +136,71 @@ function CanvasSidebarPanel(): React.JSX.Element {
 function ModelSelectorRow(): React.JSX.Element {
   const { selectedModel, setSelectedModel } = useAgentStore();
   const [installedModels, setInstalledModels] = useState<string[]>([]);
+  const [ollamaStatus, setOllamaStatus] = useState<"ok" | "offline" | "loading">("loading");
 
   useEffect(() => {
-    if (!isTauriAvailable()) return;
+    if (!isTauriAvailable()) {
+      setOllamaStatus("offline");
+      return;
+    }
     invoke<string[]>("list_ollama_models")
       .then((models) => {
-        if (models && models.length > 0) setInstalledModels(models);
+        if (models && models.length > 0) {
+          setInstalledModels(models);
+          setOllamaStatus("ok");
+        } else {
+          setOllamaStatus("offline");
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        setOllamaStatus("offline");
+      });
   }, []);
 
   const modelList = installedModels.length > 0 ? installedModels : QUICK_MODELS;
 
   return (
-    <div className="shrink-0 px-3 py-2 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
-      <span className="text-[10px] font-bold text-slate-500 shrink-0">Model:</span>
-      <select
-        value={selectedModel}
-        onChange={(e) => setSelectedModel(e.target.value)}
-        className="flex-1 text-[11px] font-bold text-slate-900 bg-white border-2 border-slate-900 rounded px-2 py-0.5 focus:outline-none focus:border-violet-600 cursor-pointer"
-      >
-        {modelList.map((m) => (
-          <option key={m} value={m}>{m}</option>
-        ))}
-      </select>
+    <div className="shrink-0 px-3 py-2 border-b border-slate-200 bg-slate-50 flex flex-col gap-1.5">
+      {/* Ollama status badge */}
+      <div className="flex items-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+            ollamaStatus === "ok"
+              ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+              : ollamaStatus === "loading"
+              ? "bg-amber-50 text-amber-700 border-amber-300"
+              : "bg-rose-50 text-rose-700 border-rose-300"
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              ollamaStatus === "ok"
+                ? "bg-emerald-500"
+                : ollamaStatus === "loading"
+                ? "bg-amber-400 animate-pulse"
+                : "bg-rose-500"
+            }`}
+          />
+          {ollamaStatus === "ok"
+            ? `Ollama online · ${installedModels.length} model${installedModels.length !== 1 ? "s" : ""}`
+            : ollamaStatus === "loading"
+            ? "Connecting to Ollama..."
+            : "Ollama offline — run: ollama serve"}
+        </span>
+      </div>
+      {/* Model selector */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-bold text-slate-500 shrink-0">Model:</span>
+        <select
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          className="flex-1 text-[11px] font-bold text-slate-900 bg-white border-2 border-slate-900 rounded px-2 py-0.5 focus:outline-none focus:border-violet-600 cursor-pointer"
+        >
+          {modelList.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

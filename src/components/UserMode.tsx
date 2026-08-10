@@ -163,7 +163,7 @@ export default function UserMode(): React.JSX.Element {
     if (!userModeTask.trim() || isUserModeRunning) return;
     clearTrajectory();
     setIsUserModeRunning(true);
-    setStatusMsg("🎯 Orchestrator analyzing task with " + selectedModel + "...");
+    setStatusMsg("🔍 Checking Ollama connection...");
 
     try {
       const result = await invoke<{
@@ -176,19 +176,36 @@ export default function UserMode(): React.JSX.Element {
         model: selectedModel,
       });
       setUserModeResult(result);
-      setStatusMsg(
-        result.success
-          ? `✅ Task completed — ${result.trajectory.length} agent steps`
-          : `❌ Error: ${result.error}`
-      );
+      if (result.success) {
+        setStatusMsg(`✅ Task completed — ${result.trajectory.length} agent steps`);
+      } else {
+        const errDetail = result.error || "Unknown error";
+        setStatusMsg(`❌ ${errDetail}`);
+        // Surface the error as a visible trajectory step
+        appendTrajectoryStep({
+          agent_name: "System",
+          step_index: 0,
+          action: "error",
+          content: `Task failed:\n${errDetail}\n\nTip: Make sure Ollama is running (ollama serve) and the model is pulled (ollama pull ${selectedModel})`,
+          tool_name: null,
+          tool_result: null,
+        });
+      }
     } catch (err) {
       const msg = String(err);
-      setStatusMsg(`❌ Failed — is Ollama running? (ollama serve)`);
+      // Parse common Ollama-specific errors to give actionable advice
+      let hint = "";
+      if (msg.includes("Connection refused") || msg.includes("unreachable") || msg.includes("connect")) {
+        hint = "\n\n👉 Fix: Run 'ollama serve' in a terminal and try again.";
+      } else if (msg.includes("model") && msg.includes("not found")) {
+        hint = `\n\n👉 Fix: Run 'ollama pull ${selectedModel}' to install the model.`;
+      }
+      setStatusMsg(`❌ Backend error — is Ollama running? (ollama serve)`);
       appendTrajectoryStep({
         agent_name: "System",
         step_index: 0,
         action: "error",
-        content: `Connection to Tauri backend failed:\n${msg}\n\nTroubleshooting:\n1. Make sure Ollama is running: ollama serve\n2. Make sure model is installed: ollama pull ${selectedModel}\n3. Restart the app`,
+        content: `Backend connection failed:\n${msg}${hint}`,
         tool_name: null,
         tool_result: null,
       });
@@ -348,8 +365,8 @@ export default function UserMode(): React.JSX.Element {
             <div className="text-4xl mb-3">🤖</div>
             <p className="text-sm font-bold text-slate-500">Ready for multi-agent task execution</p>
             <p className="text-[11px] text-slate-400 mt-1">
-              The Orchestrator will coordinate Local File Agent, Coding Agent,<br />
-              and Web Surfer Agent to solve complex tasks — all offline.
+              The Orchestrator will coordinate Local File Agent and Coding Agent<br />
+              to solve complex tasks — all offline via Ollama.
             </p>
           </div>
         )}

@@ -18,7 +18,8 @@ pub fn start_watching<R: tauri::Runtime>(
     std::thread::spawn(move || {
         for res in rx {
             if let Ok(event) = res {
-                if event.kind.is_create() {
+                // Fire on file creation OR modification (edit of existing file)
+                if event.kind.is_create() || event.kind.is_modify() {
                     if let Some(file_path) = event.paths.first() {
                         let _ = app.emit(
                             "file-watcher-triggered",

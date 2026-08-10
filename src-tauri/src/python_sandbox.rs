@@ -1,8 +1,16 @@
+/// python_sandbox.rs
+/// Local Python sandbox and filesystem tools for Hybrid Local AI Hub.
+/// Cross-platform (Windows, macOS, Linux). No Docker required.
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tokio::process::Command;
 
-/// Represents the result of executing a Python script in the local sandbox.
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Represents the result of executing a script in the local sandbox.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SandboxResult {
     pub success: bool,
@@ -11,10 +19,59 @@ pub struct SandboxResult {
     pub exit_code: i32,
 }
 
-/// Runs a Python script string in the local sandbox (cross-platform: Windows, macOS, Linux).
+// ─────────────────────────────────────────────────────────────────────────────
+// Python executable detection (robust — probes multiple candidates)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Detects the correct Python 3 executable for the current platform.
+/// Probes candidates in order: python3, python, then Windows-specific python.exe.
+/// Returns the first one that reports Python 3.x on stderr/stdout.
+pub fn find_python_executable() -> String {
+    // Candidates to try, in preference order
+    let candidates: &[&str] = &[
+        #[cfg(target_os = "windows")]
+        "python",
+        "python3",
+        #[cfg(not(target_os = "windows"))]
+        "python",
+        "python3.11",
+        "python3.10",
+        "python3.9",
+    ];
+
+    for candidate in candidates {
+        // Quick synchronous check — spawn `python --version` and check exit code
+        if let Ok(output) = std::process::Command::new(candidate)
+            .arg("--version")
+            .output()
+        {
+            // Python 3 prints "Python 3.x.y" to stdout (older versions to stderr)
+            let combined = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            if combined.contains("Python 3") {
+                return candidate.to_string();
+            }
+        }
+    }
+
+    // Last resort — return platform default and let the caller surface the error
+    #[cfg(target_os = "windows")]
+    return "python".to_string();
+    #[cfg(not(target_os = "windows"))]
+    return "python3".to_string();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Python script execution with 60s timeout
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Runs a Python script string in the local sandbox (cross-platform).
 /// Uses the system Python interpreter — no Docker required.
+/// Enforces a 60-second hard timeout.
 pub async fn run_python_script(code: &str, working_dir: Option<&str>) -> Result<SandboxResult, String> {
-    // Write code to a temp file
     let tmp_dir = std::env::temp_dir();
     let script_path = tmp_dir.join(format!("hlah_sandbox_{}.py", uuid::Uuid::new_v4()));
 
@@ -33,17 +90,20 @@ pub async fn run_python_script(code: &str, working_dir: Option<&str>) -> Result<
         }
     }
 
-    // Capture stdout and stderr
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let result = cmd.output().await;
+    // 60-second hard timeout for script execution
+    let run_result = tokio::time::timeout(
+        Duration::from_secs(60),
+        cmd.output()
+    ).await;
 
-    // Cleanup temp file
+    // Always clean up the temp file
     let _ = tokio::fs::remove_file(&script_path).await;
 
-    match result {
-        Ok(output) => {
+    match run_result {
+        Ok(Ok(output)) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             let exit_code = output.status.code().unwrap_or(-1);
@@ -54,17 +114,86 @@ pub async fn run_python_script(code: &str, working_dir: Option<&str>) -> Result<
                 exit_code,
             })
         }
-        Err(e) => {
-            // Python not available — return a descriptive error result
+        Ok(Err(e)) => {
             Ok(SandboxResult {
                 success: false,
                 stdout: String::new(),
-                stderr: format!("Python execution unavailable ({python_cmd}): {e}. Install Python 3.x for full sandbox support."),
+                stderr: format!(
+                    "Python execution failed (interpreter: '{python_cmd}'): {e}. \
+                     Install Python 3.x and ensure it is in your PATH."
+                ),
+                exit_code: -1,
+            })
+        }
+        Err(_timeout) => {
+            Ok(SandboxResult {
+                success: false,
+                stdout: String::new(),
+                stderr: "Python script timed out after 60 seconds. The script may be in an infinite loop.".to_string(),
                 exit_code: -1,
             })
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shell command execution with 30s timeout
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Runs a shell command (cross-platform) with a 30-second hard timeout.
+pub async fn run_shell_command(command: &str, working_dir: Option<&str>) -> Result<SandboxResult, String> {
+    #[cfg(target_os = "windows")]
+    let (shell, flag) = ("cmd", "/C");
+    #[cfg(not(target_os = "windows"))]
+    let (shell, flag) = ("sh", "-c");
+
+    let mut cmd = Command::new(shell);
+    cmd.arg(flag).arg(command);
+
+    if let Some(dir) = working_dir {
+        if Path::new(dir).is_dir() {
+            cmd.current_dir(dir);
+        }
+    }
+
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
+    let run_result = tokio::time::timeout(
+        Duration::from_secs(30),
+        cmd.output()
+    ).await;
+
+    match run_result {
+        Ok(Ok(output)) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let exit_code = output.status.code().unwrap_or(-1);
+            Ok(SandboxResult {
+                success: output.status.success(),
+                stdout,
+                stderr,
+                exit_code,
+            })
+        }
+        Ok(Err(e)) => Ok(SandboxResult {
+            success: false,
+            stdout: String::new(),
+            stderr: format!("Shell command failed to start: {e}"),
+            exit_code: -1,
+        }),
+        Err(_timeout) => Ok(SandboxResult {
+            success: false,
+            stdout: String::new(),
+            stderr: "Shell command timed out after 30 seconds.".to_string(),
+            exit_code: -1,
+        }),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filesystem tools
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Reads a file from the local filesystem as text.
 pub async fn read_local_file(path: &str) -> Result<String, String> {
@@ -73,12 +202,121 @@ pub async fn read_local_file(path: &str) -> Result<String, String> {
         .map_err(|e| format!("Failed to read file '{path}': {e}"))
 }
 
-/// Lists files and directories within a given directory path (recursive optional).
+/// Writes content to a file, creating parent directories automatically.
+pub async fn write_local_file(path: &str, content: &str) -> Result<(), String> {
+    if let Some(parent) = PathBuf::from(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| format!("Failed to create directories for '{path}': {e}"))?;
+        }
+    }
+    tokio::fs::write(path, content)
+        .await
+        .map_err(|e| format!("Failed to write file '{path}': {e}"))
+}
+
+/// Appends content to a file, creating it if it doesn't exist.
+pub async fn append_local_file(path: &str, content: &str) -> Result<(), String> {
+    use tokio::fs::OpenOptions;
+    use tokio::io::AsyncWriteExt;
+
+    if let Some(parent) = PathBuf::from(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| format!("Failed to create directories for '{path}': {e}"))?;
+        }
+    }
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .await
+        .map_err(|e| format!("Failed to open '{path}' for append: {e}"))?;
+
+    file.write_all(content.as_bytes())
+        .await
+        .map_err(|e| format!("Failed to append to '{path}': {e}"))
+}
+
+/// Copies a file from src to dst, creating parent directories for dst.
+pub async fn copy_file(src: &str, dst: &str) -> Result<(), String> {
+    if let Some(parent) = PathBuf::from(dst).parent() {
+        if !parent.as_os_str().is_empty() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| format!("Failed to create dst directories for '{dst}': {e}"))?;
+        }
+    }
+    tokio::fs::copy(src, dst)
+        .await
+        .map(|_| ())
+        .map_err(|e| format!("Failed to copy '{src}' to '{dst}': {e}"))
+}
+
+/// Deletes a file.
+pub async fn delete_file(path: &str) -> Result<(), String> {
+    tokio::fs::remove_file(path)
+        .await
+        .map_err(|e| format!("Failed to delete '{path}': {e}"))
+}
+
+/// Returns formatted metadata for a file or directory.
+pub async fn get_file_info(path: &str) -> Result<String, String> {
+    let meta = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| format!("Failed to get info for '{path}': {e}"))?;
+
+    let size = meta.len();
+    let is_dir = meta.is_dir();
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| format!("{}", d.as_secs()))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    Ok(format!(
+        "Path: {path}\nType: {}\nSize: {} bytes\nModified (unix): {modified}",
+        if is_dir { "directory" } else { "file" },
+        size
+    ))
+}
+
+/// Searches for text in a file (case-insensitive grep).
+pub async fn search_in_file(path: &str, query: &str) -> Result<Vec<String>, String> {
+    let content = read_local_file(path).await?;
+    let matches: Vec<String> = content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.to_lowercase().contains(&query.to_lowercase()))
+        .map(|(i, line)| format!("L{}: {}", i + 1, line))
+        .collect();
+    Ok(matches)
+}
+
+/// Lists directory contents recursively up to max_depth.
+/// Skips common noise directories: node_modules, .git, target, __pycache__, .next, dist.
 pub async fn list_directory(path: &str) -> Result<Vec<String>, String> {
     list_directory_recursive(path.to_string(), 0, 2).await
 }
 
-/// Recursive directory listing up to max_depth — uses Box::pin for async recursion.
+/// Directories to skip during recursive listing (noise / huge dirs)
+const SKIP_DIRS: &[&str] = &[
+    "node_modules",
+    ".git",
+    "target",
+    "__pycache__",
+    ".next",
+    "dist",
+    ".venv",
+    "venv",
+    ".mypy_cache",
+    ".pytest_cache",
+];
+
 fn list_directory_recursive(
     path: String,
     depth: usize,
@@ -100,182 +338,36 @@ fn list_directory_recursive(
                 .unwrap_or_default();
 
             let metadata = tokio::fs::metadata(&entry_path).await;
-            let is_dir = metadata.map(|m| m.is_dir()).unwrap_or(false);
+            let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
 
             if is_dir {
+                // Skip noise directories
+                if SKIP_DIRS.contains(&name.as_str()) {
+                    result.push(format!("{indent}[DIR] {name}/ (skipped)"));
+                    continue;
+                }
                 result.push(format!("{indent}[DIR] {name}/"));
                 if depth < max_depth {
-                    if let Ok(sub_entries) = list_directory_recursive(
-                        entry_path.to_string_lossy().to_string(),
-                        depth + 1,
-                        max_depth,
-                    ).await {
+                    if let Ok(sub_entries) =
+                        list_directory_recursive(entry_path.to_string_lossy().to_string(), depth + 1, max_depth).await
+                    {
                         result.extend(sub_entries);
                     }
                 }
             } else {
-                let size = tokio::fs::metadata(&entry_path)
-                    .await
-                    .map(|m| m.len())
-                    .unwrap_or(0);
-                result.push(format!("{indent}{name} ({} bytes)", size));
+                let size = metadata.map(|m| m.len()).unwrap_or(0);
+                result.push(format!("{indent}{name} ({size} bytes)"));
             }
         }
         Ok(result)
     })
 }
 
-/// Searches for text in a file (simple grep-like).
-pub async fn search_in_file(path: &str, query: &str) -> Result<Vec<String>, String> {
-    let content = read_local_file(path).await?;
-    let matches: Vec<String> = content
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| line.to_lowercase().contains(&query.to_lowercase()))
-        .map(|(i, line)| format!("L{}: {}", i + 1, line))
-        .collect();
-    Ok(matches)
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Tool & Agent Registration
+// ─────────────────────────────────────────────────────────────────────────────
 
-/// Writes a file to the local filesystem.
-pub async fn write_local_file(path: &str, content: &str) -> Result<(), String> {
-    // Create parent directories if needed
-    if let Some(parent) = PathBuf::from(path).parent() {
-        if !parent.as_os_str().is_empty() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| format!("Failed to create directories for '{path}': {e}"))?;
-        }
-    }
-    tokio::fs::write(path, content)
-        .await
-        .map_err(|e| format!("Failed to write file '{path}': {e}"))
-}
-
-/// Appends content to a file (creates if not exists).
-pub async fn append_local_file(path: &str, content: &str) -> Result<(), String> {
-    use tokio::fs::OpenOptions;
-    use tokio::io::AsyncWriteExt;
-
-    if let Some(parent) = PathBuf::from(path).parent() {
-        if !parent.as_os_str().is_empty() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| format!("Failed to create directories for '{path}': {e}"))?;
-        }
-    }
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .await
-        .map_err(|e| format!("Failed to open file '{path}' for append: {e}"))?;
-
-    file.write_all(content.as_bytes())
-        .await
-        .map_err(|e| format!("Failed to append to '{path}': {e}"))
-}
-
-/// Copies a file from src to dst.
-pub async fn copy_file(src: &str, dst: &str) -> Result<(), String> {
-    if let Some(parent) = PathBuf::from(dst).parent() {
-        if !parent.as_os_str().is_empty() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| format!("Failed to create dst directories: {e}"))?;
-        }
-    }
-    tokio::fs::copy(src, dst)
-        .await
-        .map(|_| ())
-        .map_err(|e| format!("Failed to copy '{src}' to '{dst}': {e}"))
-}
-
-/// Deletes a file.
-pub async fn delete_file(path: &str) -> Result<(), String> {
-    tokio::fs::remove_file(path)
-        .await
-        .map_err(|e| format!("Failed to delete '{path}': {e}"))
-}
-
-/// Gets file metadata: size, last modified.
-pub async fn get_file_info(path: &str) -> Result<String, String> {
-    let meta = tokio::fs::metadata(path)
-        .await
-        .map_err(|e| format!("Failed to get info for '{path}': {e}"))?;
-
-    let size = meta.len();
-    let is_dir = meta.is_dir();
-    let modified = meta.modified()
-        .ok()
-        .and_then(|t| {
-            t.duration_since(std::time::UNIX_EPOCH).ok()
-        })
-        .map(|d| format!("{}", d.as_secs()))
-        .unwrap_or_else(|| "unknown".to_string());
-
-    Ok(format!(
-        "Path: {path}\nType: {}\nSize: {} bytes\nModified (unix): {modified}",
-        if is_dir { "directory" } else { "file" },
-        size
-    ))
-}
-
-/// Runs a shell command (cross-platform).
-/// Returns stdout+stderr combined.
-pub async fn run_shell_command(command: &str, working_dir: Option<&str>) -> Result<SandboxResult, String> {
-    #[cfg(target_os = "windows")]
-    let (shell, flag) = ("cmd", "/C");
-    #[cfg(not(target_os = "windows"))]
-    let (shell, flag) = ("sh", "-c");
-
-    let mut cmd = Command::new(shell);
-    cmd.arg(flag).arg(command);
-
-    if let Some(dir) = working_dir {
-        if Path::new(dir).is_dir() {
-            cmd.current_dir(dir);
-        }
-    }
-
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
-
-    match cmd.output().await {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let exit_code = output.status.code().unwrap_or(-1);
-            Ok(SandboxResult {
-                success: output.status.success(),
-                stdout,
-                stderr,
-                exit_code,
-            })
-        }
-        Err(e) => Ok(SandboxResult {
-            success: false,
-            stdout: String::new(),
-            stderr: format!("Shell command failed: {e}"),
-            exit_code: -1,
-        }),
-    }
-}
-
-/// Detects the correct Python executable for the current platform.
-pub fn find_python_executable() -> String {
-    #[cfg(target_os = "windows")]
-    {
-        "python".to_string()
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        "python3".to_string()
-    }
-}
-
-/// Registers a Python tool to the user_tools directory so it is available to agents.
+/// Registers a Python tool to the user_tools directory.
 pub async fn register_tool(
     tool_name: &str,
     tool_code: &str,
@@ -300,7 +392,7 @@ pub async fn list_registered_tools(user_tools_dir: &str) -> Result<Vec<String>, 
 }
 
 /// Writes a complete, runnable generated agent to disk.
-/// Creates: generated_agents/<agent_name>/agent.py  + run.sh / run.bat
+/// Creates: generated_agents/<agent_name>/agent.py + run.sh / run.bat + README.md
 pub async fn write_agent_to_disk(
     agent_name: &str,
     agent_instructions: &str,
@@ -403,7 +495,6 @@ def execute_tool(tool_name, params):
     elif tool_name == "run_python":
         code = params.get("code", "")
         try:
-            # Write to temp file and execute
             import tempfile
             with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tf:
                 tf.write(code)
@@ -462,14 +553,13 @@ def parse_xml_tools(text):
 
 def run_agent(task, max_rounds=10):
     conversation = [f"System:\n{{SYSTEM_PROMPT}}\n\nUser Task:\n{{task}}"]
-    print(f"\\n🤖 {{MODEL}} Agent starting task...\\n")
+    print(f"\n🤖 {{MODEL}} Agent starting task...\n")
 
     for round_num in range(max_rounds):
         prompt = "\n\n".join(conversation)
         response = call_ollama(prompt)
         print(f"[Round {{round_num + 1}}] Agent: {{response[:200]}}...")
 
-        # Parse and execute tools
         tool_calls = parse_xml_tools(response)
         tool_results = []
         for tool_name, params in tool_calls:
@@ -477,7 +567,7 @@ def run_agent(task, max_rounds=10):
             result = execute_tool(tool_name, params)
             tool_results.append(f"[{{tool_name}} result]: {{result[:500]}}")
             if tool_name == "final_answer":
-                print(f"\\n✅ Final Answer: {{params.get('answer', result)}}")
+                print(f"\n✅ Final Answer: {{params.get('answer', result)}}")
                 return params.get("answer", result)
 
         msg = f"[Agent Round {{round_num + 1}}]:\n{{response}}"
@@ -501,29 +591,21 @@ if __name__ == "__main__":
         .map_err(|e| format!("Failed to write agent.py: {e}"))?;
 
     // Write run.bat (Windows)
-    let run_bat = format!(
-        "@echo off\necho Running {agent_name}...\npython \"%~dp0agent.py\" %*\n"
-    );
-    tokio::fs::write(agent_dir.join("run.bat"), run_bat)
-        .await
-        .ok();
+    let run_bat = format!("@echo off\necho Running {agent_name}...\npython \"%~dp0agent.py\" %*\n");
+    tokio::fs::write(agent_dir.join("run.bat"), run_bat).await.ok();
 
     // Write run.sh (Unix)
     let run_sh = format!(
         "#!/bin/bash\necho 'Running {agent_name}...'\npython3 \"$(dirname \"$0\")/agent.py\" \"$@\"\n"
     );
-    tokio::fs::write(agent_dir.join("run.sh"), run_sh)
-        .await
-        .ok();
+    tokio::fs::write(agent_dir.join("run.sh"), run_sh).await.ok();
 
-    // Write README.md for the agent
+    // Write README.md
     let readme = format!(
         "# {agent_name}\n\nGenerated by Hybrid Local AI Hub\n\n## Usage\n\n```bash\n# Windows\nrun.bat \"your task here\"\n\n# macOS/Linux\nbash run.sh \"your task here\"\n\n# Direct Python\npython agent.py \"your task here\"\n```\n\n## Model\n`{model}`\n\n## Tools\n{}\n\n## Instructions\n\n{agent_instructions}\n",
         tools.iter().map(|t| format!("- `{t}`")).collect::<Vec<_>>().join("\n"),
     );
-    tokio::fs::write(agent_dir.join("README.md"), readme)
-        .await
-        .ok();
+    tokio::fs::write(agent_dir.join("README.md"), readme).await.ok();
 
     Ok(format!(
         "Agent '{agent_name}' written to {}/\nFiles: agent.py, run.bat, run.sh, README.md",
