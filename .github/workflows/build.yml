@@ -41,3 +41,7 @@ jobs:
 
       - name: Cargo Check
         run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Tauri Build Test
+        run: npm run tauri build
+

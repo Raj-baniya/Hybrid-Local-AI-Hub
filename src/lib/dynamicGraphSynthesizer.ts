@@ -2,7 +2,7 @@
  * dynamicGraphSynthesizer.ts
  * Real-Time Dynamic NLP Graph Synthesizer for Hybrid Local AI Hub.
  * Analyzes ANY user prompt in real-time and constructs tailored node graphs
- * with valid DAG topology — eliminating hardcoded sample template dependencies.
+ * with valid DAG topology — featuring rich specialized agent nodes.
  */
 
 import type { GraphState } from "./graphSchema";
@@ -10,9 +10,9 @@ import type { GraphState } from "./graphSchema";
 export function synthesizeDynamicGraph(prompt: string): GraphState {
   const lower = prompt ? prompt.toLowerCase() : "";
 
-  // Title generation
+  // Dynamic Title generation
   const words = prompt.trim().split(/\s+/).slice(0, 6).join(" ");
-  const title = words ? `${words.charAt(0).toUpperCase() + words.slice(1)} Pipeline` : "Custom Automation Pipeline";
+  const title = words ? `${words.charAt(0).toUpperCase() + words.slice(1)} Pipeline` : "Custom AI Agent Pipeline";
 
   const nodes: GraphState["nodes"] = [];
   const edges: GraphState["edges"] = [];
@@ -20,179 +20,159 @@ export function synthesizeDynamicGraph(prompt: string): GraphState {
   let nodeCounter = 1;
   const nextId = () => `n${nodeCounter++}`;
 
-  // 1. Detect Inputs
-  const hasImage = lower.includes("image") || lower.includes("photo") || lower.includes("picture") || lower.includes("vision");
-  const hasFile = lower.includes("file") || lower.includes("folder") || lower.includes("watch") || lower.includes("pdf") || lower.includes("doc") || lower.includes("csv");
-  const hasRAG = lower.includes("embed") || lower.includes("vector") || lower.includes("chroma") || lower.includes("search") || lower.includes("lookup") || lower.includes("rag") || lower.includes("policy") || lower.includes("knowledge");
-  const hasCondition = lower.includes("if") || lower.includes("filter") || lower.includes("check") || lower.includes("urgent") || lower.includes("route") || lower.includes("branch");
-  const hasLog = lower.includes("log") || lower.includes("terminal font") || lower.includes("console") || lower.includes("alert");
-  const hasWriter = lower.includes("save") || lower.includes("write") || lower.includes("report") || lower.includes("output") || lower.includes("receipt") || lower.includes("file") || !hasLog;
+  // Domain Detection Flags
+  const isCoding = lower.includes("code") || lower.includes("script") || lower.includes("python") || lower.includes("rust") || lower.includes("refactor") || lower.includes("bug") || lower.includes("developer");
+  const isWeb = lower.includes("web") || lower.includes("scrape") || lower.includes("crawl") || lower.includes("site") || lower.includes("url") || lower.includes("browser") || lower.includes("price");
+  const isOrchestrated = lower.includes("multi") || lower.includes("team") || lower.includes("orchestrat") || lower.includes("coordinate") || lower.includes("complex") || lower.includes("workflow");
+  const isRAG = lower.includes("pdf") || lower.includes("search") || lower.includes("embed") || lower.includes("chroma") || lower.includes("doc") || lower.includes("rag") || lower.includes("policy") || lower.includes("knowledge");
+  const isVision = lower.includes("image") || lower.includes("photo") || lower.includes("picture") || lower.includes("vision") || lower.includes("camera") || lower.includes("inspect");
+  const isRouter = lower.includes("if") || lower.includes("filter") || lower.includes("urgent") || lower.includes("check") || lower.includes("branch");
 
-  let primaryInputId: string;
-  let secondaryInputId: string | null = null;
-
-  if (hasImage && hasFile) {
-    primaryInputId = nextId();
+  // 1. Inputs
+  const inputId = nextId();
+  if (isVision) {
     nodes.push({
-      id: primaryInputId,
-      type: "image_input",
-      label: "Image / Visual Input",
-      position: { x: 0, y: 0 },
-      data: {},
-    });
-    secondaryInputId = nextId();
-    nodes.push({
-      id: secondaryInputId,
-      type: "file_watcher",
-      label: "Document / File Input",
-      position: { x: 0, y: 150 },
-      data: { watch_path: "" },
-    });
-  } else if (hasImage) {
-    primaryInputId = nextId();
-    nodes.push({
-      id: primaryInputId,
+      id: inputId,
       type: "image_input",
       label: "Image / Photo Input",
       position: { x: 0, y: 0 },
       data: {},
     });
-  } else if (hasFile) {
-    primaryInputId = nextId();
+  } else if (isRAG || lower.includes("file") || lower.includes("folder")) {
     nodes.push({
-      id: primaryInputId,
+      id: inputId,
       type: "file_watcher",
-      label: "Watch Files / Folder",
+      label: "Document / File Ingest",
       position: { x: 0, y: 0 },
       data: { watch_path: "" },
     });
   } else {
-    primaryInputId = nextId();
     nodes.push({
-      id: primaryInputId,
+      id: inputId,
       type: "text_input",
-      label: "User Text Input",
+      label: "User Prompt Input",
       position: { x: 0, y: 0 },
       data: { default_text: prompt },
     });
   }
 
-  let lastNodeId = primaryInputId;
   let currentX = 250;
+  let lastNodeId = inputId;
 
-  // 2. RAG & Vector Storage Branch
-  let ragStoreNodeId: string | null = null;
-  if (hasRAG || secondaryInputId) {
-    const ragInput = secondaryInputId || primaryInputId;
-    const embedderId = nextId();
+  // 2. Multi-Agent Orchestrator if requested or complex
+  if (isOrchestrated || (isCoding && isWeb)) {
+    const orchId = nextId();
     nodes.push({
-      id: embedderId,
-      type: "local_embedder",
-      label: "Embed Text (nomic-embed)",
-      position: { x: currentX, y: secondaryInputId ? 150 : 0 },
-      data: { model: "nomic-embed-text" },
+      id: orchId,
+      type: "orchestrator_agent",
+      label: "Orchestrator Agent",
+      position: { x: currentX, y: 0 },
+      data: { task: prompt },
     });
-    edges.push({
-      id: `e_${ragInput}_${embedderId}`,
-      source: ragInput,
-      target: embedderId,
-    });
-
-    ragStoreNodeId = nextId();
-    const isReadMode = lower.includes("search") || lower.includes("lookup") || lower.includes("query") || lower.includes("rag") || lower.includes("check");
-    nodes.push({
-      id: ragStoreNodeId,
-      type: "chromadb_store",
-      label: isReadMode ? "ChromaDB Lookup (RAG)" : "ChromaDB Vector Store",
-      position: { x: currentX + 250, y: secondaryInputId ? 150 : 0 },
-      data: { collection_name: "local_knowledge_base", mode: isReadMode ? "read" : "write" },
-    });
-    edges.push({
-      id: `e_${embedderId}_${ragStoreNodeId}`,
-      source: embedderId,
-      target: ragStoreNodeId,
-    });
-
-    if (!secondaryInputId) {
-      lastNodeId = ragStoreNodeId;
-      currentX += 500;
-    }
+    edges.push({ id: `e_${lastNodeId}_${orchId}`, source: lastNodeId, target: orchId });
+    lastNodeId = orchId;
+    currentX += 250;
   }
 
-  // 3. Conditional Router Branch
+  // 3. Domain Specific Sub-Agents & Processing
+  if (isCoding) {
+    const codeId = nextId();
+    nodes.push({
+      id: codeId,
+      type: "coding_agent",
+      label: "Python / Code Executor",
+      position: { x: currentX, y: 0 },
+      data: { task: "Write & test code locally" },
+    });
+    edges.push({ id: `e_${lastNodeId}_${codeId}`, source: lastNodeId, target: codeId });
+    lastNodeId = codeId;
+    currentX += 250;
+
+    const optId = nextId();
+    nodes.push({
+      id: optId,
+      type: "evaluator_optimizer",
+      label: "Code Evaluator & Optimizer",
+      position: { x: currentX, y: 0 },
+      data: {},
+    });
+    edges.push({ id: `e_${lastNodeId}_${optId}`, source: lastNodeId, target: optId });
+    lastNodeId = optId;
+    currentX += 250;
+  } else if (isWeb) {
+    const webId = nextId();
+    nodes.push({
+      id: webId,
+      type: "web_surfer_agent",
+      label: "Web Scraper / Surfer Agent",
+      position: { x: currentX, y: 0 },
+      data: {},
+    });
+    edges.push({ id: `e_${lastNodeId}_${webId}`, source: lastNodeId, target: webId });
+    lastNodeId = webId;
+    currentX += 250;
+  } else if (isRAG) {
+    const embedId = nextId();
+    nodes.push({
+      id: embedId,
+      type: "local_embedder",
+      label: "Local Embedder (nomic-embed)",
+      position: { x: currentX, y: 0 },
+      data: { model: "nomic-embed-text" },
+    });
+    edges.push({ id: `e_${lastNodeId}_${embedId}`, source: lastNodeId, target: embedId });
+    currentX += 250;
+
+    const chromaId = nextId();
+    nodes.push({
+      id: chromaId,
+      type: "chromadb_store",
+      label: "ChromaDB Knowledge Store",
+      position: { x: currentX, y: 0 },
+      data: { collection_name: "kb", mode: "read" },
+    });
+    edges.push({ id: `e_${embedId}_${chromaId}`, source: embedId, target: chromaId });
+    lastNodeId = chromaId;
+    currentX += 250;
+  }
+
+  // 4. Conditional Router
   let routerId: string | null = null;
-  if (hasCondition) {
+  if (isRouter) {
     routerId = nextId();
-    const expr = lower.includes("urgent") ? "urgent" : lower.includes("image") ? "has_image" : "has_text";
     nodes.push({
       id: routerId,
       type: "conditional_router",
-      label: "Conditional Filter",
+      label: "Condition Filter Router",
       position: { x: currentX, y: 0 },
-      data: { condition_type: expr === "has_image" ? "has_image" : "custom", expression: expr },
+      data: { condition_type: "has_text" },
     });
-    edges.push({
-      id: `e_${primaryInputId}_${routerId}`,
-      source: primaryInputId,
-      target: routerId,
-    });
+    edges.push({ id: `e_${lastNodeId}_${routerId}`, source: lastNodeId, target: routerId });
     lastNodeId = routerId;
     currentX += 250;
   }
 
-  // 4. LLM Selector Node
-  const llmNodeId = nextId();
-  const modelToUse = hasImage ? "llama3.2-vision" : lower.includes("qwen") ? "qwen2.5" : "llama3.2";
-  const llmLabel = hasImage
-    ? "Vision AI Check (Llama3.2-Vision)"
-    : lower.includes("summary") || lower.includes("summarize")
-    ? "AI Summarizer (Llama3.2)"
-    : lower.includes("analyze") || lower.includes("analysis")
-    ? "AI Analyst (Llama3.2)"
-    : "Local AI Generator";
-
+  // 5. Primary Ollama LLM Inference Node
+  const llmId = nextId();
+  const modelToUse = isVision ? "llama3.2-vision" : "llama3.2";
   nodes.push({
-    id: llmNodeId,
+    id: llmId,
     type: "ollama_selector",
-    label: llmLabel,
+    label: isVision ? "Vision AI Model (llama3.2-vision)" : "Local AI Inference (llama3.2)",
     position: { x: currentX, y: routerId ? -75 : 0 },
     data: { model: modelToUse },
   });
 
   if (routerId) {
-    edges.push({
-      id: `e_${routerId}_${llmNodeId}`,
-      source: routerId,
-      target: llmNodeId,
-      condition: "true",
-    });
-  } else if (lastNodeId !== primaryInputId) {
-    edges.push({
-      id: `e_${lastNodeId}_${llmNodeId}`,
-      source: lastNodeId,
-      target: llmNodeId,
-    });
+    edges.push({ id: `e_${routerId}_${llmId}`, source: routerId, target: llmId, condition: "true" });
   } else {
-    edges.push({
-      id: `e_${primaryInputId}_${llmNodeId}`,
-      source: primaryInputId,
-      target: llmNodeId,
-    });
+    edges.push({ id: `e_${lastNodeId}_${llmId}`, source: lastNodeId, target: llmId });
   }
-
-  if (ragStoreNodeId && secondaryInputId) {
-    edges.push({
-      id: `e_${ragStoreNodeId}_${llmNodeId}`,
-      source: ragStoreNodeId,
-      target: llmNodeId,
-    });
-  }
-
-  lastNodeId = llmNodeId;
+  lastNodeId = llmId;
   currentX += 250;
 
-  // 5. Output Log Terminal / Branching
-  if (hasLog && routerId) {
+  // 6. Outputs (Log Terminal & File Writer)
+  if (routerId) {
     const logId = nextId();
     nodes.push({
       id: logId,
@@ -201,45 +181,18 @@ export function synthesizeDynamicGraph(prompt: string): GraphState {
       position: { x: currentX, y: 75 },
       data: {},
     });
-    edges.push({
-      id: `e_${routerId}_${logId}`,
-      source: routerId,
-      target: logId,
-      condition: "false",
-    });
-  } else if (hasLog) {
-    const logId = nextId();
-    nodes.push({
-      id: logId,
-      type: "log_terminal",
-      label: "Log Terminal Output",
-      position: { x: currentX, y: 75 },
-      data: {},
-    });
-    edges.push({
-      id: `e_${llmNodeId}_${logId}`,
-      source: llmNodeId,
-      target: logId,
-    });
+    edges.push({ id: `e_${routerId}_${logId}`, source: routerId, target: logId, condition: "false" });
   }
 
-  // 6. File Writer Output
-  if (hasWriter) {
-    const writerId = nextId();
-    const format = lower.includes("json") ? "json" : lower.includes("txt") ? "txt" : "md";
-    nodes.push({
-      id: writerId,
-      type: "local_file_writer",
-      label: `Write Result (${format.toUpperCase()})`,
-      position: { x: currentX, y: routerId ? -75 : 0 },
-      data: { output_path: "", format },
-    });
-    edges.push({
-      id: `e_${llmNodeId}_${writerId}`,
-      source: llmNodeId,
-      target: writerId,
-    });
-  }
+  const writerId = nextId();
+  nodes.push({
+    id: writerId,
+    type: "local_file_writer",
+    label: "Save Report / Artifact",
+    position: { x: currentX, y: routerId ? -75 : 0 },
+    data: { output_path: "", format: "md" },
+  });
+  edges.push({ id: `e_${llmId}_${writerId}`, source: llmId, target: writerId });
 
   return {
     version: 1,

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeInvoke, safeListen } from "../lib/tauriBridge";
 
 const RECOMMENDED_MODELS = [
   { name: "llama3.2", note: "Fast general-purpose pipeline translator" },
@@ -17,7 +16,7 @@ export default function ModelManagerPanel(): React.JSX.Element {
 
   const refreshModels = async () => {
     try {
-      const models = await invoke<string[]>("list_ollama_models");
+      const models = await safeInvoke<string[]>("list_ollama_models");
       setInstalledModels(models || []);
     } catch {
       setInstalledModels(["llama3.2:latest", "qwen2.5vl:7b"]);
@@ -33,10 +32,10 @@ export default function ModelManagerPanel(): React.JSX.Element {
     setPullingModel(modelName);
     setProgressStatus("Starting download...");
 
-    const unlisten = await listen<[string, { status: string; completed?: number; total?: number }]>(
+    const unlisten = await safeListen<[string, { status: string; completed?: number; total?: number }]>(
       "model-pull-progress",
-      (event) => {
-        const [targetModel, progress] = event.payload;
+      (payload) => {
+        const [targetModel, progress] = payload;
         if (targetModel === modelName) {
           if (progress.total && progress.completed) {
             const pct = Math.round((progress.completed / progress.total) * 100);
@@ -49,7 +48,7 @@ export default function ModelManagerPanel(): React.JSX.Element {
     );
 
     try {
-      await invoke("pull_model", { model: modelName });
+      await safeInvoke("pull_model", { model: modelName });
       setProgressStatus("Successfully pulled model!");
       await refreshModels();
     } catch (err) {

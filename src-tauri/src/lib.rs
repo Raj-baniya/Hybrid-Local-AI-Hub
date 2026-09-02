@@ -8,6 +8,8 @@ pub mod ollama;
 pub mod watcher;
 pub mod python_sandbox;
 pub mod agent_runner;
+pub mod cache;
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

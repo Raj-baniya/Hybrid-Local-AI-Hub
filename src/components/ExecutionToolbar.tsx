@@ -1,11 +1,7 @@
 import { useState, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke, isTauriAvailable } from "../lib/tauriBridge";
 import { useGraphStore } from "../lib/useGraphStore";
 import { useExecutionStore } from "../lib/useExecutionStore";
-
-function isTauriAvailable(): boolean {
-  return typeof window !== "undefined" && (Boolean((window as any).__TAURI_INTERNALS__) || Boolean((window as any).__TAURI__));
-}
 
 export default function ExecutionToolbar(): React.JSX.Element {
   const graph = useGraphStore((s) => s.graph);
@@ -23,7 +19,7 @@ export default function ExecutionToolbar(): React.JSX.Element {
 
     if (isTauriAvailable()) {
       try {
-        await invoke("execute_graph", { graph });
+        await safeInvoke("execute_graph", { graph });
         addLog("system", "Pipeline execution finished successfully.", "success");
       } catch (err) {
         const msg = String(err);
@@ -52,7 +48,7 @@ export default function ExecutionToolbar(): React.JSX.Element {
 
     if (isTauriAvailable()) {
       try {
-        await invoke("save_agent_file", {
+        await safeInvoke("save_agent_file", {
           defaultFilename,
           content: jsonStr,
         });

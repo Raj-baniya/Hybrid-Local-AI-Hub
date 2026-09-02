@@ -1,15 +1,11 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke, isTauriAvailable } from "../lib/tauriBridge";
 import { GraphStateSchema, type GraphState } from "../lib/graphSchema";
 import { useGraphStore } from "../lib/useGraphStore";
 import { autoLayout } from "../lib/autoLayout";
 import { TRANSLATOR_SYSTEM_PROMPT } from "../lib/translatorSystemPrompt";
 
 import { synthesizeDynamicGraph } from "../lib/dynamicGraphSynthesizer";
-
-function isTauriAvailable(): boolean {
-  return typeof window !== "undefined" && (Boolean((window as any).__TAURI_INTERNALS__) || Boolean((window as any).__TAURI__));
-}
 
 function getFallbackGraphJson(prompt: string): string {
   return JSON.stringify(synthesizeDynamicGraph(prompt));
@@ -62,7 +58,7 @@ export async function requestGraph(
 
     if (isTauriAvailable()) {
       try {
-        raw = await invoke<string>("generate_graph", {
+        raw = await safeInvoke<string>("generate_graph", {
           prompt: attemptPrompt,
           model: modelName,
           systemPromptOverride: currentSysPrompt,

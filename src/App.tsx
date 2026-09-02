@@ -11,7 +11,7 @@ import AgentEditor from "./components/AgentEditor";
 import WorkflowEditor from "./components/WorkflowEditor";
 import { useAgentStore, type AgentMode } from "./lib/useAgentStore";
 import { useGraphStore } from "./lib/useGraphStore";
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke } from "./lib/tauriBridge";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mode Configuration
@@ -68,11 +68,6 @@ const QUICK_MODELS = [
   "deepseek-r1:7b",
   "phi4",
 ];
-
-function isTauriAvailable(): boolean {
-  return typeof window !== "undefined" &&
-    (Boolean((window as any).__TAURI_INTERNALS__) || Boolean((window as any).__TAURI__));
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live Graph Node/Edge Badge
@@ -139,11 +134,7 @@ function ModelSelectorRow(): React.JSX.Element {
   const [ollamaStatus, setOllamaStatus] = useState<"ok" | "offline" | "loading">("loading");
 
   useEffect(() => {
-    if (!isTauriAvailable()) {
-      setOllamaStatus("offline");
-      return;
-    }
-    invoke<string[]>("list_ollama_models")
+    safeInvoke<string[]>("list_ollama_models")
       .then((models) => {
         if (models && models.length > 0) {
           setInstalledModels(models);

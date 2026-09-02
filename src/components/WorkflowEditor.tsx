@@ -5,8 +5,7 @@
  * 100% offline via local Ollama + Tauri backend.
  */
 import { useState, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeInvoke, safeListen } from "../lib/tauriBridge";
 import { useAgentStore, type TrajectoryStep } from "../lib/useAgentStore";
 import { parseWorkflowSpec } from "../lib/xmlParser";
 import { useGraphStore } from "../lib/useGraphStore";
@@ -165,13 +164,15 @@ export default function WorkflowEditor(): React.JSX.Element {
 
   // Listen for real-time trajectory events from Rust backend
   useEffect(() => {
-    const unlisten = listen<{ step: TrajectoryStep; is_final: boolean }>(
+    const unlistenPromise = safeListen<{ step: TrajectoryStep; is_final: boolean }>(
       "agent-trajectory-step",
-      (event) => {
-        appendWorkflowStep(event.payload.step);
+      (payload) => {
+        appendWorkflowStep(payload.step);
       }
     );
-    return () => { unlisten.then((fn) => fn()); };
+    return () => {
+      unlistenPromise.then((unlistenFn) => unlistenFn());
+    };
   }, [appendWorkflowStep]);
 
   // ── Profile Workflow ─────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ export default function WorkflowEditor(): React.JSX.Element {
     setErrorDetail(null);
 
     try {
-      const xml = await invoke<string>("profile_workflow_requirement", {
+      const xml = await safeInvoke<string>("profile_workflow_requirement", {
         requirement: workflowRequirement,
         model: selectedModel,
       });
@@ -215,7 +216,7 @@ export default function WorkflowEditor(): React.JSX.Element {
 
     try {
       const xmlToSend = showXmlEditor ? editedXml : workflowSpecXml;
-      const result = await invoke<{
+      const result = await safeInvoke<{
         success: boolean;
         final_answer: string;
         trajectory: TrajectoryStep[];

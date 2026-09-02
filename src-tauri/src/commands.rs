@@ -71,12 +71,14 @@ fn fallback_graph_compiler(prompt: &str) -> String {
         format!("{} Pipeline", first_words.join(" "))
     };
 
+    let is_coding = lower.contains("code") || lower.contains("script") || lower.contains("python") || lower.contains("rust") || lower.contains("refactor") || lower.contains("bug") || lower.contains("developer");
+    let is_web = lower.contains("web") || lower.contains("scrape") || lower.contains("crawl") || lower.contains("site") || lower.contains("url") || lower.contains("browser") || lower.contains("price");
+    let is_orchestrated = lower.contains("multi") || lower.contains("team") || lower.contains("orchestrat") || lower.contains("coordinate") || lower.contains("complex") || lower.contains("workflow");
     let has_image = lower.contains("image") || lower.contains("photo") || lower.contains("picture") || lower.contains("vision");
     let has_file = lower.contains("file") || lower.contains("folder") || lower.contains("watch") || lower.contains("pdf") || lower.contains("doc") || lower.contains("csv");
     let has_rag = lower.contains("embed") || lower.contains("vector") || lower.contains("chroma") || lower.contains("search") || lower.contains("lookup") || lower.contains("rag") || lower.contains("policy");
     let has_condition = lower.contains("if") || lower.contains("filter") || lower.contains("check") || lower.contains("urgent") || lower.contains("route");
     let has_log = lower.contains("log") || lower.contains("terminal") || lower.contains("console") || lower.contains("alert");
-    let has_writer = lower.contains("save") || lower.contains("write") || lower.contains("report") || lower.contains("output") || !has_log;
 
     let mut nodes: Vec<serde_json::Value> = Vec::new();
     let mut edges: Vec<serde_json::Value> = Vec::new();
@@ -88,59 +90,77 @@ fn fallback_graph_compiler(prompt: &str) -> String {
         id
     };
 
-    let primary_input = if has_image && has_file {
-        let img_id = next_id();
-        nodes.push(serde_json::json!({ "id": img_id, "type": "image_input", "label": "Image Input", "position": { "x": 0, "y": 0 }, "data": {} }));
-        let file_id = next_id();
-        nodes.push(serde_json::json!({ "id": file_id, "type": "file_watcher", "label": "Document Input", "position": { "x": 0, "y": 150 }, "data": { "watch_path": "" } }));
-        img_id
-    } else if has_image {
+    // 1. Input Node
+    let primary_input = if has_image {
         let id = next_id();
-        nodes.push(serde_json::json!({ "id": id, "type": "image_input", "label": "Image Input", "position": { "x": 0, "y": 0 }, "data": {} }));
+        nodes.push(serde_json::json!({ "id": id, "type": "image_input", "label": "Image / Photo Input", "position": { "x": 0, "y": 0 }, "data": {} }));
         id
-    } else if has_file {
+    } else if has_file || has_rag {
         let id = next_id();
-        nodes.push(serde_json::json!({ "id": id, "type": "file_watcher", "label": "Watch Folder / Files", "position": { "x": 0, "y": 0 }, "data": { "watch_path": "" } }));
+        nodes.push(serde_json::json!({ "id": id, "type": "file_watcher", "label": "Document / File Ingest", "position": { "x": 0, "y": 0 }, "data": { "watch_path": "" } }));
         id
     } else {
         let id = next_id();
-        nodes.push(serde_json::json!({ "id": id, "type": "text_input", "label": "User Input", "position": { "x": 0, "y": 0 }, "data": { "default_text": prompt } }));
+        nodes.push(serde_json::json!({ "id": id, "type": "text_input", "label": "User Input Prompt", "position": { "x": 0, "y": 0 }, "data": { "default_text": prompt } }));
         id
     };
 
     let mut current_x = 250;
     let mut last_node_id = primary_input.clone();
 
-    // RAG step
-    let mut rag_store_id: Option<String> = None;
-    if has_rag {
+    // 2. Orchestrator Node
+    if is_orchestrated || (is_coding && is_web) {
+        let orch_id = next_id();
+        nodes.push(serde_json::json!({ "id": orch_id, "type": "orchestrator_agent", "label": "Orchestrator Agent", "position": { "x": current_x, "y": 0 }, "data": { "task": prompt } }));
+        edges.push(serde_json::json!({ "id": format!("e_{}_{}", last_node_id, orch_id), "source": last_node_id, "target": orch_id }));
+        last_node_id = orch_id;
+        current_x += 250;
+    }
+
+    // 3. Domain Agents / Sub-processes
+    if is_coding {
+        let code_id = next_id();
+        nodes.push(serde_json::json!({ "id": code_id, "type": "coding_agent", "label": "Python Code Executor", "position": { "x": current_x, "y": 0 }, "data": {} }));
+        edges.push(serde_json::json!({ "id": format!("e_{}_{}", last_node_id, code_id), "source": last_node_id, "target": code_id }));
+        last_node_id = code_id;
+        current_x += 250;
+
+        let opt_id = next_id();
+        nodes.push(serde_json::json!({ "id": opt_id, "type": "evaluator_optimizer", "label": "Code Evaluator & Optimizer", "position": { "x": current_x, "y": 0 }, "data": {} }));
+        edges.push(serde_json::json!({ "id": format!("e_{}_{}", last_node_id, opt_id), "source": last_node_id, "target": opt_id }));
+        last_node_id = opt_id;
+        current_x += 250;
+    } else if is_web {
+        let web_id = next_id();
+        nodes.push(serde_json::json!({ "id": web_id, "type": "web_surfer_agent", "label": "Web Scraper / Surfer Agent", "position": { "x": current_x, "y": 0 }, "data": {} }));
+        edges.push(serde_json::json!({ "id": format!("e_{}_{}", last_node_id, web_id), "source": last_node_id, "target": web_id }));
+        last_node_id = web_id;
+        current_x += 250;
+    } else if has_rag {
         let emb_id = next_id();
         nodes.push(serde_json::json!({ "id": emb_id, "type": "local_embedder", "label": "Embed Text (nomic-embed)", "position": { "x": current_x, "y": 0 }, "data": { "model": "nomic-embed-text" } }));
-        edges.push(serde_json::json!({ "id": format!("e_{}_{}", primary_input, emb_id), "source": primary_input, "target": emb_id }));
+        edges.push(serde_json::json!({ "id": format!("e_{}_{}", last_node_id, emb_id), "source": last_node_id, "target": emb_id }));
 
         let store_id = next_id();
-        let mode = if lower.contains("search") || lower.contains("lookup") || lower.contains("read") { "read" } else { "write" };
-        nodes.push(serde_json::json!({ "id": store_id, "type": "chromadb_store", "label": "ChromaDB Knowledge Base", "position": { "x": current_x + 250, "y": 0 }, "data": { "collection_name": "local_kb", "mode": mode } }));
+        nodes.push(serde_json::json!({ "id": store_id, "type": "chromadb_store", "label": "ChromaDB Knowledge Base", "position": { "x": current_x + 250, "y": 0 }, "data": { "collection_name": "local_kb", "mode": "read" } }));
         edges.push(serde_json::json!({ "id": format!("e_{}_{}", emb_id, store_id), "source": emb_id, "target": store_id }));
 
-        rag_store_id = Some(store_id.clone());
         last_node_id = store_id;
         current_x += 500;
     }
 
-    // Router step
+    // 4. Condition Router
     let mut router_id: Option<String> = None;
     if has_condition {
         let r_id = next_id();
-        let expr = if lower.contains("urgent") { "urgent" } else { "has_text" };
-        nodes.push(serde_json::json!({ "id": r_id, "type": "conditional_router", "label": "Condition Filter", "position": { "x": current_x, "y": 0 }, "data": { "condition_type": "custom", "expression": expr } }));
+        nodes.push(serde_json::json!({ "id": r_id, "type": "conditional_router", "label": "Condition Filter Router", "position": { "x": current_x, "y": 0 }, "data": { "condition_type": "has_text" } }));
         edges.push(serde_json::json!({ "id": format!("e_{}_{}", last_node_id, r_id), "source": last_node_id, "target": r_id }));
         router_id = Some(r_id.clone());
         last_node_id = r_id;
         current_x += 250;
     }
 
-    // LLM step
+    // 5. Ollama LLM Inference Node
     let llm_id = next_id();
     let model = if has_image { "llama3.2-vision" } else { "llama3.2" };
     let label = if has_image { "Vision AI Check" } else if lower.contains("summary") { "AI Summarizer" } else { "Local AI Generator" };
@@ -152,30 +172,21 @@ fn fallback_graph_compiler(prompt: &str) -> String {
         edges.push(serde_json::json!({ "id": format!("e_{}_{}", last_node_id, llm_id), "source": last_node_id, "target": llm_id }));
     }
 
-    if let Some(ref store_id) = rag_store_id {
-        if primary_input != last_node_id {
-            edges.push(serde_json::json!({ "id": format!("e_{}_{}", store_id, llm_id), "source": store_id, "target": llm_id }));
-        }
-    }
-
-    // Logger branch
-    if has_log {
+    // 6. Outputs
+    if let Some(ref r_id) = router_id {
         let log_id = next_id();
         nodes.push(serde_json::json!({ "id": log_id, "type": "log_terminal", "label": "Log Alert Terminal", "position": { "x": current_x + 250, "y": 75 }, "data": {} }));
-        if let Some(ref r_id) = router_id {
-            edges.push(serde_json::json!({ "id": format!("e_{}_{}", r_id, log_id), "source": r_id, "target": log_id, "condition": "false" }));
-        } else {
-            edges.push(serde_json::json!({ "id": format!("e_{}_{}", llm_id, log_id), "source": llm_id, "target": log_id }));
-        }
+        edges.push(serde_json::json!({ "id": format!("e_{}_{}", r_id, log_id), "source": r_id, "target": log_id, "condition": "false" }));
+    } else if has_log {
+        let log_id = next_id();
+        nodes.push(serde_json::json!({ "id": log_id, "type": "log_terminal", "label": "Log Terminal Output", "position": { "x": current_x + 250, "y": 75 }, "data": {} }));
+        edges.push(serde_json::json!({ "id": format!("e_{}_{}", llm_id, log_id), "source": llm_id, "target": log_id }));
     }
 
-    // Writer output
-    if has_writer {
-        let writer_id = next_id();
-        let fmt = if lower.contains("json") { "json" } else if lower.contains("txt") { "txt" } else { "md" };
-        nodes.push(serde_json::json!({ "id": writer_id, "type": "local_file_writer", "label": "Write Output File", "position": { "x": current_x + 250, "y": 0 }, "data": { "output_path": "", "format": fmt } }));
-        edges.push(serde_json::json!({ "id": format!("e_{}_{}", llm_id, writer_id), "source": llm_id, "target": writer_id }));
-    }
+    let writer_id = next_id();
+    let fmt = if lower.contains("json") { "json" } else if lower.contains("txt") { "txt" } else { "md" };
+    nodes.push(serde_json::json!({ "id": writer_id, "type": "local_file_writer", "label": "Save Output Artifact", "position": { "x": current_x + 250, "y": 0 }, "data": { "output_path": "", "format": fmt } }));
+    edges.push(serde_json::json!({ "id": format!("e_{}_{}", llm_id, writer_id), "source": llm_id, "target": writer_id }));
 
     serde_json::json!({
         "version": 1,
@@ -187,6 +198,7 @@ fn fallback_graph_compiler(prompt: &str) -> String {
         }
     }).to_string()
 }
+
 
 #[tauri::command]
 pub async fn generate_graph(

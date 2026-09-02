@@ -23,6 +23,12 @@ import OllamaSelectorNode from "./nodes/OllamaSelectorNode";
 import ConditionalRouterNode from "./nodes/ConditionalRouterNode";
 import LocalFileWriterNode from "./nodes/LocalFileWriterNode";
 import LogTerminalNode from "./nodes/LogTerminalNode";
+import OrchestratorAgentNode from "./nodes/OrchestratorAgentNode";
+import CodingAgentNode from "./nodes/CodingAgentNode";
+import LocalFileAgentNode from "./nodes/LocalFileAgentNode";
+import WebSurferAgentNode from "./nodes/WebSurferAgentNode";
+import VoteAggregatorNode from "./nodes/VoteAggregatorNode";
+import EvaluatorOptimizerNode from "./nodes/EvaluatorOptimizerNode";
 import NodeInspector from "./NodeInspector";
 import { useGraphStore } from "../lib/useGraphStore";
 import type { NodeTypeEnum } from "../lib/graphSchema";
@@ -40,7 +46,14 @@ const NODE_TYPES_MAP = {
   conditional_router: ConditionalRouterNode,
   local_file_writer: LocalFileWriterNode,
   log_terminal: LogTerminalNode,
+  orchestrator_agent: OrchestratorAgentNode,
+  coding_agent: CodingAgentNode,
+  local_file_agent: LocalFileAgentNode,
+  web_surfer_agent: WebSurferAgentNode,
+  vote_aggregator: VoteAggregatorNode,
+  evaluator_optimizer: EvaluatorOptimizerNode,
 };
+
 
 const VALID_NODE_TYPES = new Set([
   "file_watcher",

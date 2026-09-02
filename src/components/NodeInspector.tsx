@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke } from "../lib/tauriBridge";
 import { useGraphStore } from "../lib/useGraphStore";
 
 interface NodeInspectorProps {
@@ -261,7 +261,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
   ]);
 
   useEffect(() => {
-    invoke<string[]>("list_ollama_models")
+    safeInvoke<string[]>("list_ollama_models")
       .then((models) => {
         if (models && models.length > 0) setOllamaModels(models);
       })
@@ -309,7 +309,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
 
   const handlePickFolder = async () => {
     try {
-      const path = await invoke<string>("pick_folder");
+      const path = await safeInvoke<string>("pick_folder");
       updateDataField("watch_path", path);
       updateDataField("output_path", path);
     } catch {}
@@ -317,7 +317,7 @@ export default function NodeInspector({ selectedNodeId, onClose }: NodeInspector
 
   const handlePickImage = async () => {
     try {
-      const path = await invoke<string>("pick_image");
+      const path = await safeInvoke<string>("pick_image");
       updateDataField("image_path", path);
     } catch {}
   };

@@ -5,8 +5,7 @@
  * 100% offline via local Ollama LLMs. Real execution only — no mocks.
  */
 import { useState, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeInvoke, safeListen } from "../lib/tauriBridge";
 import { useAgentStore, type CreatedTool, type TrajectoryStep, type AgentRunResult } from "../lib/useAgentStore";
 import { parseAgentSpec, agentSpecToXml } from "../lib/xmlParser";
 import { useGraphStore } from "../lib/useGraphStore";
@@ -40,7 +39,7 @@ function StepRequirement(): React.JSX.Element {
     setAgentEditorStep("profiling");
 
     try {
-      const xmlResponse = await invoke<string>("profile_agent_requirement", {
+      const xmlResponse = await safeInvoke<string>("profile_agent_requirement", {
         requirement: agentRequirement,
         model: selectedModel,
       });
@@ -50,7 +49,8 @@ function StepRequirement(): React.JSX.Element {
       setParsedAgentSpec(parsed);
       setAgentEditorStep("tools");
     } catch (err) {
-      setErrorMsg(`Failed to profile agent requirement: ${String(err)}. Make sure Ollama is running ('ollama serve').`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(`Failed to profile agent requirement: ${errMsg}`);
     } finally {
       setIsAgentEditorRunning(false);
     }
@@ -132,7 +132,7 @@ function StepToolsAndAgent(): React.JSX.Element {
     setToolErrorMsg(null);
 
     try {
-      const raw = await invoke<{
+      const raw = await safeInvoke<{
         tool_name: string;
         generated_code: string;
         test_stdout: string;
@@ -379,13 +379,15 @@ function StepDone(): React.JSX.Element {
 
   // Listen for real-time trajectory events from Rust backend
   useEffect(() => {
-    const unlisten = listen<{ step: TrajectoryStep; is_final: boolean }>(
+    const unlistenPromise = safeListen<{ step: TrajectoryStep; is_final: boolean }>(
       "agent-trajectory-step",
-      (event) => {
-        setTrajectory((prev) => [...prev, event.payload.step]);
+      (payload) => {
+        setTrajectory((prev) => [...prev, payload.step]);
       }
     );
-    return () => { unlisten.then((fn) => fn()); };
+    return () => {
+      unlistenPromise.then((unlistenFn) => unlistenFn());
+    };
   }, []);
 
   const primaryAgent = parsedAgentSpec?.agents[0];
@@ -399,7 +401,7 @@ function StepDone(): React.JSX.Element {
     setStatusMsg({ text: `🤖 Running ${primaryAgent.name} with ${selectedModel}...`, type: "info" });
 
     try {
-      const result = await invoke<AgentRunResult>("run_custom_agent", {
+      const result = await safeInvoke<AgentRunResult>("run_custom_agent", {
         agentName: primaryAgent.name,
         instructions: primaryAgent.instruction,
         tools: primaryAgent.tools,
@@ -441,7 +443,7 @@ function StepDone(): React.JSX.Element {
     const defaultFilename = `${cleanName}.json`;
 
     try {
-      const path = await invoke<string>("save_agent_file", {
+      const path = await safeInvoke<string>("save_agent_file", {
         defaultFilename,
         content: jsonStr,
       });
@@ -468,7 +470,7 @@ function StepDone(): React.JSX.Element {
     const defaultFilename = `${cleanName}.xml`;
 
     try {
-      const path = await invoke<string>("save_agent_file", {
+      const path = await safeInvoke<string>("save_agent_file", {
         defaultFilename,
         content: xmlStr,
       });

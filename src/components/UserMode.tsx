@@ -5,8 +5,7 @@
  * 100% offline via local Ollama LLMs.
  */
 import { useState, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeInvoke, safeListen } from "../lib/tauriBridge";
 import { useAgentStore, type TrajectoryStep } from "../lib/useAgentStore";
 import { useGraphStore } from "../lib/useGraphStore";
 import { autoLayout } from "../lib/autoLayout";
@@ -150,13 +149,15 @@ export default function UserMode(): React.JSX.Element {
 
   // Listen for live trajectory events from Tauri backend
   useEffect(() => {
-    const unlisten = listen<{ step: TrajectoryStep; is_final: boolean }>(
+    const unlistenPromise = safeListen<{ step: TrajectoryStep; is_final: boolean }>(
       "agent-trajectory-step",
-      (event) => {
-        appendTrajectoryStep(event.payload.step);
+      (payload) => {
+        appendTrajectoryStep(payload.step);
       }
     );
-    return () => { unlisten.then((fn) => fn()); };
+    return () => {
+      unlistenPromise.then((unlistenFn) => unlistenFn());
+    };
   }, [appendTrajectoryStep]);
 
   const handleRun = async () => {
@@ -166,7 +167,7 @@ export default function UserMode(): React.JSX.Element {
     setStatusMsg("🔍 Checking Ollama connection...");
 
     try {
-      const result = await invoke<{
+      const result = await safeInvoke<{
         success: boolean;
         final_answer: string;
         trajectory: TrajectoryStep[];

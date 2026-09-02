@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "clean": "node -e \"const fs = require('fs'); ['dist', 'src-tauri/target'].forEach(d => fs.rmSync(d, {recursive: true, force: true})); console.log('✓ Cleaned build artifacts');\"",
     "preview": "vite preview",
     "tauri": "tauri"
   },
