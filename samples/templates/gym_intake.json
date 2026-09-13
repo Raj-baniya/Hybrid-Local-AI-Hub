@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "watcher",
+      "position": null,
+      "data": {
+        "type": "FileWatcherNode",
+        "watchPath": "./gym_intake",
+        "pattern": "*.pdf",
+        "recursive": false
+      }
+    },
+    {
+      "id": "pdf_extractor",
+      "position": null,
+      "data": {
+        "type": "PDFExtractorNode",
+        "pageRange": null
+      }
+    },
+    {
+      "id": "llm_planner",
+      "position": null,
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "temperature": 0.5,
+        "promptTemplate": "You are a personal fitness coach. Based on the following gym intake form, create a detailed personalised workout plan including goals, weekly schedule, and nutrition tips:\n\n{{pdf_extractor.output}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "goal_router",
+      "position": null,
+      "data": {
+        "type": "ConditionalRouterNode",
+        "condition": "weight loss",
+        "trueTarget": "writer_wl",
+        "falseTarget": "writer_mg"
+      }
+    },
+    {
+      "id": "writer_wl",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./output/weight_loss_plan.txt",
+        "append": false
+      }
+    },
+    {
+      "id": "writer_mg",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./output/muscle_gain_plan.txt",
+        "append": false
+      }
+    },
+    {
+      "id": "embedder",
+      "position": null,
+      "data": {
+        "type": "LocalEmbedderNode",
+        "model": "nomic-embed-text"
+      }
+    },
+    {
+      "id": "chroma_store",
+      "position": null,
+      "data": {
+        "type": "ChromaDbStoreNode",
+        "collectionName": "gym_profiles",
+        "chromaUrl": "http://localhost:8000",
+        "inputMap": {
+          "vector": "embedder.output",
+          "document": "pdf_extractor.output"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "watcher",       "source_handle": null, "target": "pdf_extractor", "target_handle": null },
+    { "id": "e2", "source": "pdf_extractor", "source_handle": null, "target": "llm_planner",   "target_handle": null },
+    { "id": "e3", "source": "llm_planner",   "source_handle": null, "target": "goal_router",   "target_handle": null },
+    { "id": "e4", "source": "goal_router",   "source_handle": null, "target": "writer_wl",     "target_handle": null },
+    { "id": "e5", "source": "goal_router",   "source_handle": null, "target": "writer_mg",     "target_handle": null },
+    { "id": "e6", "source": "pdf_extractor", "source_handle": null, "target": "embedder",      "target_handle": null },
+    { "id": "e7", "source": "embedder",      "source_handle": null, "target": "chroma_store",  "target_handle": null }
+  ]
+}

@@ -1,128 +1,147 @@
-# Hybrid Local AI Hub — 100% Offline Zero-Code Multi-Agent & Workflow Framework
+# Hybrid Local AI Hub
 
-[![Tauri v2](https://img.shields.io/badge/Tauri-v2.x-blue?style=flat-square&logo=tauri)](https://tauri.app/)
-[![React 19](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react)](https://react.dev/)
-[![Rust](https://img.shields.io/badge/Rust-2021-orange?style=flat-square&logo=rust)](https://www.rust-lang.org/)
-[![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-black?style=flat-square)](https://ollama.com/)
-[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_DB-purple?style=flat-square)](https://www.trychroma.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+**Local-first AI workflow orchestrator.** Generate, run, and manage AI automation pipelines entirely on your machine — no cloud, no API keys, no data leaving your system.
 
-A **100% offline**, privacy-first, free & open-source, cross-platform desktop framework and visual AI workflow hub built with **Tauri v2 + React 19 + TypeScript + Rust**. **Hybrid Local AI Hub** empowers non-technical users and developers to create, customize, and orchestrate complex LLM agents, tools, and workflows through **Natural Language Alone** — running entirely on local hardware with zero cloud dependencies or subscription costs.
+Powered by [Ollama](https://ollama.com) (local LLMs) and [ChromaDB](https://www.trychroma.com) (local vector storage).
 
 ---
 
-## 🌟 Architecture Overview
+## Quick Start
 
-```mermaid
-graph TD
-    subgraph UI ["React 19 + TypeScript UI Layer"]
-        M1[💬 User Mode: Deep Research Agents]
-        M2[🛠️ Agent Editor: Zero-Code Agent & Tool Creation]
-        M3[⚡ Workflow Editor: Event-Driven Multi-Agent Workflows]
-        M4[🎨 Canvas & Models: Visual Node Graph & Ollama Hub]
-    end
-
-    subgraph Core ["Hybrid Local AI Hub Engine"]
-        P[XML Transformed Tool Call Parser]
-        S[Zustand Multi-Mode State Manager]
-        C[Visual Node Compiler & Dagre Layout]
-    end
-
-    subgraph Backend ["Native Rust Tokio Offline Engine"]
-        E1[Orchestrator & Agent Handoff Runner]
-        E2[Cross-Platform Tokio Python Sandbox]
-        E3[Kahn's Topological DAG Executor]
-        E4[Ollama REST Client & Local ChromaDB]
-    end
-
-    M1 --> P
-    M2 --> P
-    M3 --> P
-    M4 --> C
-    P --> E1
-    E1 --> E2
-    C --> E3
-    E1 --> E4
-    E3 --> E4
-```
-
----
-
-## 🚀 Core Operating Modes
-
-### 1. 💬 `User Mode` (Deep Research Agents)
-- Autonomous Generalist Multi-Agent System:
-  - **Orchestrator Agent**: Decomposes user goals, plans execution steps, and coordinates specialized sub-agents.
-  - **Local File Agent**: Reads documents (`.pdf`, `.txt`, `.md`, `.csv`), searches local directories, and writes outputs.
-  - **Coding Agent**: Writes and executes Python code locally within a secure cross-platform process sandbox.
-  - **Web Surfer Agent**: Browses local or cached web pages.
-- Standardized Agent Handoff protocol (`transfer_to_coding_agent`, `transfer_to_local_file_agent`, `transfer_back_to_orchestrator`).
-- Live trajectory cards with action badges, expandable step details, and **📊 Load to Canvas** graph sync.
-
-### 2. 🛠️ `Agent Editor` (Zero-Code Agent & Tool Creation)
-- **Natural Language Agent Profiling**: Enter high-level requirements to generate structured XML agent specifications (`<agents>`, `<agent>`, `<instruction>`, `<tools>`).
-- **Editable XML Profiles**: Inspect and edit agent XML definitions directly.
-- **Inline Python Tool Generator**: Automatically generates Python function code using local Ollama LLMs, executes test cases in the local sandbox, and registers tools to `./user_tools/`.
-
-### 3. ⚡ `Workflow Editor` (Event-Driven Multi-Agent Workflows)
-Supports 4 core workflow patterns:
-1. **Sequential**: Linear event pipeline where output of step $N$ feeds input of step $N+1$.
-2. **If-Else Branching**: First agent evaluates a condition, then routes execution to the matching branch.
-3. **Parallelization + Majority Voting**: Multiple agents solve the task concurrently; a vote aggregator determines consensus.
-4. **Evaluator-Optimizer**: Generator + Evaluator iterative refinement loop with `GOTO` rules until quality standards are met.
-
-### 4. 🎨 `Canvas & Models` (Visual Node Graph Canvas)
-- Interactive visual graph builder powered by **@xyflow/react (React Flow 12)** and **Dagre auto-layout**.
-- 15 custom node types (Triggers, Embedders, Vector DB, LLMs, Conditionals, Agents, Vote Aggregators).
-- Real-time DFS cycle rejection and Kahn's topological sort execution.
-- Ollama Model Manager panel to list, pull, and monitor local models (`llama3.2`, `qwen2.5`, `nomic-embed-text`, `llama3.2-vision`).
-
----
-
-## 🛠️ Technology Stack
-
-| Layer | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Desktop Wrapper** | [Tauri v2](https://tauri.app/) | Cross-platform (Windows, macOS, Linux) desktop window & Rust bridge |
-| **Frontend UI** | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) | Modern UI shell, state management, and mode components |
-| **Visual Canvas** | [@xyflow/react](https://reactflow.dev/) + [Dagre](https://github.com/dagrejs/dagre) | Interactive node graph canvas & auto-layout |
-| **State & Parsing** | [Zustand v5](https://zustand.docs.pmnd.rs/) + [Zod v4](https://zod.dev/) | Global state store, schema validation, and XML parser |
-| **Backend Engine** | [Rust 2021](https://www.rust-lang.org/) + [Tokio](https://tokio.rs/) | Multithreaded offline agent runner, handoff engine, and topological DAG executor |
-| **Code Sandbox** | Rust `tokio::process` | Native cross-platform Python script execution sandbox without Docker |
-| **Local AI Stack** | [Ollama](https://ollama.com/) + [ChromaDB](https://www.trychroma.com/) | 100% offline LLM inference & vector database |
-
----
-
-## ⚡ Prerequisites & Commands to Run
-
-### 1. Prerequisites
-- **Node.js** (v18+)
-- **Rust** (1.75+)
-- **Python** (3.8+) for local sandbox execution
-- **Ollama** installed locally ([ollama.com](https://ollama.com/))
-
-### 2. Pull Local Models in Ollama
-Run these terminal commands:
 ```bash
-ollama pull llama3.2
-ollama pull nomic-embed-text
-ollama pull qwen2.5
+# 1. Install and set up (detects Ollama, pulls default models)
+hybrid-hub init
+
+# 2. Generate a workflow from plain English
+hybrid-hub chat "Watch my ./inbox folder for PDFs and summarise each one" -o summariser.json
+
+# 3. Validate it
+hybrid-hub validate summariser.json
+
+# 4. Run it
+hybrid-hub run summariser.json --watch
 ```
 
-### 3. Start Development Mode
-Run this terminal command:
-```bash
-npm run tauri dev
-```
+That's it. Real LLM inference, real local files, zero cloud.
 
-### 4. Build Production Installer
-Run this terminal command to compile standalone installers (`.exe`/`.msi` on Windows, `.dmg` on macOS, `.AppImage`/`.deb` on Linux):
+---
+
+## Installation
+
+### Option A: Download a pre-built binary
+
+Download the binary for your OS from the [releases page](../../releases) and put it somewhere on your PATH.
+
+### Option B: Build from source
+
 ```bash
-npm run tauri build
+# Requires Rust (https://rustup.rs)
+git clone <repo-url>
+cd hybrid-local-ai-hub
+cargo build --release
+# Binary: target/release/hybrid-hub (or hybrid-hub.exe on Windows)
 ```
 
 ---
 
-## 📄 License
+## Commands
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
+| Command | Description |
+|---|---|
+| `hybrid-hub init` | Set up Ollama, pull recommended models, check ChromaDB |
+| `hybrid-hub chat "<instruction>"` | Generate a workflow from natural language |
+| `hybrid-hub validate <file>` | Check a workflow JSON for errors |
+| `hybrid-hub run <file>` | Run a workflow (once, or `--watch` for continuous) |
+| `hybrid-hub models list` | List installed Ollama models |
+| `hybrid-hub models pull <name>` | Pull an Ollama model |
+| `hybrid-hub logs <execution-id>` | Show results from a past run |
+| `hybrid-hub export <file> -o <bundle.zip>` | Package a workflow for sharing |
+| `hybrid-hub import <bundle.zip>` | Import a shared workflow bundle |
+| `hybrid-hub template list` | Browse starter templates |
+| `hybrid-hub template use <name> -o <file>` | Copy a starter template |
+| `hybrid-hub examples` | See real example `chat` instructions |
+
+---
+
+## Workflow Node Types
+
+Workflows are JSON graphs composed of 9 node types:
+
+| Node | Purpose |
+|---|---|
+| `FileWatcherNode` | Triggers on new/changed files in a folder |
+| `TextInputNode` | Provides static text or template input |
+| `ImageInputNode` | Reads an image from disk |
+| `OllamaSelectorNode` | Calls a local LLM via Ollama |
+| `LocalEmbedderNode` | Generates embeddings (for ChromaDB) |
+| `PDFExtractorNode` | Extracts text from PDFs |
+| `ChromaDbStoreNode` | Stores embeddings + documents in ChromaDB |
+| `ConditionalRouterNode` | Routes execution based on content |
+| `LocalFileWriterNode` | Writes output to a local file |
+
+Generate workflows with `hybrid-hub chat`, or build them manually in JSON.
+
+---
+
+## Recommended Models (8 GB RAM)
+
+| Purpose | Model | Why |
+|---|---|---|
+| **Default chat/generation** | `llama3.2` (3B) | Best all-rounder for 8 GB, strong instruction-following |
+| **Fastest** | `phi4-mini` (3.8B) | ~28 tokens/sec, good for speed-critical workflows |
+| **Best reasoning** | `qwen3:4b` | Best reasoning quality in the 8 GB tier |
+| **Lightest fallback** | `gemma2:2b` | For very RAM-constrained machines |
+| **Embeddings** | `nomic-embed-text` | Purpose-built, ~270 MB, negligible RAM overhead |
+
+```bash
+hybrid-hub init              # pulls llama3.2 + nomic-embed-text automatically
+hybrid-hub models pull phi4-mini   # add alternate models as needed
+```
+
+---
+
+## ChromaDB Setup (optional, for embedding workflows)
+
+ChromaDB is only required if your workflow uses `ChromaDbStoreNode` or `LocalEmbedderNode`.
+
+```bash
+pip install chromadb
+chroma run --host localhost --port 8000
+```
+
+---
+
+## Example Workflows
+
+```bash
+# See all examples
+hybrid-hub examples
+
+# Use a starter template
+hybrid-hub template list
+hybrid-hub template use gym-intake -o gym.json
+```
+
+Or generate anything:
+```bash
+hybrid-hub chat "Watch ./invoices for new PDFs, extract vendor + amount with an LLM, append to invoices.jsonl"
+```
+
+---
+
+## Sharing Workflows
+
+```bash
+# Export a workflow with its manifest (required models, paths, etc.)
+hybrid-hub export my_workflow.json -o my_bundle.zip
+
+# On the recipient's machine
+hybrid-hub import my_bundle.zip          # shows required models + flags paths to review
+hybrid-hub run imported_workflow.json    # run it
+```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

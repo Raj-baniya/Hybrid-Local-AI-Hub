@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "prompt",
+      "position": null,
+      "data": {
+        "type": "TextInputNode",
+        "text": "Write a short poem about the stars."
+      }
+    },
+    {
+      "id": "llm",
+      "position": null,
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "temperature": 0.7,
+        "promptTemplate": "{{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "writer",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./output/poem.txt",
+        "append": false
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "prompt", "source_handle": null, "target": "llm",    "target_handle": null },
+    { "id": "e2", "source": "llm",    "source_handle": null, "target": "writer", "target_handle": null }
+  ]
+}

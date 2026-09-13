@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "watcher",
+      "position": null,
+      "data": {
+        "type": "FileWatcherNode",
+        "watchPath": "./inbox",
+        "pattern": "*.txt",
+        "recursive": false
+      }
+    },
+    {
+      "id": "llm_summariser",
+      "position": null,
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "temperature": 0.4,
+        "promptTemplate": "Summarise the following document in 3-5 concise bullet points. Focus on the key information:\n\n{{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "writer",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./summaries/summary.txt",
+        "append": false
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "watcher",        "source_handle": null, "target": "llm_summariser", "target_handle": null },
+    { "id": "e2", "source": "llm_summariser",  "source_handle": null, "target": "writer",         "target_handle": null }
+  ]
+}

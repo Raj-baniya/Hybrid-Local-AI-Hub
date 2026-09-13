@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "watcher",
+      "position": null,
+      "data": {
+        "type": "FileWatcherNode",
+        "watchPath": "./docs",
+        "pattern": "*.pdf",
+        "recursive": false
+      }
+    },
+    {
+      "id": "pdf_extractor",
+      "position": null,
+      "data": {
+        "type": "PDFExtractorNode",
+        "pageRange": null
+      }
+    },
+    {
+      "id": "embedder",
+      "position": null,
+      "data": {
+        "type": "LocalEmbedderNode",
+        "model": "nomic-embed-text"
+      }
+    },
+    {
+      "id": "chroma_store",
+      "position": null,
+      "data": {
+        "type": "ChromaDbStoreNode",
+        "collectionName": "knowledge_base",
+        "chromaUrl": "http://localhost:8000",
+        "inputMap": {
+          "vector": "embedder.output",
+          "document": "pdf_extractor.output"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "watcher",       "source_handle": null, "target": "pdf_extractor", "target_handle": null },
+    { "id": "e2", "source": "pdf_extractor", "source_handle": null, "target": "embedder",       "target_handle": null },
+    { "id": "e3", "source": "embedder",      "source_handle": null, "target": "chroma_store",   "target_handle": null }
+  ]
+}

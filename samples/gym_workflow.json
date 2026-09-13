@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "watcher1",
+      "position": null,
+      "data": {
+        "type": "FileWatcherNode",
+        "watchPath": "./gym_intake",
+        "pattern": "*.pdf",
+        "recursive": false
+      }
+    },
+    {
+      "id": "pdf_extractor1",
+      "position": null,
+      "data": {
+        "type": "PDFExtractorNode",
+        "pageRange": null
+      }
+    },
+    {
+      "id": "llm1",
+      "position": null,
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "temperature": 0.5,
+        "promptTemplate": "Generate a personalized workout plan based on the PDF intake form:\n\n{{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "writer1",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./plans/workout_plan.txt",
+        "append": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "watcher1",
+      "sourceHandle": null,
+      "target": "pdf_extractor1",
+      "targetHandle": null
+    },
+    {
+      "id": "e2",
+      "source": "pdf_extractor1",
+      "sourceHandle": null,
+      "target": "llm1",
+      "targetHandle": null
+    },
+    {
+      "id": "e3",
+      "source": "llm1",
+      "sourceHandle": null,
+      "target": "writer1",
+      "targetHandle": null
+    }
+  ]
+}

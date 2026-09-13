@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "ticket_input",
+      "position": null,
+      "data": {
+        "type": "TextInputNode",
+        "text": "Paste ticket text here, or replace this node with a FileWatcherNode to process tickets from files."
+      }
+    },
+    {
+      "id": "classifier",
+      "position": null,
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "temperature": 0.1,
+        "promptTemplate": "Classify this customer support ticket. Reply with exactly one word: 'billing', 'technical', or 'general'. Do not explain.\n\nTicket:\n{{ticket_input.output}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "router",
+      "position": null,
+      "data": {
+        "type": "ConditionalRouterNode",
+        "condition": "billing",
+        "trueTarget": "writer_billing",
+        "falseTarget": "writer_other"
+      }
+    },
+    {
+      "id": "writer_billing",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./queues/billing_queue.txt",
+        "append": true
+      }
+    },
+    {
+      "id": "writer_other",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./queues/general_queue.txt",
+        "append": true
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "ticket_input",  "source_handle": null, "target": "classifier",     "target_handle": null },
+    { "id": "e2", "source": "classifier",    "source_handle": null, "target": "router",          "target_handle": null },
+    { "id": "e3", "source": "router",        "source_handle": null, "target": "writer_billing",  "target_handle": null },
+    { "id": "e4", "source": "router",        "source_handle": null, "target": "writer_other",    "target_handle": null }
+  ]
+}

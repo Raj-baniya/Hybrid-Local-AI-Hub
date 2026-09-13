@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Hybrid Local AI Hub",
-  "version": "0.1.0",
-  "identifier": "com.rajbaniya.hybrid-local-ai-hub",
+  "version": "1.0.0",
+  "identifier": "com.hybridlocalaihub.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -13,10 +13,12 @@
     "windows": [
       {
         "title": "Hybrid Local AI Hub",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 900,
-        "minHeight": 600
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 720,
+        "resizable": true,
+        "fullscreen": false
       }
     ],
     "security": {
@@ -24,14 +26,7 @@
     }
   },
   "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
+    "active": false,
+    "icon": []
   }
 }

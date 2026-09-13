@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "question_input",
+      "position": null,
+      "data": {
+        "type": "TextInputNode",
+        "text": "What are the main causes and effects of ocean acidification?"
+      }
+    },
+    {
+      "id": "llm_digest",
+      "position": null,
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "temperature": 0.3,
+        "promptTemplate": "You are a research assistant. For the following research question, produce a structured digest with these sections:\n\n# Background\n(2-3 sentences of context)\n\n# Key Findings\n- Finding 1\n- Finding 2\n- Finding 3\n- Finding 4\n- Finding 5\n\n# Open Questions\n- Question 1\n- Question 2\n- Question 3\n\nResearch question: {{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "writer",
+      "position": null,
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./research/digest.md",
+        "append": false
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "question_input", "source_handle": null, "target": "llm_digest", "target_handle": null },
+    { "id": "e2", "source": "llm_digest",     "source_handle": null, "target": "writer",     "target_handle": null }
+  ]
+}

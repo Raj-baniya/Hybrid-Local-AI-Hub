@@ -1,0 +1,51 @@
+[package]
+name = "hybrid-local-ai-hub"
+version = "0.1.0"
+edition = "2021"
+description = "A local-first AI workflow orchestrator — chat-to-graph compiler + execution engine"
+license = "MIT"
+authors = ["Hybrid Local AI Hub Contributors"]
+
+[lib]
+name = "hybrid_local_ai_hub"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hybrid-hub"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+notify = "6"
+lopdf = "0.32"
+crossterm = "0.27"
+indicatif = "0.17"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "1"
+dirs = "5"
+zip = "2"
+sysinfo = "0.30"
+futures = "0.3"
+async-trait = "0.1"
+base64 = "0.23.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[workspace]
+members = [
+    ".",
+    "src-tauri",
+]
