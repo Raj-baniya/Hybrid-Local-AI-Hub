@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-// ─── Request / Response types ─────────────────────────────────────────────────
+// â”€â”€â”€ Request / Response types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Serialize)]
 struct UpsertRequest {
@@ -27,7 +27,7 @@ pub struct QueryResult {
     pub distances: Vec<Vec<f32>>,
 }
 
-// ─── Public client ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Public client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Clone)]
 pub struct ChromaClient {
@@ -41,6 +41,7 @@ impl ChromaClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             http: Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
+                .no_proxy()
                 .build()
                 .expect("Failed to build HTTP client"),
         }

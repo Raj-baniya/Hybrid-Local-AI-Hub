@@ -4,6 +4,11 @@ import { useWorkflowStore } from '../store/workflowStore';
 import { Graph } from '../schema/graphSchema';
 import { Sparkles, ArrowRight, CheckCircle, AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
 
+type OllamaStatus =
+  | { state: "NotRunning" }
+  | { state: "NoModels" }
+  | { state: "Ready"; models: { name: string }[] };
+
 export const ChatPanel: React.FC = () => {
   const setActivePanel = useWorkflowStore((s) => s.setActivePanel);
   const getActiveGraph = useWorkflowStore((s) => s.getActiveGraph);
@@ -11,7 +16,17 @@ export const ChatPanel: React.FC = () => {
   const createTab = useWorkflowStore((s) => s.createTab);
 
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState('llama3.2');
+  const [model, setModel] = useState('');
+  const [installedModels, setInstalledModels] = useState<{name: string}[]>([]);
+
+  React.useEffect(() => {
+    invoke<OllamaStatus>('cmd_check_ollama').then((s) => {
+      if (s.state === 'Ready' && s.models.length > 0) {
+        setInstalledModels(s.models);
+        setModel(s.models[0].name);
+      }
+    });
+  }, []);
   const [temperature, setTemperature] = useState(0.2);
   const [isEditMode, setIsEditMode] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,6 +35,10 @@ export const ChatPanel: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    if (!model) {
+      setError("No model selected — install one in the Model Manager first.");
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -135,10 +154,15 @@ export const ChatPanel: React.FC = () => {
                 fontSize: 12,
               }}
             >
-              <option value="llama3.2">llama3.2 (Recommended)</option>
-              <option value="phi4-mini">phi4-mini (Fastest)</option>
-              <option value="qwen3:4b">qwen3:4b (Best Reasoning)</option>
-              <option value="gemma2:2b">gemma2:2b (Lightest)</option>
+              {installedModels.length === 0 ? (
+                <option value="">No models installed</option>
+              ) : (
+                installedModels.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

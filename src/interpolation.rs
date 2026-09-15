@@ -1,14 +1,14 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use crate::schema::Graph;
 
 /// Resolve all `{{...}}` template placeholders in a string.
 ///
 /// Two valid forms:
-///   - `{{input}}` — shorthand for "the single incoming node's output"
+///   - `{{input}}` â€” shorthand for "the single incoming node's output"
 ///     (validated structurally in `validate.rs`; here we look up via `single_input`).
-///   - `{{node_id.output}}` — explicit reference to a specific node's output.
+///   - `{{node_id.output}}` â€” explicit reference to a specific node's output.
 ///
-/// `outputs` maps `node_id` → its runtime output string.
+/// `outputs` maps `node_id` â†’ its runtime output string.
 /// `single_input` is `Some(value)` if the node receiving this template has
 /// exactly one incoming edge, `None` otherwise (should have been caught by validate).
 pub fn resolve(
@@ -131,7 +131,7 @@ fn check_template_placeholders(
                 let ref_id = &placeholder[..dot];
                 if !node_ids.contains(ref_id) {
                     errors.push(format!(
-                        "Node '{}', field '{}': {{{{{}}}}} — no node with id '{}' exists",
+                        "Node '{}', field '{}': {{{{{}}}}} â€” no node with id '{}' exists",
                         node_id, field, placeholder, ref_id
                     ));
                 }

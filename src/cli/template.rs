@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
@@ -68,7 +68,7 @@ fn templates() -> &'static [TemplateEntry] {
 fn list_templates() -> Result<()> {
     println!();
     println!("  Available starter templates:");
-    println!("  (These are editable starting points — 'hybrid-hub chat' can generate anything)");
+    println!("  (These are editable starting points â€” 'hybrid-hub chat' can generate anything)");
     println!();
     for t in templates() {
         println!("  {:20}  {}", t.name, t.description);
@@ -102,7 +102,7 @@ fn use_template(name: &str, output: &PathBuf) -> Result<()> {
         anyhow!("Cannot write to '{}': {e}", output.display())
     })?;
 
-    println!("  ✓ Template '{}' written to: {}", name, output.display());
+    println!("  âœ“ Template '{}' written to: {}", name, output.display());
     println!("    {}", entry.description);
     println!();
     println!("  Next steps:");

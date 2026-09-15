@@ -78,6 +78,8 @@ export const GraphCanvas: React.FC = () => {
         fitView
         snapToGrid
         snapGrid={[15, 15]}
+        panOnScroll={true}
+        selectionOnDrag={true}
         defaultEdgeOptions={{
           animated: true,
           style: { stroke: '#64748b', strokeWidth: 2 },

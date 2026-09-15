@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use clap::Args;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
@@ -15,7 +15,7 @@ const DEFAULT_EMBED_MODEL: &str = "nomic-embed-text";
 #[derive(Args, Debug)]
 pub struct InitArgs {
     /// Ollama base URL to check.
-    #[arg(long, default_value = "http://localhost:11434")]
+    #[arg(long, default_value = "http://127.0.0.1:11434")]
     pub ollama_url: String,
 
     /// ChromaDB base URL to check.
@@ -32,7 +32,7 @@ pub async fn init(args: InitArgs) -> Result<()> {
 
     print_banner();
 
-    // ── Step 1: Check if `ollama` binary is installed ────────────────────────
+    // â”€â”€ Step 1: Check if `ollama` binary is installed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let ollama_installed = is_ollama_installed();
 
     if !ollama_installed {
@@ -54,11 +54,11 @@ pub async fn init(args: InitArgs) -> Result<()> {
         }
     } else {
         crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-        println!("  ✓ Ollama binary is installed");
+        println!("  âœ“ Ollama binary is installed");
         crossterm::execute!(stdout, ResetColor).ok();
     }
 
-    // ── Step 2: Check if the Ollama service is running ───────────────────────
+    // â”€â”€ Step 2: Check if the Ollama service is running â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let client = OllamaClient::new(&args.ollama_url);
     let service_running = client.is_reachable().await;
 
@@ -77,7 +77,7 @@ pub async fn init(args: InitArgs) -> Result<()> {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 if client.is_reachable().await {
                     crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-                    println!("  ✓ Ollama service is now running");
+                    println!("  âœ“ Ollama service is now running");
                     crossterm::execute!(stdout, ResetColor).ok();
                     break;
                 }
@@ -94,20 +94,20 @@ pub async fn init(args: InitArgs) -> Result<()> {
         }
     } else {
         crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-        println!("  ✓ Ollama service is running at {}", args.ollama_url);
+        println!("  âœ“ Ollama service is running at {}", args.ollama_url);
         crossterm::execute!(stdout, ResetColor).ok();
     }
 
-    // ── Step 3: RAM check for model recommendations ──────────────────────────
+    // â”€â”€ Step 3: RAM check for model recommendations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let ram_gb = detect_ram_gb();
     if ram_gb > 0 && ram_gb <= 8 {
         crossterm::execute!(stdout, SetForegroundColor(Color::Yellow)).ok();
-        println!("  ⚠  Detected ~{}GB RAM — recommending 3–4B parameter models.", ram_gb);
+        println!("  âš   Detected ~{}GB RAM â€” recommending 3â€“4B parameter models.", ram_gb);
         println!("     Models above ~4B at Q4 quantization may leave little headroom.");
         crossterm::execute!(stdout, ResetColor).ok();
     }
 
-    // ── Step 4: Check/pull recommended models ────────────────────────────────
+    // â”€â”€ Step 4: Check/pull recommended models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let models = client.list_models().await.unwrap_or_default();
     let installed: Vec<&str> = models.iter().map(|m| m.name.as_str()).collect();
 
@@ -116,7 +116,7 @@ pub async fn init(args: InitArgs) -> Result<()> {
 
     if !needs_chat && !needs_embed {
         crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-        println!("  ✓ Required models already installed (llama3.2, nomic-embed-text)");
+        println!("  âœ“ Required models already installed (llama3.2, nomic-embed-text)");
         crossterm::execute!(stdout, ResetColor).ok();
     } else {
         if needs_chat {
@@ -129,26 +129,26 @@ pub async fn init(args: InitArgs) -> Result<()> {
         }
     }
 
-    // ── Step 5: ChromaDB check ───────────────────────────────────────────────
+    // â”€â”€ Step 5: ChromaDB check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let chroma = ChromaClient::new(&args.chroma_url);
     if chroma.is_reachable().await {
         crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-        println!("  ✓ ChromaDB is reachable at {}", args.chroma_url);
+        println!("  âœ“ ChromaDB is reachable at {}", args.chroma_url);
         crossterm::execute!(stdout, ResetColor).ok();
     } else {
         crossterm::execute!(stdout, SetForegroundColor(Color::Yellow)).ok();
-        println!("  ⚠  ChromaDB is not running at {}", args.chroma_url);
+        println!("  âš   ChromaDB is not running at {}", args.chroma_url);
         crossterm::execute!(stdout, ResetColor).ok();
-        println!("     ChromaDB is optional — only needed for ChromaDbStoreNode.");
+        println!("     ChromaDB is optional â€” only needed for ChromaDbStoreNode.");
         println!("     To start it:");
         println!("       pip install chromadb");
         println!("       chroma run --host localhost --port 8000");
     }
 
-    // ── Done ─────────────────────────────────────────────────────────────────
+    // â”€â”€ Done â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     println!();
     crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-    println!("  ✓ Hybrid Local AI Hub is ready!");
+    println!("  âœ“ Hybrid Local AI Hub is ready!");
     crossterm::execute!(stdout, ResetColor).ok();
     println!();
     println!("  Quick start:");
@@ -157,21 +157,21 @@ pub async fn init(args: InitArgs) -> Result<()> {
     println!("    hybrid-hub run workflow.json");
     println!();
     println!("  Alternate models (pull with: hybrid-hub models pull <name>):");
-    println!("    phi4-mini      — fastest option for 8 GB RAM (~28 tok/s)");
-    println!("    qwen3:4b       — best reasoning quality in the 8 GB tier");
-    println!("    gemma2:2b      — lightest fallback for very constrained machines");
+    println!("    phi4-mini      â€” fastest option for 8 GB RAM (~28 tok/s)");
+    println!("    qwen3:4b       â€” best reasoning quality in the 8 GB tier");
+    println!("    gemma2:2b      â€” lightest fallback for very constrained machines");
     println!();
 
     Ok(())
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn print_banner() {
     println!();
-    println!("  ┌─────────────────────────────────────────┐");
-    println!("  │       Hybrid Local AI Hub — Init        │");
-    println!("  └─────────────────────────────────────────┘");
+    println!("  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”");
+    println!("  â”‚       Hybrid Local AI Hub â€” Init        â”‚");
+    println!("  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜");
     println!();
 }
 
@@ -223,7 +223,7 @@ async fn install_ollama() -> Result<()> {
             anyhow::bail!("Ollama install script failed");
         }
         crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-        println!("  ✓ Ollama installed successfully");
+        println!("  âœ“ Ollama installed successfully");
         crossterm::execute!(stdout, ResetColor).ok();
     }
 
@@ -245,7 +245,7 @@ fn start_ollama_service() -> Result<()> {
 fn detect_ram_gb() -> u64 {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
-    sys.total_memory() / 1_073_741_824 // bytes → GB
+    sys.total_memory() / 1_073_741_824 // bytes â†’ GB
 }
 
 fn prompt_yes_no(question: &str, default_yes: bool) -> Result<bool> {
@@ -268,7 +268,7 @@ async fn pull_with_progress(client: &OllamaClient, model: &str) -> Result<()> {
     pb.set_style(
         ProgressStyle::with_template("  {spinner:.cyan} {msg}")
             .unwrap()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+            .tick_strings(&["â ‹", "â ™", "â ¹", "â ¸", "â ¼", "â ´", "â ¦", "â §", "â ‡", "â "]),
     );
     pb.set_message(format!("Pulling '{}'...", model));
     pb.enable_steady_tick(Duration::from_millis(80));
@@ -279,6 +279,6 @@ async fn pull_with_progress(client: &OllamaClient, model: &str) -> Result<()> {
         })
         .await?;
 
-    pb.finish_with_message(format!("✓ '{}' ready", model));
+    pb.finish_with_message(format!("âœ“ '{}' ready", model));
     Ok(())
 }

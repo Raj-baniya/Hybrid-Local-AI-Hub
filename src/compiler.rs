@@ -1,4 +1,4 @@
-//! Chat-to-graph compiler core: shared between CLI (`chat.rs`) and GUI IPC (`commands.rs`).
+﻿//! Chat-to-graph compiler core: shared between CLI (`chat.rs`) and GUI IPC (`commands.rs`).
 //!
 //! Generates a valid `Graph` from plain-English instructions using a local LLM via Ollama.
 //! Employs an iterative validation and targeted-repair loop (up to 3 rounds) before returning.
@@ -10,7 +10,7 @@ use crate::translator_prompt::build_system_prompt;
 use crate::validate::validate_graph;
 
 pub const DEFAULT_MODEL: &str = "llama3.2";
-pub const DEFAULT_OLLAMA_URL: &str = "http://localhost:11434";
+pub const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
 pub const DEFAULT_TEMPERATURE: f32 = 0.2;
 pub const MAX_REPAIR_ROUNDS: usize = 3;
 
@@ -110,7 +110,7 @@ async fn run_compiler_loop(
     Err(format!(
         "Failed to generate a valid workflow after {} repair rounds.\nLast validation errors:\n{}\n\nLast model output:\n{}",
         MAX_REPAIR_ROUNDS,
-        last_errors.iter().map(|e| format!(" • {e}")).collect::<Vec<_>>().join("\n"),
+        last_errors.iter().map(|e| format!(" â€¢ {e}")).collect::<Vec<_>>().join("\n"),
         last_json
     ))
 }

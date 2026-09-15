@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::Path;
 use std::sync::mpsc;
@@ -35,7 +35,7 @@ impl FileWatcher {
             .watch(Path::new(path), mode)
             .map_err(|e| anyhow!("Failed to watch path '{}': {e}", path))?;
 
-        // Bridge sync → async in a dedicated thread.
+        // Bridge sync â†’ async in a dedicated thread.
         let async_tx_clone = async_tx.clone();
         std::thread::spawn(move || {
             loop {

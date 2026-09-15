@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-// ─── Request / Response types ─────────────────────────────────────────────────
+// â”€â”€â”€ Request / Response types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Serialize)]
 struct GenerateRequest<'a> {
@@ -40,7 +40,7 @@ struct EmbedResponse {
     embedding: Vec<f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ModelInfo {
     pub name: String,
     pub size: Option<u64>,
@@ -58,7 +58,7 @@ pub struct PullProgress {
     pub total: Option<u64>,
 }
 
-// ─── Public client ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Public client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Clone)]
 pub struct OllamaClient {
@@ -72,6 +72,7 @@ impl OllamaClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             http: Client::builder()
                 .timeout(std::time::Duration::from_secs(300))
+                .no_proxy()
                 .build()
                 .expect("Failed to build HTTP client"),
         }
@@ -235,5 +236,37 @@ impl OllamaClient {
             .await
             .map(|r| r.status().is_success())
             .unwrap_or(false)
+    }
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(tag = "state")]
+pub enum OllamaStatus {
+    NotRunning,
+    NoModels,
+    Ready { models: Vec<ModelInfo> },
+}
+
+pub async fn check_ollama_status(url: &str) -> OllamaStatus {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .no_proxy()
+        .build()
+        .unwrap();
+
+    let resp = match client.get(&format!("{}/api/tags", url.trim_end_matches('/'))).send().await {
+        Ok(r) => r,
+        Err(_) => return OllamaStatus::NotRunning,
+    };
+
+    let parsed: ListModelsResponse = match resp.json().await {
+        Ok(p) => p,
+        Err(_) => return OllamaStatus::NotRunning,
+    };
+
+    if parsed.models.is_empty() {
+        OllamaStatus::NoModels
+    } else {
+        OllamaStatus::Ready { models: parsed.models }
     }
 }

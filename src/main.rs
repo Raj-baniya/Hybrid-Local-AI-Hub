@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+﻿use clap::{Parser, Subcommand};
 
 mod cli;
 
@@ -18,7 +18,7 @@ GETTING STARTED:
 #[command(
     name = "hybrid-hub",
     version,
-    about = "Hybrid Local AI Hub — local-first AI workflow orchestrator",
+    about = "Hybrid Local AI Hub â€” local-first AI workflow orchestrator",
     long_about = "Generate, run, and manage AI workflows entirely on your local machine.\n\
                   No cloud required. Powered by Ollama + ChromaDB.",
     after_help = AFTER_HELP,
@@ -35,7 +35,7 @@ enum Commands {
 EXAMPLES:
   hybrid-hub init
   hybrid-hub init --yes
-  hybrid-hub init --ollama-url http://localhost:11434
+  hybrid-hub init --ollama-url http://127.0.0.1:11434
 ")]
     Init(cli::init::InitArgs),
 
@@ -144,10 +144,10 @@ async fn main() {
 
 fn print_getting_started() {
     println!();
-    println!("  Hybrid Local AI Hub — local-first AI workflow orchestrator");
+    println!("  Hybrid Local AI Hub â€” local-first AI workflow orchestrator");
     println!("  Generate and run AI workflows on your machine. No cloud required.");
     println!();
-    println!("  ── Quick Start ────────────────────────────────────────────────");
+    println!("  â”€â”€ Quick Start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     println!();
     println!("  1. hybrid-hub init");
     println!("     Check / install Ollama and pull recommended models.");
@@ -164,7 +164,7 @@ fn print_getting_started() {
     println!("  5. hybrid-hub logs <execution-id>");
     println!("     Inspect per-node results from a past run.");
     println!();
-    println!("  ── More ────────────────────────────────────────────────────────");
+    println!("  â”€â”€ More â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     println!();
     println!("  hybrid-hub examples            real example instructions for chat");
     println!("  hybrid-hub template list       starter templates to copy and run");
@@ -178,7 +178,7 @@ fn print_getting_started() {
 
 fn print_examples() {
     println!();
-    println!("  ── Example Instructions for 'hybrid-hub chat' ──────────────────");
+    println!("  â”€â”€ Example Instructions for 'hybrid-hub chat' â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     println!();
 
     let examples: &[(&str, &str, &str)] = &[
@@ -252,10 +252,10 @@ fn print_examples() {
         println!();
     }
 
-    println!("  ── Tips ────────────────────────────────────────────────────────");
+    println!("  â”€â”€ Tips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     println!();
-    println!("  • Use --model phi4-mini for faster generation");
-    println!("  • Use --model qwen3:4b for better reasoning on complex instructions");
-    println!("  • Use --edit <file> to refine an existing workflow iteratively");
+    println!("  â€¢ Use --model phi4-mini for faster generation");
+    println!("  â€¢ Use --model qwen3:4b for better reasoning on complex instructions");
+    println!("  â€¢ Use --edit <file> to refine an existing workflow iteratively");
     println!();
 }

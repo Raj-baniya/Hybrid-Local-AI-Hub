@@ -1,0 +1,15 @@
+# Python Dependencies (Run: pip install -r requirements.txt)
+chromadb>=0.4.0
+
+# --- Setup Commands ---
+# 1. Install Node.js Frontend Dependencies:
+# npm install
+#
+# 2. Build Tauri Application (if compiling from source):
+# cargo build --release
+#
+# 3. Initialize Hybrid Hub (sets up Ollama and downloads default models):
+# hybrid-hub init
+#
+# 4. Run ChromaDB Vector Database locally (requires chromadb from above):
+# chroma run --host localhost --port 8000

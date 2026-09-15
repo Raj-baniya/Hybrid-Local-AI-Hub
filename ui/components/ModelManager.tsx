@@ -4,6 +4,11 @@ import { listen } from '@tauri-apps/api/event';
 import { useWorkflowStore } from '../store/workflowStore';
 import { Cpu, Download, CheckCircle, AlertCircle, Loader2, RefreshCw, X, StopCircle } from 'lucide-react';
 
+type OllamaStatus =
+  | { state: "NotRunning" }
+  | { state: "NoModels" }
+  | { state: "Ready"; models: ModelInfo[] };
+
 interface ModelInfo {
   name: string;
   size?: number;
@@ -27,6 +32,7 @@ const RECOMMENDED_MODELS = [
 export const ModelManager: React.FC = () => {
   const setActivePanel = useWorkflowStore((s) => s.setActivePanel);
 
+  const [status, setStatus] = useState<OllamaStatus | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [pullingModel, setPullingModel] = useState<string | null>(null);
@@ -39,8 +45,13 @@ export const ModelManager: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const list = await invoke<ModelInfo[]>('list_models', {});
-      setModels(list);
+      const s = await invoke<OllamaStatus>('cmd_check_ollama', {});
+      setStatus(s);
+      if (s.state === 'Ready') {
+        setModels(s.models);
+      } else {
+        setModels([]);
+      }
     } catch (err: any) {
       setError(typeof err === 'string' ? err : err.message || 'Failed to list Ollama models');
     } finally {
@@ -69,7 +80,7 @@ export const ModelManager: React.FC = () => {
     setPullProgress(null);
     setError(null);
     try {
-      await invoke('pull_model', { modelName });
+      await invoke('pull_model', { model_name: modelName });
       setPullStatus('Model successfully pulled!');
       await fetchModels();
     } catch (err: any) {
@@ -83,12 +94,12 @@ export const ModelManager: React.FC = () => {
 
   const handleCancel = async () => {
     if (!pullingModel) return;
-    try { await invoke('cancel_pull', { modelName: pullingModel }); } catch (_) {}
+    try { await invoke('cancel_pull', { model_name: pullingModel }); } catch (_) {}
   };
 
   const isInstalled = (name: string) => models.some((m) => m.name.startsWith(name) || m.name === name);
   const formatSize = (bytes?: number) => {
-    if (!bytes) return '—';
+    if (!bytes) return 'â€”';
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
   const formatBytes = (n: number) => {
@@ -120,6 +131,29 @@ export const ModelManager: React.FC = () => {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {status?.state === 'NotRunning' && (
+          <div style={{ padding: 14, background: 'rgba(244,63,94,0.07)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, color: '#f8fafc', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fb7185', fontWeight: 600 }}>
+              <AlertCircle size={16} /> Ollama is not running
+            </div>
+            <div>
+              <ol style={{ paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <li>Install it from <a href="https://ollama.com/download" target="_blank" style={{ color: '#38bdf8' }}>ollama.com/download</a></li>
+                <li>Run <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 4px', borderRadius: 4 }}>ollama serve</code> in a terminal</li>
+              </ol>
+            </div>
+          </div>
+        )}
+
+        {status?.state === 'NoModels' && (
+          <div style={{ padding: 14, background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 10, color: '#f8fafc', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#facc15', fontWeight: 600 }}>
+              <AlertCircle size={16} /> No models installed
+            </div>
+            <div>Ollama is running, but no models are installed. Please pull one from the recommendations below to begin.</div>
+          </div>
+        )}
+
         {error && (
           <div style={{ padding: 10, background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)', borderRadius: 6, color: '#fca5a5', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
             <AlertCircle size={14} />{error}
@@ -211,3 +245,4 @@ export const ModelManager: React.FC = () => {
     </div>
   );
 };
+

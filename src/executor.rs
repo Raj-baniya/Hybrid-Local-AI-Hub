@@ -1,4 +1,4 @@
-//! Execution engine: topological sort → concurrent node execution via Kahn's algorithm.
+﻿//! Execution engine: topological sort â†’ concurrent node execution via Kahn's algorithm.
 //!
 //! Failure policy:
 //!   - Default (`FailurePolicy::HaltOnFailure`): any node failure immediately skips
@@ -20,7 +20,7 @@ use crate::interpolation;
 use crate::ollama::OllamaClient;
 use crate::schema::{Graph, NodeType};
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FailurePolicy {
@@ -43,11 +43,11 @@ pub struct ExecutorConfig {
 impl Default for ExecutorConfig {
     fn default() -> Self {
         Self {
-            ollama_url: "http://localhost:11434".to_string(),
+            ollama_url: "http://127.0.0.1:11434".to_string(),
             chroma_url: "http://localhost:8000".to_string(),
             failure_policy: FailurePolicy::HaltOnFailure,
             default_timeout_secs: 10,
-            llm_timeout_secs: 120,
+            llm_timeout_secs: 300,
         }
     }
 }
@@ -240,7 +240,7 @@ pub async fn run_graph(
     Ok(record)
 }
 
-// ─── Internals ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Internals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn build_adj_and_indegree(
     graph: &Graph,
@@ -298,7 +298,7 @@ async fn execute_node(
     skipped: Arc<Mutex<HashSet<String>>>,
 ) -> Result<String> {
     match node_data {
-        // ── TextInputNode ────────────────────────────────────────────────────
+        // â”€â”€ TextInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::TextInputNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -306,14 +306,14 @@ async fn execute_node(
             Ok(resolved)
         }
 
-        // ── FileWatcherNode ──────────────────────────────────────────────────
+        // â”€â”€ FileWatcherNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::FileWatcherNode(_cfg) => {
             // In `run` (one-shot) mode, a FileWatcherNode yields a static placeholder;
             // in `--watch` mode, the watcher module feeds events from outside.
-            Ok("[FileWatcherNode: event-driven — use --watch mode]".to_string())
+            Ok("[FileWatcherNode: event-driven â€” use --watch mode]".to_string())
         }
 
-        // ── ImageInputNode ───────────────────────────────────────────────────
+        // â”€â”€ ImageInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::ImageInputNode(cfg) => {
             // Read image bytes and base64-encode them for downstream LLM nodes.
             let bytes = tokio::fs::read(&cfg.image_path).await.map_err(|e| {
@@ -324,7 +324,7 @@ async fn execute_node(
             Ok(format!("<image>{}</image>", b64))
         }
 
-        // ── PDFExtractorNode ─────────────────────────────────────────────────
+        // â”€â”€ PDFExtractorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::PDFExtractorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -335,7 +335,7 @@ async fn execute_node(
             extract_pdf_text(&node_id, &pdf_path, cfg.page_range)
         }
 
-        // ── OllamaSelectorNode ───────────────────────────────────────────────
+        // â”€â”€ OllamaSelectorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::OllamaSelectorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -362,7 +362,7 @@ async fn execute_node(
                 .map_err(|e| anyhow!("OllamaSelectorNode '{}': {e}", node_id))
         }
 
-        // ── LocalEmbedderNode ────────────────────────────────────────────────
+        // â”€â”€ LocalEmbedderNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::LocalEmbedderNode(cfg) => {
             let locked = outputs.lock().await;
             let text = single_input_value(&predecessors, &locked)
@@ -374,7 +374,7 @@ async fn execute_node(
             Ok(serde_json::to_string(&embedding)?)
         }
 
-        // ── ChromaDbStoreNode ────────────────────────────────────────────────
+        // â”€â”€ ChromaDbStoreNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::ChromaDbStoreNode(cfg) => {
             let locked = outputs.lock().await;
 
@@ -411,7 +411,7 @@ async fn execute_node(
             Ok(format!("Stored document '{}' in collection '{}'", id, cfg.collection_name))
         }
 
-        // ── ConditionalRouterNode ────────────────────────────────────────────
+        // â”€â”€ ConditionalRouterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::ConditionalRouterNode(cfg) => {
             let locked = outputs.lock().await;
             let input = single_input_value(&predecessors, &locked)
@@ -434,7 +434,7 @@ async fn execute_node(
             Ok(format!("routed:{}", routed_to))
         }
 
-        // ── LocalFileWriterNode ──────────────────────────────────────────────
+        // â”€â”€ LocalFileWriterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::LocalFileWriterNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);

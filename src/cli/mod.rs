@@ -1,4 +1,4 @@
-pub mod chat;
+﻿pub mod chat;
 pub mod export;
 pub mod init;
 pub mod logs;

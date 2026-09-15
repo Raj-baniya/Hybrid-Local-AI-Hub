@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -44,7 +44,7 @@ pub async fn export(args: ExportArgs) -> Result<()> {
 
     // Validate before exporting.
     validate_graph(&graph)
-        .map_err(|errs| anyhow!("Workflow has errors — fix before exporting:\n{}", errs.join("\n")))?;
+        .map_err(|errs| anyhow!("Workflow has errors â€” fix before exporting:\n{}", errs.join("\n")))?;
 
     // Build the manifest.
     let manifest = build_manifest(&graph);
@@ -77,21 +77,21 @@ pub async fn export(args: ExportArgs) -> Result<()> {
 
     zip.finish()?;
 
-    println!("  ✓ Exported to: {}", args.output.display());
+    println!("  âœ“ Exported to: {}", args.output.display());
     println!("    Contains: {}, manifest.json, README.md", workflow_name);
     println!();
     if !manifest.required_ollama_models.is_empty() {
         println!("  Required Ollama models: {}", manifest.required_ollama_models.join(", "));
     }
     if !manifest.machine_specific_paths.is_empty() {
-        println!("  ⚠  {} machine-specific path(s) flagged in manifest — recipients must review.",
+        println!("  âš   {} machine-specific path(s) flagged in manifest â€” recipients must review.",
             manifest.machine_specific_paths.len());
     }
 
     Ok(())
 }
 
-// ─── Import ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Import â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Args, Debug)]
 pub struct ImportArgs {
@@ -103,7 +103,7 @@ pub struct ImportArgs {
     pub output: Option<PathBuf>,
 
     /// Ollama URL (for pulling missing models).
-    #[arg(long, default_value = "http://localhost:11434")]
+    #[arg(long, default_value = "http://127.0.0.1:11434")]
     pub ollama_url: String,
 
     /// Pull missing models without prompting.
@@ -172,9 +172,9 @@ pub async fn import(args: ImportArgs) -> Result<()> {
         for model in &manifest.required_ollama_models {
             let is_installed = installed.iter().any(|m| m.contains(model.as_str()));
             if is_installed {
-                println!("    ✓ {} (installed)", model);
+                println!("    âœ“ {} (installed)", model);
             } else {
-                println!("    ✗ {} (NOT installed)", model);
+                println!("    âœ— {} (NOT installed)", model);
                 missing_models.push(model.clone());
             }
         }
@@ -196,10 +196,10 @@ pub async fn import(args: ImportArgs) -> Result<()> {
                         ollama
                             .pull_model(model, None, |progress| print!("\r    {}", progress.status))
                             .await?;
-                        println!("\r  ✓ '{}' ready                   ", model);
+                        println!("\r  âœ“ '{}' ready                   ", model);
                     }
                 } else {
-                    println!("  ⚠  Ollama is not reachable — skipping model pull");
+                    println!("  âš   Ollama is not reachable â€” skipping model pull");
                     println!("     Run 'hybrid-hub init' first");
                 }
             }
@@ -208,7 +208,7 @@ pub async fn import(args: ImportArgs) -> Result<()> {
 
     // Warn about machine-specific paths.
     if !manifest.machine_specific_paths.is_empty() {
-        println!("  ⚠  Machine-specific paths that need review before running:");
+        println!("  âš   Machine-specific paths that need review before running:");
         for p in &manifest.machine_specific_paths {
             println!("    Node '{}', field '{}': {}", p.node_id, p.field, p.value);
         }
@@ -225,7 +225,7 @@ pub async fn import(args: ImportArgs) -> Result<()> {
     std::fs::write(&out_path, &workflow_json)
         .map_err(|e| anyhow!("Cannot write to '{}': {e}", out_path.display()))?;
 
-    println!("  ✓ Workflow written to: {}", out_path.display());
+    println!("  âœ“ Workflow written to: {}", out_path.display());
     if !manifest.machine_specific_paths.is_empty() {
         println!("  Review and update the machine-specific paths above before running.");
     } else {
@@ -236,7 +236,7 @@ pub async fn import(args: ImportArgs) -> Result<()> {
     Ok(())
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn build_manifest(graph: &Graph) -> BundleManifest {
     let mut models: HashSet<String> = HashSet::new();
@@ -353,7 +353,7 @@ The following paths reference the original machine's filesystem.
             manifest.required_chroma_collections.join("\n")
         },
         if manifest.machine_specific_paths.is_empty() {
-            "None — this workflow has no machine-specific paths.".to_string()
+            "None â€” this workflow has no machine-specific paths.".to_string()
         } else {
             manifest
                 .machine_specific_paths

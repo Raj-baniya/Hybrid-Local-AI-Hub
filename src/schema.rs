@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-// ─── Node type enum ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Node type enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Every node variant carries its own config fields inline (discriminated union).
 /// The `type` field is the tag that drives deserialization.
@@ -19,7 +19,7 @@ pub enum NodeType {
     LocalFileWriterNode(LocalFileWriterConfig),
 }
 
-// ─── Per-variant config structs ──────────────────────────────────────────────
+// â”€â”€â”€ Per-variant config structs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -52,7 +52,7 @@ pub struct ImageInputConfig {
 pub struct OllamaSelectorConfig {
     /// Ollama model identifier (e.g. "llama3.2", "phi4-mini").
     pub model: String,
-    /// Sampling temperature (0.0–2.0; default 0.7).
+    /// Sampling temperature (0.0â€“2.0; default 0.7).
     #[serde(default = "default_temperature")]
     pub temperature: f32,
     /// Prompt template. Use `{{input}}` (single-input shorthand) or
@@ -111,7 +111,7 @@ pub struct LocalFileWriterConfig {
     pub append: bool,
 }
 
-// ─── Graph structs ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Graph structs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// A node in the graph. `position` is optional/unused in CLI mode but kept for
 /// forward JSON-compatibility when a GUI is added.
@@ -143,7 +143,7 @@ pub struct Graph {
     pub edges: Vec<GraphEdge>,
 }
 
-// ─── Defaults ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn default_temperature() -> f32 {
     0.7

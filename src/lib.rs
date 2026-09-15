@@ -1,4 +1,4 @@
-//! Hybrid Local AI Hub — library crate.
+﻿//! Hybrid Local AI Hub â€” library crate.
 //!
 //! All core modules exposed here for use by:
 //!   - `src/main.rs` (CLI binary)

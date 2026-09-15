@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use clap::Args;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use hybrid_local_ai_hub::execution_record::{ExecutionRecord, NodeStatus};
@@ -46,22 +46,22 @@ pub async fn logs(args: LogsArgs) -> Result<()> {
     crossterm::execute!(stdout, ResetColor).ok();
 
     println!();
-    println!("  ─── Node Results ────────────────────────────────────────────");
+    println!("  â”€â”€â”€ Node Results â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     println!();
 
     for node in &record.nodes {
         let (icon, color) = match node.status {
-            NodeStatus::Success => ("✓", Color::Green),
-            NodeStatus::Failed  => ("✗", Color::Red),
-            NodeStatus::Skipped => ("–", Color::DarkGrey),
-            NodeStatus::Running => ("⟳", Color::Yellow),
-            NodeStatus::Pending => ("·", Color::DarkGrey),
+            NodeStatus::Success => ("âœ“", Color::Green),
+            NodeStatus::Failed  => ("âœ—", Color::Red),
+            NodeStatus::Skipped => ("â€“", Color::DarkGrey),
+            NodeStatus::Running => ("âŸ³", Color::Yellow),
+            NodeStatus::Pending => ("Â·", Color::DarkGrey),
         };
 
         let duration_str = node
             .duration_ms
             .map(|d| format!("{:.1}s", d as f64 / 1000.0))
-            .unwrap_or_else(|| "—".to_string());
+            .unwrap_or_else(|| "â€”".to_string());
 
         crossterm::execute!(stdout, SetForegroundColor(color)).ok();
         print!("  {} ", icon);
@@ -70,7 +70,7 @@ pub async fn logs(args: LogsArgs) -> Result<()> {
 
         if let Some(ref preview) = node.output_preview {
             let truncated = if preview.len() > 120 {
-                format!("{}…", &preview[..117])
+                format!("{}â€¦", &preview[..117])
             } else {
                 preview.clone()
             };

@@ -1,4 +1,4 @@
-//! Tauri IPC commands exposing core Hybrid Local AI Hub engine to the GUI frontend.
+﻿//! Tauri IPC commands exposing core Hybrid Local AI Hub engine to the GUI frontend.
 //!
 //! Mirrors CLI functionality without duplication: calls into `hybrid_local_ai_hub` library.
 
@@ -14,11 +14,11 @@ use tokio::sync::Mutex;
 use hybrid_local_ai_hub::compiler;
 use hybrid_local_ai_hub::execution_record::ExecutionRecord;
 use hybrid_local_ai_hub::executor::{self, ExecutorConfig, FailurePolicy};
-use hybrid_local_ai_hub::ollama::{ModelInfo, OllamaClient};
+use hybrid_local_ai_hub::ollama::{ModelInfo, OllamaClient, OllamaStatus, check_ollama_status};
 use hybrid_local_ai_hub::schema::Graph;
 use hybrid_local_ai_hub::validate;
 
-// ─── Shared state ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Shared state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Tracks in-progress model pulls so they can be cancelled.
 #[derive(Default)]
@@ -26,7 +26,7 @@ pub struct PullState {
     pub active_pulls: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
-// ─── Executor config payload ──────────────────────────────────────────────────
+// â”€â”€â”€ Executor config payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +38,7 @@ pub struct ExecutorConfigPayload {
     pub llm_timeout_secs: Option<u64>,
 }
 
-// ─── Commands ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// 1. Run a workflow graph end-to-end.
 #[tauri::command]
@@ -99,9 +99,15 @@ pub fn validate_graph(graph: Graph) -> Result<(), Vec<String>> {
 /// 3. List models available locally in Ollama.
 #[tauri::command]
 pub async fn list_models(ollama_url: Option<String>) -> Result<Vec<ModelInfo>, String> {
-    let url = ollama_url.unwrap_or_else(|| "http://localhost:11434".to_string());
+    let url = ollama_url.unwrap_or_else(|| "http://127.0.0.1:11434".to_string());
     let client = OllamaClient::new(&url);
     client.list_models().await.map_err(|e| format!("{e}"))
+}
+
+#[tauri::command]
+pub async fn cmd_check_ollama(ollama_url: Option<String>) -> OllamaStatus {
+    let url = ollama_url.unwrap_or_else(|| "http://127.0.0.1:11434".to_string());
+    check_ollama_status(&url).await
 }
 
 /// 4. Pull a model from Ollama with streaming progress events.
@@ -112,7 +118,7 @@ pub async fn pull_model(
     model_name: String,
     ollama_url: Option<String>,
 ) -> Result<(), String> {
-    let url = ollama_url.unwrap_or_else(|| "http://localhost:11434".to_string());
+    let url = ollama_url.unwrap_or_else(|| "http://127.0.0.1:11434".to_string());
     let client = OllamaClient::new(&url);
 
     let app_handle = app.clone();
@@ -161,8 +167,17 @@ pub async fn chat_generate(
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
     let u = ollama_url.unwrap_or_else(|| compiler::DEFAULT_OLLAMA_URL.to_string());
-    let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
 
+    let status = check_ollama_status(&u).await;
+    let installed: Vec<String> = match status {
+        OllamaStatus::Ready { models } => models.into_iter().map(|mi| mi.name).collect(),
+        _ => return Err("No local model detected â€” install one first.".to_string()),
+    };
+    if !installed.contains(&m) {
+        return Err(format!("Model '{m}' is not installed. Installed models: {:?}", installed));
+    }
+
+    let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
     compiler::generate_workflow(&instruction, &m, &u, t).await
 }
 
@@ -177,8 +192,17 @@ pub async fn chat_edit(
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
     let u = ollama_url.unwrap_or_else(|| compiler::DEFAULT_OLLAMA_URL.to_string());
-    let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
 
+    let status = check_ollama_status(&u).await;
+    let installed: Vec<String> = match status {
+        OllamaStatus::Ready { models } => models.into_iter().map(|mi| mi.name).collect(),
+        _ => return Err("No local model detected â€” install one first.".to_string()),
+    };
+    if !installed.contains(&m) {
+        return Err(format!("Model '{m}' is not installed. Installed models: {:?}", installed));
+    }
+
+    let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
     compiler::edit_workflow(&instruction, &existing_graph, &m, &u, t).await
 }
 

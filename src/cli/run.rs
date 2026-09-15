@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use clap::Args;
 use std::path::PathBuf;
 
@@ -27,7 +27,7 @@ pub struct RunArgs {
     pub continue_on_failure: bool,
 
     /// Ollama base URL.
-    #[arg(long, default_value = "http://localhost:11434")]
+    #[arg(long, default_value = "http://127.0.0.1:11434")]
     pub ollama_url: String,
 
     /// ChromaDB base URL.
@@ -48,7 +48,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
     if let Err(errs) = validate_graph(&graph) {
         eprintln!("Workflow validation failed:");
         for err in errs {
-            eprintln!("  • {}", err);
+            eprintln!("  â€¢ {}", err);
         }
         std::process::exit(1);
     }
@@ -80,7 +80,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
                     match watcher.rx.recv().await {
                         Some(Ok(path)) => {
                             let trigger = format!("watch:{}", path.display());
-                            println!("\n▶  File event: {}", path.display());
+                            println!("\nâ–¶  File event: {}", path.display());
                             execute_and_print(&graph, config.clone(), &trigger, args.json).await?;
                         }
                         Some(Err(e)) => eprintln!("Watch error: {e}"),
@@ -120,11 +120,11 @@ async fn execute_and_print(
 
     for node_rec in &record.nodes {
         let (icon, color) = match node_rec.status {
-            NodeStatus::Success => ("✓", Color::Green),
-            NodeStatus::Failed  => ("✗", Color::Red),
-            NodeStatus::Skipped => ("–", Color::DarkGrey),
-            NodeStatus::Running => ("⟳", Color::Yellow),
-            NodeStatus::Pending => ("·", Color::DarkGrey),
+            NodeStatus::Success => ("âœ“", Color::Green),
+            NodeStatus::Failed  => ("âœ—", Color::Red),
+            NodeStatus::Skipped => ("â€“", Color::DarkGrey),
+            NodeStatus::Running => ("âŸ³", Color::Yellow),
+            NodeStatus::Pending => ("Â·", Color::DarkGrey),
         };
 
         let duration_str = node_rec
@@ -140,15 +140,15 @@ async fn execute_and_print(
 
         if let Some(ref preview) = node_rec.output_preview {
             let truncated = if preview.len() > 80 {
-                format!("{}…", &preview[..77])
+                format!("{}â€¦", &preview[..77])
             } else {
                 preview.clone()
             };
-            println!("      ↳ {}", truncated);
+            println!("      â†³ {}", truncated);
         }
         if let Some(ref err) = node_rec.error {
             crossterm::execute!(stdout, SetForegroundColor(Color::Red)).ok();
-            println!("      ✗ {}", err);
+            println!("      âœ— {}", err);
             crossterm::execute!(stdout, ResetColor).ok();
         }
     }

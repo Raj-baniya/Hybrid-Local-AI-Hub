@@ -1,12 +1,12 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+﻿use std::collections::{HashMap, HashSet, VecDeque};
 use crate::schema::{Graph, GraphEdge, GraphNode, NodeType};
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Validates the structural integrity of a graph.
 ///
 /// Returns `Ok(())` if the graph is valid, or `Err(Vec<String>)` containing
-/// all discovered errors (not just the first one — full error list).
+/// all discovered errors (not just the first one â€” full error list).
 pub fn validate_graph(graph: &Graph) -> Result<(), Vec<String>> {
     let mut errors: Vec<String> = Vec::new();
 
@@ -51,7 +51,7 @@ pub fn validate_graph(graph: &Graph) -> Result<(), Vec<String>> {
     let incoming: HashMap<&str, Vec<&str>> = build_incoming_map(&graph.nodes, &graph.edges);
     validate_template_references(graph, &node_ids, &incoming, &mut errors);
 
-    // 4. Cycle detection — run after edge validity so we don't panic on bad refs.
+    // 4. Cycle detection â€” run after edge validity so we don't panic on bad refs.
     if errors.is_empty() && has_cycle(&graph.nodes, &graph.edges) {
         errors.push(
             "Graph contains a cycle. Workflow graphs must be directed acyclic graphs (DAGs)."
@@ -101,7 +101,7 @@ pub fn would_create_cycle(
     false
 }
 
-// ─── Internals ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Internals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn build_incoming_map<'a>(
     nodes: &'a [GraphNode],
@@ -227,7 +227,7 @@ fn validate_placeholder(
         let ref_node_id = &placeholder[..dot_pos];
         if !node_ids.contains(ref_node_id) {
             errors.push(format!(
-                "Node '{}', field '{}': references {{{{{}}}}} — no node with id '{}' exists",
+                "Node '{}', field '{}': references {{{{{}}}}} â€” no node with id '{}' exists",
                 node_id, field_name, placeholder, ref_node_id
             ));
         }
@@ -284,7 +284,7 @@ fn dfs_has_cycle<'a>(
     if let Some(neighbors) = adj.get(node) {
         for &neighbor in neighbors {
             match color.get(neighbor).copied().unwrap_or(0) {
-                1 => return true, // back edge → cycle
+                1 => return true, // back edge â†’ cycle
                 0 if dfs_has_cycle(neighbor, adj, color) => return true,
                 _ => {} // black = already fully processed
             }

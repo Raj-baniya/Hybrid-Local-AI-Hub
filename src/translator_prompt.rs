@@ -1,4 +1,4 @@
-//! System prompt builder for the chat-to-graph compiler.
+﻿//! System prompt builder for the chat-to-graph compiler.
 //!
 //! Produces the schema + examples prompt sent to the LLM. The schema is derived
 //! directly from the `NodeType` enum so it stays in sync with `schema.rs`.
@@ -13,14 +13,14 @@ pub fn build_system_prompt() -> String {
     )
 }
 
-// ─── Schema section ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Schema section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Hand-maintained but verified by cargo test (see tests/schema_tests.rs).
 // Update whenever schema.rs changes.
 
 const SCHEMA_SECTION: &str = r#"
 ## Workflow Graph Schema
 
-You must output ONLY valid JSON matching this schema — no prose, no markdown fences.
+You must output ONLY valid JSON matching this schema â€” no prose, no markdown fences.
 
 ### Top-level object
 ```
@@ -53,39 +53,39 @@ You must output ONLY valid JSON matching this schema — no prose, no markdown f
 
 ### NodeType variants (use the exact "type" string shown)
 
-**FileWatcherNode** — watches a directory for file events
+**FileWatcherNode** â€” watches a directory for file events
 ```json
 { "type": "FileWatcherNode", "watchPath": "./folder", "pattern": "*.pdf", "recursive": false }
 ```
 
-**TextInputNode** — provides static text or a template
+**TextInputNode** â€” provides static text or a template
 ```json
 { "type": "TextInputNode", "text": "Process this: {{upstream_id.output}}" }
 ```
 
-**ImageInputNode** — reads an image from disk
+**ImageInputNode** â€” reads an image from disk
 ```json
 { "type": "ImageInputNode", "imagePath": "./photo.jpg" }
 ```
 
-**OllamaSelectorNode** — calls a local LLM
+**OllamaSelectorNode** â€” calls a local LLM
 ```json
 { "type": "OllamaSelectorNode", "model": "llama3.2", "temperature": 0.7,
   "promptTemplate": "Summarize: {{input}}", "jsonMode": false }
 ```
 (Use `{{input}}` only when this node has exactly ONE incoming edge; otherwise use `{{node_id.output}}`)
 
-**LocalEmbedderNode** — generates embeddings via Ollama
+**LocalEmbedderNode** â€” generates embeddings via Ollama
 ```json
 { "type": "LocalEmbedderNode", "model": "nomic-embed-text" }
 ```
 
-**PDFExtractorNode** — extracts text from a PDF
+**PDFExtractorNode** â€” extracts text from a PDF
 ```json
 { "type": "PDFExtractorNode", "pageRange": null }
 ```
 
-**ChromaDbStoreNode** — stores embeddings + documents in ChromaDB
+**ChromaDbStoreNode** â€” stores embeddings + documents in ChromaDB
 ```json
 { "type": "ChromaDbStoreNode", "collectionName": "my_collection",
   "chromaUrl": "http://localhost:8000",
@@ -93,14 +93,14 @@ You must output ONLY valid JSON matching this schema — no prose, no markdown f
 ```
 (inputMap maps named inputs to "node_id.output" references)
 
-**ConditionalRouterNode** — routes based on a condition
+**ConditionalRouterNode** â€” routes based on a condition
 ```json
 { "type": "ConditionalRouterNode", "condition": "weight_loss",
   "trueTarget": "node_id_a", "falseTarget": "node_id_b" }
 ```
 (condition is a substring match against the input)
 
-**LocalFileWriterNode** — writes text to a file
+**LocalFileWriterNode** â€” writes text to a file
 ```json
 { "type": "LocalFileWriterNode", "outputPath": "./output/result.txt", "append": false }
 ```
@@ -113,7 +113,7 @@ You must output ONLY valid JSON matching this schema — no prose, no markdown f
 - The closed vocabulary is exactly the 9 node types above. Do not invent new types.
 "#;
 
-// ─── Examples section ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Examples section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const EXAMPLES_SECTION: &str = r#"
 ## Worked Examples
@@ -173,7 +173,7 @@ const EXAMPLES_SECTION: &str = r#"
 ```
 "#;
 
-// ─── Instructions section ─────────────────────────────────────────────────────
+// â”€â”€â”€ Instructions section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const INSTRUCTIONS_SECTION: &str = r#"
 ## Your Task
@@ -181,16 +181,16 @@ const INSTRUCTIONS_SECTION: &str = r#"
 The user will describe a workflow automation. Generate a valid JSON graph for it using ONLY the 9 node types above.
 
 Rules:
-1. Output ONLY the JSON object — no markdown, no explanation, no ```json fences.
+1. Output ONLY the JSON object â€” no markdown, no explanation, no ```json fences.
 2. Generate meaningful, descriptive node IDs (e.g. "pdf_extractor", "llm_planner", not "node1").
 3. Use the exact camelCase field names shown in the schema.
 4. Every edge must connect two real node ids in the graph.
-5. Ensure the graph is a DAG — no cycles.
+5. Ensure the graph is a DAG â€” no cycles.
 6. If the user's instruction implies a file trigger, use FileWatcherNode.
 7. If multiple nodes feed into ChromaDbStoreNode, always use inputMap.
 8. Make reasonable assumptions for unspecified details (model name, output paths, etc.).
-9. Do not use node types outside the 9 defined above — if the user asks for something
+9. Do not use node types outside the 9 defined above â€” if the user asks for something
    that maps to no node type (e.g. "send email"), explain in a comment field that it
-   is outside the vocabulary — actually you cannot add comment fields, just omit it
+   is outside the vocabulary â€” actually you cannot add comment fields, just omit it
    and use a LocalFileWriterNode to write the email content to a file as a workaround.
 "#;

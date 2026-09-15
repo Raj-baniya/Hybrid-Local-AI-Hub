@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use clap::Args;
 use std::path::PathBuf;
 
@@ -32,7 +32,7 @@ pub fn validate(args: ValidateArgs) -> Result<()> {
             } else {
                 let mut stdout = std::io::stdout();
                 crossterm::execute!(stdout, SetForegroundColor(Color::Red)).ok();
-                eprintln!("✗ JSON parse error: {e}");
+                eprintln!("âœ— JSON parse error: {e}");
                 crossterm::execute!(stdout, ResetColor).ok();
             }
             std::process::exit(1);
@@ -46,7 +46,7 @@ pub fn validate(args: ValidateArgs) -> Result<()> {
             } else {
                 let mut stdout = std::io::stdout();
                 crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-                println!("✓ Workflow is valid ({} nodes, {} edges)",
+                println!("âœ“ Workflow is valid ({} nodes, {} edges)",
                     graph.nodes.len(), graph.edges.len());
                 crossterm::execute!(stdout, ResetColor).ok();
             }
@@ -57,10 +57,10 @@ pub fn validate(args: ValidateArgs) -> Result<()> {
             } else {
                 let mut stdout = std::io::stdout();
                 crossterm::execute!(stdout, SetForegroundColor(Color::Red)).ok();
-                eprintln!("✗ Workflow has {} error(s):", errs.len());
+                eprintln!("âœ— Workflow has {} error(s):", errs.len());
                 crossterm::execute!(stdout, ResetColor).ok();
                 for err in &errs {
-                    eprintln!("  • {}", err);
+                    eprintln!("  â€¢ {}", err);
                 }
             }
             std::process::exit(1);

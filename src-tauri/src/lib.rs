@@ -1,4 +1,4 @@
-pub mod commands;
+﻿pub mod commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -9,6 +9,7 @@ pub fn run() {
             commands::run_graph,
             commands::validate_graph,
             commands::list_models,
+            commands::cmd_check_ollama,
             commands::pull_model,
             commands::cancel_pull,
             commands::chat_generate,

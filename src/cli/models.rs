@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -15,7 +15,7 @@ pub struct ModelsArgs {
 pub enum ModelsCommand {
     /// List all models available on the local Ollama instance.
     List {
-        #[arg(long, default_value = "http://localhost:11434")]
+        #[arg(long, default_value = "http://127.0.0.1:11434")]
         ollama_url: String,
         #[arg(long)]
         json: bool,
@@ -24,7 +24,7 @@ pub enum ModelsCommand {
     Pull {
         /// Model name (e.g. llama3.2, phi4-mini, nomic-embed-text).
         name: String,
-        #[arg(long, default_value = "http://localhost:11434")]
+        #[arg(long, default_value = "http://127.0.0.1:11434")]
         ollama_url: String,
     },
 }
@@ -68,7 +68,7 @@ async fn list_models(ollama_url: &str, json: bool) -> Result<()> {
             .map(|s| format!("{:.1} GB", s as f64 / 1_073_741_824.0))
             .unwrap_or_else(|| "?".to_string());
         crossterm::execute!(stdout, SetForegroundColor(Color::Cyan)).ok();
-        print!("  • {:<35}", model.name);
+        print!("  â€¢ {:<35}", model.name);
         crossterm::execute!(stdout, ResetColor).ok();
         println!("{}", size_str);
     }
@@ -90,7 +90,7 @@ async fn pull_model(name: &str, ollama_url: &str) -> Result<()> {
     pb.set_style(
         ProgressStyle::with_template("{spinner:.cyan} {msg}")
             .unwrap()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+            .tick_strings(&["â ‹", "â ™", "â ¹", "â ¸", "â ¼", "â ´", "â ¦", "â §", "â ‡", "â "]),
     );
     pb.set_message(format!("Pulling '{}'...", name));
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
@@ -101,6 +101,6 @@ async fn pull_model(name: &str, ollama_url: &str) -> Result<()> {
         })
         .await?;
 
-    pb.finish_with_message(format!("✓ '{}' pulled successfully", name));
+    pb.finish_with_message(format!("âœ“ '{}' pulled successfully", name));
     Ok(())
 }

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use clap::Args;
 use std::path::PathBuf;
 
@@ -29,7 +29,7 @@ pub struct ChatArgs {
     pub model: String,
 
     /// Ollama base URL.
-    #[arg(long, default_value = "http://localhost:11434")]
+    #[arg(long, default_value = "http://127.0.0.1:11434")]
     pub ollama_url: String,
 
     /// Temperature (lower = more deterministic JSON output).
@@ -67,7 +67,7 @@ pub async fn chat(args: ChatArgs) -> Result<()> {
         if let Err(errs) = validate_graph(&existing) {
             eprintln!("Warning: existing graph has validation errors:");
             for e in &errs {
-                eprintln!("  • {e}");
+                eprintln!("  â€¢ {e}");
             }
         }
         format!(
@@ -148,13 +148,13 @@ pub async fn chat(args: ChatArgs) -> Result<()> {
     match graph {
         None => {
             crossterm::execute!(stdout, SetForegroundColor(Color::Red)).ok();
-            eprintln!("  ✗ Failed to generate a valid graph after {} repair attempts.", MAX_REPAIR_ROUNDS);
+            eprintln!("  âœ— Failed to generate a valid graph after {} repair attempts.", MAX_REPAIR_ROUNDS);
             crossterm::execute!(stdout, ResetColor).ok();
             eprintln!("  Last attempt:");
             eprintln!("{}", last_json);
             eprintln!("  Validation errors:");
             for err in &last_errors {
-                eprintln!("  • {err}");
+                eprintln!("  â€¢ {err}");
             }
             std::process::exit(1);
         }
@@ -178,7 +178,7 @@ pub async fn chat(args: ChatArgs) -> Result<()> {
             })?;
 
             crossterm::execute!(stdout, SetForegroundColor(Color::Green)).ok();
-            println!("  ✓ Workflow saved to: {}", out_path.display());
+            println!("  âœ“ Workflow saved to: {}", out_path.display());
             crossterm::execute!(stdout, ResetColor).ok();
 
             if !args.raw {
@@ -190,7 +190,7 @@ pub async fn chat(args: ChatArgs) -> Result<()> {
     Ok(())
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Extract the first {...} JSON object from a potentially noisy LLM response.
 fn extract_json(text: &str) -> &str {
