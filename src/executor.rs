@@ -99,11 +99,17 @@ pub async fn run_graph(
 
         let mut handles = vec![];
         for node_id in &layer {
-            let node = graph
+            let node = match graph
                 .nodes
                 .iter()
                 .find(|n| &n.id == node_id)
-                .expect("node must exist");
+            {
+                Some(n) => n,
+                None => {
+                    // Node missing from graph definition, skip gracefully
+                    continue;
+                }
+            };
 
             let node_data = node.data.clone();
             let node_id = node_id.clone();
@@ -124,13 +130,16 @@ pub async fn run_graph(
             
             // Mark the actual record as running
             let initial_record = {
-                let nr = record.nodes.iter_mut().find(|r| r.node_id == node_id).unwrap();
-                nr.start();
-                nr.clone()
+                if let Some(nr) = record.nodes.iter_mut().find(|r| r.node_id == *node_id) {
+                    nr.start();
+                    Some(nr.clone())
+                } else {
+                    None
+                }
             };
 
-            if let Some(ref s) = tx {
-                let _ = s.send(initial_record);
+            if let (Some(ref s), Some(ir)) = (tx, initial_record) {
+                let _ = s.send(ir);
             }
 
             let handle = tokio::spawn(async move {
@@ -164,11 +173,14 @@ pub async fn run_graph(
         for handle in handles {
             let (node_id, result) = handle.await.map_err(|e| anyhow!("Task panic: {e}"))?;
 
-            let nr = record
+            let nr = match record
                 .nodes
                 .iter_mut()
-                .find(|r| r.node_id == node_id)
-                .expect("record must exist");
+                .find(|r| r.node_id == *node_id)
+            {
+                Some(n) => n,
+                None => continue,
+            };
 
             match result {
                 Ok(output) => {

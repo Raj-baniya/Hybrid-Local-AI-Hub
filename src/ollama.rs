@@ -264,7 +264,7 @@ pub async fn check_ollama_status(url: &str) -> OllamaStatus {
         .build()
         .unwrap();
 
-    let resp = match client.get(&format!("{}/api/tags", url.trim_end_matches('/'))).send().await {
+    let resp = match client.get(format!("{}/api/tags", url.trim_end_matches('/'))).send().await {
         Ok(r) => r,
         Err(_) => return OllamaStatus::NotRunning,
     };

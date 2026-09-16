@@ -43,6 +43,8 @@ export const TopBar: React.FC = () => {
   const isPreRunDialogOpen = useWorkflowStore((s) => s.isPreRunDialogOpen);
   const setPreRunDialogOpen = useWorkflowStore((s) => s.setPreRunDialogOpen);
 
+  const [executionModalOutput, setExecutionModalOutput] = React.useState<string | null>(null);
+
   useEffect(() => {
     const unlisten = listen<any>('node-progress', (event) => {
       const nr = event.payload;
@@ -79,8 +81,21 @@ export const TopBar: React.FC = () => {
     clearNodeStatuses();
 
     try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const outputPath = await save({
+        title: "Select where to save the Agent's output",
+        filters: [{ name: 'Text File', extensions: ['txt', 'md', 'json'] }],
+        defaultPath: 'agent_output.txt',
+      });
+      if (!outputPath) {
+        setIsExecuting(false);
+        return; // User cancelled
+      }
+
       const record = await invoke<ExecutionRecord>('run_graph', { graph });
       setExecutionRecord(record);
+
+      let finalOutput = "No output generated.";
 
       record.nodes.forEach((nr) => {
         const rawStatus = (nr.status ?? '').toLowerCase();
@@ -93,10 +108,21 @@ export const TopBar: React.FC = () => {
           outputPreview: nr.output_preview,
           error: nr.error,
         });
+        
+        if (rawStatus === 'success' && nr.output_preview) {
+           finalOutput = nr.output_preview; // Capture the last successful node's output
+        }
       });
+
+      if (outputPath && finalOutput && finalOutput !== "No output generated.") {
+         const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+         await writeTextFile(outputPath, finalOutput);
+      }
 
       if (record.overall_status !== 'success') {
         setActivePanel('logs');
+      } else {
+        setExecutionModalOutput(finalOutput);
       }
     } catch (err: any) {
       alert(`Execution failed:\n${typeof err === 'string' ? err : err.message}`);
@@ -105,16 +131,7 @@ export const TopBar: React.FC = () => {
     }
   };
 
-  const handleValidate = async () => {
-    const graph = getActiveGraph();
-    try {
-      await invoke('validate_graph', { graph });
-      alert('✓ Workflow validation passed! All nodes and connections are structurally sound.');
-    } catch (errs: any) {
-      const msg = Array.isArray(errs) ? errs.join('\n') : JSON.stringify(errs);
-      alert(`Validation errors found:\n${msg}`);
-    }
-  };
+
 
   const handleSave = async () => {
     const graph = getActiveGraph();
@@ -162,6 +179,7 @@ export const TopBar: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 16px',
+        gap: 16,
         userSelect: 'none',
         zIndex: 20,
       }}
@@ -171,6 +189,62 @@ export const TopBar: React.FC = () => {
           onConfirm={handleRunConfirm}
           onCancel={() => setPreRunDialogOpen(false)} 
         />
+      )}
+
+      {executionModalOutput !== null && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'var(--bg-panel)',
+            width: 700,
+            maxHeight: '80vh',
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: 12,
+            border: '1px solid var(--border-medium)',
+            boxShadow: '0 16px 40px rgba(0,0,0,0.4)',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--border-medium)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'var(--bg-secondary)'
+            }}>
+              <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 16 }}>Execution Completed</h3>
+              <button 
+                onClick={() => setExecutionModalOutput(null)}
+                style={{
+                  background: 'transparent', border: 'none', color: 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: 20
+                }}
+              >×</button>
+            </div>
+            <div style={{ padding: 20, overflowY: 'auto', flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-secondary)', fontSize: 14, fontFamily: 'monospace' }}>
+              {executionModalOutput}
+            </div>
+            <div style={{ padding: 16, borderTop: '1px solid var(--border-medium)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-secondary)' }}>
+              <button
+                onClick={() => setExecutionModalOutput(null)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--accent-cyan)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >Close</button>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Left: Tabs */}
@@ -194,6 +268,7 @@ export const TopBar: React.FC = () => {
                   borderLeft: isActive ? '1px solid var(--border-medium)' : '1px solid transparent',
                   borderRight: isActive ? '1px solid var(--border-medium)' : '1px solid transparent',
                   cursor: 'pointer',
+                  flexShrink: 0,
                   fontSize: 13,
                   color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
                   fontWeight: isActive ? 600 : 400,
@@ -253,11 +328,6 @@ export const TopBar: React.FC = () => {
         <button className="btn btn-secondary" onClick={() => autoLayout('LR')} title="Organize Layout">
           <LayoutGrid size={14} />
           Auto Layout
-        </button>
-
-        <button className="btn btn-secondary" onClick={handleValidate} title="Validate DAG Structural Integrity">
-          <CheckCircle size={14} />
-          Validate
         </button>
 
         <button

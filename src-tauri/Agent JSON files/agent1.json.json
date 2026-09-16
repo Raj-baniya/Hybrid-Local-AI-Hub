@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "n_user_request",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "data": {
+        "type": "TextInputNode",
+        "text": "create a monday gym chest and triceps workout plan "
+      }
+    },
+    {
+      "id": "n_core_agent",
+      "position": [
+        360.0,
+        -210.0
+      ],
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "temperature": 0.7,
+        "promptTemplate": "System: You are a private local AI assistant running entirely on the user's device. Understand the user's request, reason through the task, use available local tools when required, and provide accurate and useful responses. Never claim that an action was performed unless it was successfully completed.\n\nUser Request: {{n_user_request.output}}\n\nPlease execute this task and provide the final result:",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "n_file_manager_tool",
+      "position": [
+        740.0,
+        0.0
+      ],
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./logs/local-agent-output.txt",
+        "append": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_request_to_agent",
+      "source": "n_user_request",
+      "sourceHandle": null,
+      "target": "n_core_agent",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_agent_to_file",
+      "source": "n_core_agent",
+      "sourceHandle": null,
+      "target": "n_file_manager_tool",
+      "targetHandle": null
+    }
+  ]
+}

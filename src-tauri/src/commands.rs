@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde::Deserialize;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
 use hybrid_local_ai_hub::compiler;
@@ -363,10 +363,10 @@ fn detect_gpu() -> (Option<String>, Option<f64>) {
 // ———————————————————————————————————————————————————————————————————
 
 #[tauri::command]
-pub fn list_agents() -> Result<Vec<String>, String> {
-    let agents_dir = std::env::current_dir()
-        .unwrap_or_default()
-        .join("Agent JSON files");
+pub fn list_agents(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let agents_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("agents");
     
     if !agents_dir.exists() {
         return Ok(Vec::new());
@@ -392,14 +392,19 @@ pub fn list_agents() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn save_agent(name: String, graph: Graph) -> Result<(), String> {
-    let agents_dir = std::env::current_dir()
-        .unwrap_or_default()
-        .join("Agent JSON files");
+pub fn save_agent(app: tauri::AppHandle, name: String, graph: Graph) -> Result<(), String> {
+    let agents_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("agents");
         
     std::fs::create_dir_all(&agents_dir).map_err(|e| format!("Failed to create agents dir: {e}"))?;
     
-    let path = agents_dir.join(format!("{}.json", name));
+    // Sanitize filename for Windows
+    let safe_name = name.replace(|c: char| {
+        c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*'
+    }, "_");
+    
+    let path = agents_dir.join(format!("{}.json", safe_name));
     
     let json_str = serde_json::to_string_pretty(&graph)
         .map_err(|e| format!("Serialization failed: {e}"))?;
@@ -409,10 +414,10 @@ pub fn save_agent(name: String, graph: Graph) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn load_agent(name: String) -> Result<Graph, String> {
-    let agents_dir = std::env::current_dir()
-        .unwrap_or_default()
-        .join("Agent JSON files");
+pub fn load_agent(app: tauri::AppHandle, name: String) -> Result<Graph, String> {
+    let agents_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("agents");
         
     let path = agents_dir.join(format!("{}.json", name));
     if !path.exists() {
@@ -429,39 +434,47 @@ pub fn load_agent(name: String) -> Result<Graph, String> {
 }
 
 #[tauri::command]
-pub fn launch_agent_terminal(name: String) -> Result<(), String> {
-    let agents_dir = std::env::current_dir()
-        .unwrap_or_default()
-        .join("Agent JSON files");
-        
-    let path = agents_dir.join(format!("{}.json", name));
-    if !path.exists() {
-        return Err(format!("Agent file not found: {}", path.display()));
-    }
-    
-    let path_str = path.to_string_lossy().to_string();
-    
-    #[cfg(target_os = "windows")]
+pub fn launch_agent_terminal(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    #[cfg(not(debug_assertions))]
     {
-        let mut cmd = std::process::Command::new("cmd");
-        if let Ok(cwd) = std::env::current_dir() {
-            if cwd.ends_with("src-tauri") {
-                if let Some(parent) = cwd.parent() {
-                    cmd.current_dir(parent);
-                }
-            }
-        }
-        cmd.args(["/c", "start", "cmd.exe", "/k", &format!("cargo run -- run \"{}\"", path_str)])
-            .spawn()
-            .map_err(|e| format!("Failed to launch terminal: {e}"))?;
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    {
-        return Err("Terminal launching currently only implemented for Windows.".to_string());
+        return Err("Agent Terminal Launcher is only available in development mode (requires Cargo).".to_string());
     }
 
-    Ok(())
+    #[cfg(debug_assertions)]
+    {
+        let agents_dir = app.path().app_local_data_dir()
+            .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+            .join("agents");
+            
+        let path = agents_dir.join(format!("{}.json", name));
+        if !path.exists() {
+            return Err(format!("Agent file not found: {}", path.display()));
+        }
+        
+        let path_str = path.to_string_lossy().to_string();
+        
+        #[cfg(target_os = "windows")]
+        {
+            let mut cmd = std::process::Command::new("cmd");
+            if let Ok(cwd) = std::env::current_dir() {
+                if cwd.ends_with("src-tauri") {
+                    if let Some(parent) = cwd.parent() {
+                        cmd.current_dir(parent);
+                    }
+                }
+            }
+            cmd.args(["/c", "start", "cmd.exe", "/k", &format!("cargo run -- run \"{}\"", path_str)])
+                .spawn()
+                .map_err(|e| format!("Failed to launch terminal: {e}"))?;
+        }
+        
+        #[cfg(not(target_os = "windows"))]
+        {
+            return Err("Terminal launching currently only implemented for Windows.".to_string());
+        }
+
+        Ok(())
+    }
 }
 
 #[tauri::command]
