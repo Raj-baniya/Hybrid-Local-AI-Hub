@@ -121,7 +121,6 @@ export const ChatPanel: React.FC = () => {
         background: 'var(--bg-card)',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
       }}
     >
       <div

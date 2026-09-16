@@ -74,7 +74,7 @@ impl OllamaClient {
                 .timeout(std::time::Duration::from_secs(600))
                 .no_proxy()
                 .build()
-                .expect("Failed to build HTTP client"),
+                .unwrap_or_else(|_| Client::new()),
         }
     }
 
@@ -84,7 +84,7 @@ impl OllamaClient {
             http: Client::builder()
                 .no_proxy()
                 .build()
-                .expect("Failed to build HTTP client"),
+                .unwrap_or_else(|_| Client::new()),
         }
     }
 
@@ -262,9 +262,9 @@ pub async fn check_ollama_status(url: &str) -> OllamaStatus {
         .timeout(std::time::Duration::from_secs(3))
         .no_proxy()
         .build()
-        .unwrap();
+        .unwrap_or_else(|_| reqwest::Client::new());
 
-    let resp = match client.get(&format!("{}/api/tags", url.trim_end_matches('/'))).send().await {
+    let resp = match client.get(format!("{}/api/tags", url.trim_end_matches('/'))).send().await {
         Ok(r) => r,
         Err(_) => return OllamaStatus::NotRunning,
     };

@@ -135,7 +135,7 @@ export const HelpAgentPanel: React.FC = () => {
         width: '100%',
         height: '100%',
         background: 'var(--bg-card)',
-        display: 'flex', flexDirection: 'column', height: '100%' }}>
+        display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

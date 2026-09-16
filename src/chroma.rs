@@ -1,4 +1,4 @@
-﻿use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -40,10 +40,9 @@ impl ChromaClient {
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             http: Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .no_proxy()
+                .timeout(std::time::Duration::from_secs(3))
                 .build()
-                .expect("Failed to build HTTP client"),
+                .unwrap_or_else(|_| Client::new()),
         }
     }
 

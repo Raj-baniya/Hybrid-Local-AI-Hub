@@ -143,7 +143,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   tabs: [
     {
       id: initialTabId,
-      title: 'Fitness Pipeline',
+      title: 'Untitled',
       filePath: null,
       nodes: initialCanvas.nodes,
       edges: initialCanvas.edges,

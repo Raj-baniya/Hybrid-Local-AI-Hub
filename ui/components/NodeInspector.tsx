@@ -11,6 +11,18 @@ export const NodeInspector: React.FC = () => {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
   const deleteNode = useWorkflowStore((s) => s.deleteNode);
 
+  const [models, setModels] = React.useState<{ name: string }[]>([]);
+
+  React.useEffect(() => {
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke<any>('cmd_check_ollama').then((s) => {
+        if (s.state === 'Ready' && s.models.length > 0) {
+          setModels(s.models);
+        }
+      }).catch(console.error);
+    });
+  }, []);
+
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const selectedNode = activeTab?.nodes.find((n) => n.id === selectedNodeId);
 
@@ -98,12 +110,18 @@ export const NodeInspector: React.FC = () => {
         return (
           <>
             <label style={labelStyle}>Ollama Model</label>
-            <input
-              type="text"
+            <select
               value={data.model}
               onChange={(e) => updateNodeData(selectedNode.id, { model: e.target.value })}
-              style={inputStyle}
-            />
+              style={{ ...inputStyle, appearance: 'auto', paddingRight: 24 }}
+            >
+              <option value="llama3.2">llama3.2 (default)</option>
+              {models.filter(m => m.name !== 'llama3.2').map((m) => (
+                <option key={m.name} value={m.name}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
             <label style={labelStyle}>Temperature ({data.temperature})</label>
             <input
               type="range"
