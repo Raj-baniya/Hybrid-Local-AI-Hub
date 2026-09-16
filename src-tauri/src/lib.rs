@@ -17,6 +17,7 @@ pub fn run() {
             commands::chat_edit,
             commands::cancel_llm_task,
             commands::save_workflow,
+            commands::save_text_file,
             commands::load_workflow,
             commands::cmd_system_info,
             commands::list_agents,

@@ -283,6 +283,16 @@ pub fn load_workflow(path: String) -> Result<Graph, String> {
     Ok(graph)
 }
 
+/// 8b. Save arbitrary text to a file.
+#[tauri::command]
+pub fn save_text_file(path: String, text: String) -> Result<(), String> {
+    if let Some(parent) = Path::new(&path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&path, text)
+        .map_err(|e| format!("Failed to write text file '{path}': {e}"))
+}
+
 // ———————————————————————————————————————————————————————————————————
 // System Info (for onboarding wizard hardware-aware recommendations)
 // ———————————————————————————————————————————————————————————————————

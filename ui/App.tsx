@@ -43,6 +43,45 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  // Global Keyboard Shortcuts for Tab Management
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.ctrlKey) {
+        const key = e.key.toLowerCase();
+        
+        if (key === 't') {
+          e.preventDefault();
+          useWorkflowStore.getState().createTab();
+        } 
+        else if (key === 'w') {
+          e.preventDefault();
+          const state = useWorkflowStore.getState();
+          if (state.activeTabId) {
+            state.requestCloseTab(state.activeTabId);
+          }
+        }
+        else if (key === 'tab') {
+          e.preventDefault();
+          const state = useWorkflowStore.getState();
+          const currentIdx = state.tabs.findIndex(t => t.id === state.activeTabId);
+          if (currentIdx !== -1 && state.tabs.length > 1) {
+            const nextIdx = e.shiftKey ? 
+              (currentIdx - 1 + state.tabs.length) % state.tabs.length : 
+              (currentIdx + 1) % state.tabs.length;
+            state.switchTab(state.tabs[nextIdx].id);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   if (showWizard === null) {
     return (
       <div style={{

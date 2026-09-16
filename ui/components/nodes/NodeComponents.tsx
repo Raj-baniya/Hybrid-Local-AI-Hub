@@ -1,5 +1,6 @@
 import React from 'react';
 import { NodeProps } from '@xyflow/react';
+import { useWorkflowStore } from '../../store/workflowStore';
 import { CustomNodeWrapper } from './CustomNodeWrapper';
 import {
   FolderSearch,
@@ -92,6 +93,19 @@ export const ImageInputNodeComponent: React.FC<NodeProps> = ({ id, data, selecte
 
 export const OllamaSelectorNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const cfg = data as unknown as OllamaSelectorConfig;
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
+  const [models, setModels] = React.useState<{ name: string }[]>([]);
+
+  React.useEffect(() => {
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke<any>('cmd_check_ollama').then((s) => {
+        if (s.state === 'Ready' && s.models.length > 0) {
+          setModels(s.models);
+        }
+      }).catch(console.error);
+    });
+  }, []);
+
   return (
     <CustomNodeWrapper
       id={id}
@@ -102,10 +116,35 @@ export const OllamaSelectorNodeComponent: React.FC<NodeProps> = ({ id, data, sel
       hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: '#f59e0b', fontWeight: 600 }}>{cfg.model}</span>
-          <span style={{ color: '#64748b' }}>T={cfg.temperature}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <select
+            value={cfg.model}
+            onChange={(e) => updateNodeData(id, { model: e.target.value })}
+            className="nodrag"
+            style={{
+              background: 'var(--bg-panel)',
+              color: '#f59e0b',
+              border: '1px solid var(--border-medium)',
+              borderRadius: 4,
+              padding: '2px 4px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              maxWidth: 120,
+              textOverflow: 'ellipsis',
+              appearance: 'none',
+              outline: 'none'
+            }}
+          >
+            <option value="llama3.2">llama3.2 (default)</option>
+            {models.filter(m => m.name !== 'llama3.2').map((m) => (
+              <option key={m.name} value={m.name}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <span style={{ color: '#64748b', fontSize: 11 }}>T={cfg.temperature}</span>
         </div>
         <div style={{ maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', color: '#94a3b8', fontSize: 11 }}>
           {cfg.promptTemplate}

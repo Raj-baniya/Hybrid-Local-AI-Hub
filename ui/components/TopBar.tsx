@@ -6,7 +6,6 @@ import { useWorkflowStore, ExecutionRecord } from '../store/workflowStore';
 import { Graph } from '../schema/graphSchema';
 import {
   Play,
-  CheckCircle,
   LayoutGrid,
   Save,
   FolderOpen,
@@ -115,8 +114,7 @@ export const TopBar: React.FC = () => {
       });
 
       if (outputPath && finalOutput && finalOutput !== "No output generated.") {
-         const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-         await writeTextFile(outputPath, finalOutput);
+         await invoke('save_text_file', { path: outputPath, text: finalOutput });
       }
 
       if (record.overall_status !== 'success') {
