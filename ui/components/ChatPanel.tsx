@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useWorkflowStore } from '../store/workflowStore';
+import { useChatStore } from '../store/chatStore';
 import { Graph } from '../schema/graphSchema';
 import { Sparkles, ArrowRight, CheckCircle, AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
 
@@ -15,23 +16,51 @@ export const ChatPanel: React.FC = () => {
   const loadGraphIntoActiveTab = useWorkflowStore((s) => s.loadGraphIntoActiveTab);
   const createTab = useWorkflowStore((s) => s.createTab);
 
-  const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState('');
-  const [installedModels, setInstalledModels] = useState<{name: string}[]>([]);
+  const {
+    status,
+    instruction: prompt, setInstruction: setPrompt,
+    model, setModel,
+    temperature, setTemperature,
+    isEditMode, setIsEditMode,
+    resultGraph: generatedGraph,
+    errorMessage: error,
+    startGeneration, setSuccess, setError, reset
+  } = useChatStore();
+
+  const loading = status === "generating";
+
+  const [installedModels, setInstalledModels] = useState<{ name: string }[]>([]);
 
   React.useEffect(() => {
     invoke<OllamaStatus>('cmd_check_ollama').then((s) => {
       if (s.state === 'Ready' && s.models.length > 0) {
         setInstalledModels(s.models);
-        setModel(s.models[0].name);
+        // Only set default model if it's not already set in the global store
+        if (!useChatStore.getState().model) {
+          setModel(s.models[0].name);
+        }
       }
     });
+  }, [setModel]);
+
+  const [taskId, setTaskId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    console.log("[DIAGNOSTIC] ChatPanel mounted");
+    return () => {
+      console.log("[DIAGNOSTIC] ChatPanel UNMOUNTED mid-request");
+    };
   }, []);
-  const [temperature, setTemperature] = useState(0.2);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [generatedGraph, setGeneratedGraph] = useState<Graph | null>(null);
+
+  const handleStop = async () => {
+    if (taskId) {
+      try {
+        await invoke('cancel_llm_task', { taskId });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -40,33 +69,35 @@ export const ChatPanel: React.FC = () => {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setGeneratedGraph(null);
+    startGeneration();
+    const newTaskId = crypto.randomUUID();
+    setTaskId(newTaskId);
 
-    try {
-      let result: Graph;
-      if (isEditMode) {
-        const currentGraph = getActiveGraph();
-        result = await invoke<Graph>('chat_edit', {
-          instruction: prompt,
-          existingGraph: currentGraph,
-          model,
-          temperature,
-        });
-      } else {
-        result = await invoke<Graph>('chat_generate', {
-          instruction: prompt,
-          model,
-          temperature,
-        });
-      }
-      setGeneratedGraph(result);
-    } catch (err: any) {
-      setError(typeof err === 'string' ? err : err.message || 'Generation failed');
-    } finally {
-      setLoading(false);
-    }
+    const isEdit = isEditMode;
+    const currentGraph = isEditMode ? getActiveGraph() : null;
+
+    invoke<Graph>(isEdit ? 'chat_edit' : 'chat_generate', isEdit ? {
+      instruction: prompt,
+      existingGraph: currentGraph,
+      model,
+      temperature,
+      taskId: newTaskId,
+    } : {
+      instruction: prompt,
+      model,
+      temperature,
+      taskId: newTaskId,
+    })
+      .then((result) => {
+        console.log("[DIAGNOSTIC] Generation promise RESOLVED!", result);
+        setSuccess(result);
+      })
+      .catch((err: any) => {
+        setError(typeof err === 'string' ? err : err.message || 'Generation failed');
+      })
+      .finally(() => {
+        setTaskId(null);
+      });
   };
 
   const handleLoadOntoCanvas = (inNewTab = false) => {
@@ -78,14 +109,16 @@ export const ChatPanel: React.FC = () => {
       loadGraphIntoActiveTab(generatedGraph, `AI: ${prompt.slice(0, 20)}...`);
     }
     setActivePanel('none');
+    reset();
   };
 
   return (
     <div
+      className="animate-slide-in-right"
       style={{
-        width: 380,
-        background: 'rgba(15, 23, 42, 0.95)',
-        borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+        width: '100%',
+        height: '100%',
+        background: 'var(--bg-card)',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -94,19 +127,19 @@ export const ChatPanel: React.FC = () => {
       <div
         style={{
           padding: '14px 18px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid var(--border-subtle)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Sparkles size={18} style={{ color: '#06b6d4' }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#f8fafc' }}>Chat-to-Graph Compiler</span>
+          <Sparkles size={18} style={{ color: 'var(--accent-cyan)' }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Chat-to-Graph Compiler</span>
         </div>
         <button
           onClick={() => setActivePanel('none')}
-          style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}
+          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
         >
           <X size={16} />
         </button>
@@ -114,7 +147,7 @@ export const ChatPanel: React.FC = () => {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 6 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
             Natural Language Instruction
           </label>
           <textarea
@@ -125,10 +158,10 @@ export const ChatPanel: React.FC = () => {
             style={{
               width: '100%',
               padding: '10px 12px',
-              background: 'rgba(0, 0, 0, 0.4)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-medium)',
               borderRadius: 8,
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               fontSize: 13,
               outline: 'none',
               resize: 'vertical',
@@ -138,7 +171,7 @@ export const ChatPanel: React.FC = () => {
 
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
               Ollama Model
             </label>
             <select
@@ -147,10 +180,10 @@ export const ChatPanel: React.FC = () => {
               style={{
                 width: '100%',
                 padding: '6px 8px',
-                background: 'rgba(0, 0, 0, 0.4)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-medium)',
                 borderRadius: 6,
-                color: '#f8fafc',
+                color: 'var(--text-primary)',
                 fontSize: 12,
               }}
             >
@@ -167,7 +200,7 @@ export const ChatPanel: React.FC = () => {
           </div>
 
           <div style={{ width: 100 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
               Temp ({temperature})
             </label>
             <input
@@ -177,7 +210,7 @@ export const ChatPanel: React.FC = () => {
               step="0.05"
               value={temperature}
               onChange={(e) => setTemperature(parseFloat(e.target.value))}
-              style={{ width: '100%', accentColor: '#06b6d4' }}
+              style={{ width: '100%', accentColor: 'var(--accent-cyan)' }}
             />
           </div>
         </div>
@@ -189,29 +222,41 @@ export const ChatPanel: React.FC = () => {
             checked={isEditMode}
             onChange={(e) => setIsEditMode(e.target.checked)}
           />
-          <label htmlFor="editModeToggle" style={{ fontSize: 12, color: '#cbd5e1', cursor: 'pointer' }}>
+          <label htmlFor="editModeToggle" style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Modify existing canvas workflow (Edit mode)
           </label>
         </div>
 
-        <button
-          className="btn btn-primary"
-          style={{ justifyContent: 'center', padding: '10px' }}
-          onClick={handleGenerate}
-          disabled={loading || !prompt.trim()}
-        >
-          {loading ? (
-            <>
-              <Loader2 size={16} className="spinning" />
-              Compiling & Validating...
-            </>
-          ) : (
-            <>
-              <Sparkles size={16} />
-              {isEditMode ? 'Refine Canvas Workflow' : 'Synthesize Workflow Graph'}
-            </>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-primary"
+            style={{ flex: 1, justifyContent: 'center', padding: '10px' }}
+            onClick={handleGenerate}
+            disabled={loading || !prompt.trim()}
+          >
+            {loading ? (
+              <>
+                <Loader2 size={16} className="spinning" />
+                Compiling...
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                {isEditMode ? 'Refine' : 'Synthesize'}
+              </>
+            )}
+          </button>
+          {loading && (
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '10px', color: 'var(--accent-red)' }}
+              onClick={handleStop}
+              title="Stop Generation"
+            >
+              <X size={16} />
+            </button>
           )}
-        </button>
+        </div>
 
         {error && (
           <div
@@ -220,7 +265,7 @@ export const ChatPanel: React.FC = () => {
               background: 'rgba(244, 63, 94, 0.12)',
               border: '1px solid rgba(244, 63, 94, 0.3)',
               borderRadius: 8,
-              color: '#fb7185',
+              color: 'var(--accent-rose)',
               fontSize: 12,
             }}
           >
@@ -231,7 +276,6 @@ export const ChatPanel: React.FC = () => {
             <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11, fontFamily: 'monospace' }}>{error}</pre>
           </div>
         )}
-
         {generatedGraph && (
           <div
             style={{
@@ -244,11 +288,11 @@ export const ChatPanel: React.FC = () => {
               gap: 12,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#34d399', fontWeight: 600, fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent-emerald)', fontWeight: 600, fontSize: 13 }}>
               <CheckCircle size={16} />
               Workflow Graph Validated!
             </div>
-            <div style={{ fontSize: 12, color: '#cbd5e1' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               Generated <b>{generatedGraph.nodes.length}</b> nodes and <b>{generatedGraph.edges.length}</b> connections.
             </div>
 

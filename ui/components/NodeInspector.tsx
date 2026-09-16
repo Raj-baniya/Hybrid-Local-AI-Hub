@@ -19,10 +19,10 @@ export const NodeInspector: React.FC = () => {
       <div
         style={{
           width: 320,
-          background: 'rgba(15, 23, 42, 0.95)',
-          borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'var(--bg-card)',
+          borderLeft: '1px solid var(--border-subtle)',
           padding: 20,
-          color: '#64748b',
+          color: 'var(--text-muted)',
           fontSize: 13,
           display: 'flex',
           alignItems: 'center',
@@ -62,7 +62,7 @@ export const NodeInspector: React.FC = () => {
                 checked={data.recursive}
                 onChange={(e) => updateNodeData(selectedNode.id, { recursive: e.target.checked })}
               />
-              <span style={{ fontSize: 12, color: '#cbd5e1' }}>Watch subdirectories recursively</span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Watch subdirectories recursively</span>
             </div>
           </>
         );
@@ -112,7 +112,7 @@ export const NodeInspector: React.FC = () => {
               step="0.05"
               value={data.temperature}
               onChange={(e) => updateNodeData(selectedNode.id, { temperature: parseFloat(e.target.value) })}
-              style={{ width: '100%', accentColor: '#38bdf8' }}
+              style={{ width: '100%', accentColor: 'var(--accent-cyan)' }}
             />
             <label style={labelStyle}>Prompt Template</label>
             <textarea
@@ -128,7 +128,7 @@ export const NodeInspector: React.FC = () => {
                 checked={data.jsonMode}
                 onChange={(e) => updateNodeData(selectedNode.id, { jsonMode: e.target.checked })}
               />
-              <span style={{ fontSize: 12, color: '#cbd5e1' }}>JSON output mode</span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>JSON output mode</span>
             </div>
           </>
         );
@@ -241,7 +241,7 @@ export const NodeInspector: React.FC = () => {
                 checked={data.append}
                 onChange={(e) => updateNodeData(selectedNode.id, { append: e.target.checked })}
               />
-              <span style={{ fontSize: 12, color: '#cbd5e1' }}>Append mode (instead of overwrite)</span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Append mode (instead of overwrite)</span>
             </div>
           </>
         );
@@ -250,10 +250,11 @@ export const NodeInspector: React.FC = () => {
 
   return (
     <div
+      className="animate-slide-in-right"
       style={{
         width: 320,
-        background: 'rgba(15, 23, 42, 0.95)',
-        borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'var(--bg-card)',
+        borderLeft: '1px solid var(--border-subtle)',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -262,19 +263,19 @@ export const NodeInspector: React.FC = () => {
       <div
         style={{
           padding: '14px 16px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid var(--border-subtle)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>{data.type}</div>
-          <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>ID: {selectedNode.id}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{data.type}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>ID: {selectedNode.id}</div>
         </div>
         <button
           onClick={() => setSelectedNodeId(null)}
-          style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}
+          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
         >
           <X size={16} />
         </button>
@@ -284,7 +285,7 @@ export const NodeInspector: React.FC = () => {
         {renderFields()}
       </div>
 
-      <div style={{ padding: 14, borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+      <div style={{ padding: 14, borderTop: '1px solid var(--border-subtle)' }}>
         <button
           className="btn btn-danger"
           style={{ width: '100%', justifyContent: 'center' }}
@@ -301,7 +302,7 @@ export const NodeInspector: React.FC = () => {
 const labelStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: '#94a3b8',
+  color: 'var(--text-muted)',
   marginBottom: 4,
   display: 'block',
 };
@@ -309,10 +310,10 @@ const labelStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '7px 10px',
-  background: 'rgba(0, 0, 0, 0.4)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
+  background: 'var(--bg-secondary)',
+  border: '1px solid var(--border-medium)',
   borderRadius: 6,
-  color: '#f8fafc',
+  color: 'var(--text-primary)',
   fontSize: 12,
   fontFamily: 'monospace',
   outline: 'none',
@@ -321,10 +322,10 @@ const inputStyle: React.CSSProperties = {
 const textareaStyle: React.CSSProperties = {
   width: '100%',
   padding: '7px 10px',
-  background: 'rgba(0, 0, 0, 0.4)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
+  background: 'var(--bg-secondary)',
+  border: '1px solid var(--border-medium)',
   borderRadius: 6,
-  color: '#f8fafc',
+  color: 'var(--text-primary)',
   fontSize: 12,
   fontFamily: 'monospace',
   outline: 'none',

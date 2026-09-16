@@ -80,7 +80,7 @@ export const ModelManager: React.FC = () => {
     setPullProgress(null);
     setError(null);
     try {
-      await invoke('pull_model', { model_name: modelName });
+      await invoke('pull_model', { modelName: modelName });
       setPullStatus('Model successfully pulled!');
       await fetchModels();
     } catch (err: any) {
@@ -94,7 +94,7 @@ export const ModelManager: React.FC = () => {
 
   const handleCancel = async () => {
     if (!pullingModel) return;
-    try { await invoke('cancel_pull', { model_name: pullingModel }); } catch (_) {}
+    try { await invoke('cancel_pull', { modelName: pullingModel }); } catch (_) {}
   };
 
   const isInstalled = (name: string) => models.some((m) => m.name.startsWith(name) || m.name === name);
@@ -113,18 +113,26 @@ export const ModelManager: React.FC = () => {
     : null;
 
   return (
-    <div style={{ width: 420, background: 'rgba(15, 23, 42, 0.95)', borderLeft: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
+    <div
+      className="animate-slide-in-right"
+      style={{
+        width: '100%',
+        background: 'var(--bg-card)',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+      }}
+    >  {/* Header */}
       <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Cpu size={18} style={{ color: '#10b981' }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#f8fafc' }}>Local Model Manager</span>
+          <Cpu size={18} style={{ color: 'var(--accent-emerald)' }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Local Model Manager</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={fetchModels} title="Refresh" style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex' }}>
+          <button onClick={fetchModels} title="Refresh" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}>
             <RefreshCw size={14} className={loading ? 'spinning' : ''} />
           </button>
-          <button onClick={() => setActivePanel('none')} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex' }}>
+          <button onClick={() => setActivePanel('none')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}>
             <X size={16} />
           </button>
         </div>
@@ -132,21 +140,21 @@ export const ModelManager: React.FC = () => {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 18 }}>
         {status?.state === 'NotRunning' && (
-          <div style={{ padding: 14, background: 'rgba(244,63,94,0.07)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, color: '#f8fafc', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: 14, background: 'rgba(244,63,94,0.07)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fb7185', fontWeight: 600 }}>
               <AlertCircle size={16} /> Ollama is not running
             </div>
             <div>
               <ol style={{ paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <li>Install it from <a href="https://ollama.com/download" target="_blank" style={{ color: '#38bdf8' }}>ollama.com/download</a></li>
-                <li>Run <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 4px', borderRadius: 4 }}>ollama serve</code> in a terminal</li>
+                <li>Install it from <a href="https://ollama.com/download" target="_blank" style={{ color: 'var(--accent-cyan)' }}>ollama.com/download</a></li>
+                <li>Run <code style={{ background: 'var(--bg-secondary)', padding: '2px 4px', borderRadius: 4 }}>ollama serve</code> in a terminal</li>
               </ol>
             </div>
           </div>
         )}
 
         {status?.state === 'NoModels' && (
-          <div style={{ padding: 14, background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 10, color: '#f8fafc', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: 14, background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#facc15', fontWeight: 600 }}>
               <AlertCircle size={16} /> No models installed
             </div>
@@ -162,7 +170,7 @@ export const ModelManager: React.FC = () => {
 
         {/* Pull progress */}
         {pullingModel && (
-          <div style={{ padding: 14, background: 'rgba(56,189,248,0.07)', border: '1px solid rgba(56,189,248,0.25)', borderRadius: 10 }}>
+          <div style={{ padding: 14, background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontWeight: 600, fontSize: 12 }}>
                 <Loader2 size={14} className="spinning" />
@@ -173,14 +181,14 @@ export const ModelManager: React.FC = () => {
               </button>
             </div>
             {/* Progress bar */}
-            <div style={{ height: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+            <div style={{ height: 6, background: 'var(--border-subtle)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
               {progressPercent !== null ? (
-                <div style={{ height: '100%', width: `${progressPercent}%`, background: 'linear-gradient(90deg, #0ea5e9, #38bdf8)', borderRadius: 99, transition: 'width 0.3s ease' }} />
+                <div style={{ height: '100%', width: `${progressPercent}%`, background: 'var(--accent-cyan)', borderRadius: 99, transition: 'width 0.3s ease' }} />
               ) : (
                 <div className="progress-bar-shimmer" style={{ height: '100%', borderRadius: 99 }} />
               )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: 11 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: 11 }}>
               <span>{pullStatus}</span>
               {pullProgress && <span>{formatBytes(pullProgress.completed)} / {formatBytes(pullProgress.total)}{progressPercent !== null && ` (${progressPercent}%)`}</span>}
             </div>
@@ -189,15 +197,15 @@ export const ModelManager: React.FC = () => {
 
         {/* Installed */}
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 10 }}>Installed in Ollama ({models.length})</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>Installed in Ollama ({models.length})</div>
           {models.length === 0 ? (
-            <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>No models detected. Pull one from below.</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic' }}>No models detected. Pull one from below.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {models.map((m) => (
-                <div key={m.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, fontSize: 12 }}>
-                  <span style={{ fontWeight: 600, color: '#f8fafc', fontFamily: 'monospace' }}>{m.name}</span>
-                  <span style={{ color: '#64748b', fontSize: 11 }}>{formatSize(m.size)}</span>
+                <div key={m.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 6, fontSize: 12 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{m.name}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(m.size)}</span>
                 </div>
               ))}
             </div>
@@ -206,21 +214,21 @@ export const ModelManager: React.FC = () => {
 
         {/* Recommended */}
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 10 }}>Recommended for 8GB RAM</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>Recommended for 8GB RAM</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {RECOMMENDED_MODELS.map((rec) => {
               const installed = isInstalled(rec.name);
               return (
-                <div key={rec.name} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div key={rec.name} style={{ padding: '10px 12px', background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ maxWidth: 260 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontWeight: 600, color: '#38bdf8', fontSize: 12 }}>{rec.name}</span>
-                      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(56,189,248,0.15)', color: '#38bdf8' }}>{rec.tag}</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12, fontFamily: 'monospace' }}>{rec.name}</span>
+                      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(56,189,248,0.15)', color: 'var(--accent-cyan)' }}>{rec.tag}</span>
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{rec.desc}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{rec.desc}</div>
                   </div>
                   {installed ? (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#10b981', fontSize: 11 }}><CheckCircle size={14} /> Ready</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-emerald)', fontSize: 11, fontWeight: 600 }}><CheckCircle size={14} /> Ready</span>
                   ) : (
                     <button className="btn btn-secondary" style={{ padding: '5px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => handlePull(rec.name)} disabled={!!pullingModel}>
                       <Download size={12} /> Pull

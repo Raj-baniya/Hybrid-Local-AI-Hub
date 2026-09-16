@@ -1,4 +1,4 @@
-﻿//! System prompt builder for the chat-to-graph compiler.
+//! System prompt builder for the chat-to-graph compiler.
 //!
 //! Produces the schema + examples prompt sent to the LLM. The schema is derived
 //! directly from the `NodeType` enum so it stays in sync with `schema.rs`.
@@ -62,6 +62,7 @@ You must output ONLY valid JSON matching this schema â€” no prose, no markd
 ```json
 { "type": "TextInputNode", "text": "Process this: {{upstream_id.output}}" }
 ```
+(TextInputNode with no incoming edges MUST contain real hardcoded text, NOT `{{input}}`. Use `{{input}}` or `{{node_id.output}}` only when the node has incoming edges.)
 
 **ImageInputNode** â€” reads an image from disk
 ```json
@@ -102,7 +103,7 @@ You must output ONLY valid JSON matching this schema â€” no prose, no markd
 
 **LocalFileWriterNode** â€” writes text to a file
 ```json
-{ "type": "LocalFileWriterNode", "outputPath": "./output/result.txt", "append": false }
+{ "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/result.txt", "append": false }
 ```
 
 ### Rules
@@ -110,7 +111,9 @@ You must output ONLY valid JSON matching this schema â€” no prose, no markd
 - Every edge `source` and `target` must match an existing node `id`.
 - ConditionalRouterNode `trueTarget` and `falseTarget` must be existing node ids.
 - `{{input}}` is only valid on nodes with exactly one incoming edge. Otherwise use `{{node_id.output}}`.
+- A TextInputNode with zero incoming edges MUST contain real hardcoded text (e.g. "My customer complaint is about billing"). NEVER use `{{input}}` on a source TextInputNode.
 - The closed vocabulary is exactly the 9 node types above. Do not invent new types.
+- ALWAYS use a highly specific filename for LocalFileWriterNode `outputPath` based on the task (e.g. `./Agent JSON files/Agent Output/fitness_plan.txt` instead of generic `result.txt`) so multiple agents don't overwrite each other's outputs.
 "#;
 
 // â”€â”€â”€ Examples section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -125,7 +128,7 @@ const EXAMPLES_SECTION: &str = r#"
   "nodes": [
     { "id": "watcher1", "position": null, "data": { "type": "FileWatcherNode", "watchPath": "./inbox", "pattern": "*.txt", "recursive": false } },
     { "id": "llm1",     "position": null, "data": { "type": "OllamaSelectorNode", "model": "llama3.2", "temperature": 0.5, "promptTemplate": "Summarize this document concisely:\n\n{{input}}", "jsonMode": false } },
-    { "id": "writer1",  "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./summaries/summary.txt", "append": false } }
+    { "id": "writer1",  "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/summary.txt", "append": false } }
   ],
   "edges": [
     { "id": "e1", "source": "watcher1", "source_handle": null, "target": "llm1",    "target_handle": null },
@@ -157,11 +160,11 @@ const EXAMPLES_SECTION: &str = r#"
 {
   "version": 1,
   "nodes": [
-    { "id": "input1",    "position": null, "data": { "type": "TextInputNode", "text": "{{input}}" } },
+    { "id": "input1",    "position": null, "data": { "type": "TextInputNode", "text": "Hi, I was charged twice on my credit card for order #12345. Please help me get a refund." } },
     { "id": "classify1", "position": null, "data": { "type": "OllamaSelectorNode", "model": "llama3.2", "temperature": 0.1, "promptTemplate": "Classify this ticket. If it is about billing, reply with 'billing'. Otherwise reply with 'general'. Ticket:\n\n{{input1.output}}", "jsonMode": false } },
     { "id": "router1",   "position": null, "data": { "type": "ConditionalRouterNode", "condition": "billing", "trueTarget": "writer_billing", "falseTarget": "writer_general" } },
-    { "id": "writer_billing", "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./queues/billing_queue.txt", "append": true } },
-    { "id": "writer_general", "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./queues/general_queue.txt", "append": true } }
+    { "id": "writer_billing", "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/billing_queue.txt", "append": true } },
+    { "id": "writer_general", "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/general_queue.txt", "append": true } }
   ],
   "edges": [
     { "id": "e1", "source": "input1",    "source_handle": null, "target": "classify1",     "target_handle": null },

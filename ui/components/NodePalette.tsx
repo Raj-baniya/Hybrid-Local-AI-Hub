@@ -116,17 +116,17 @@ export const NodePalette: React.FC = () => {
 
   return (
     <div
+      className="animate-slide-in-left"
       style={{
-        width: 260,
-        background: 'rgba(15, 23, 42, 0.9)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+        width: '100%',
+        background: 'var(--bg-card)',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
       }}
     >
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: '#94a3b8', textTransform: 'uppercase' }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
           Node Palette
         </div>
         <input
@@ -138,10 +138,10 @@ export const NodePalette: React.FC = () => {
             width: '100%',
             marginTop: 10,
             padding: '6px 10px',
-            background: 'rgba(0, 0, 0, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-medium)',
             borderRadius: 6,
-            color: '#f8fafc',
+            color: 'var(--text-primary)',
             fontSize: 12,
             outline: 'none',
           }}
@@ -154,7 +154,7 @@ export const NodePalette: React.FC = () => {
           if (items.length === 0) return null;
           return (
             <div key={cat}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>{cat}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>{cat}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {items.map((item) => (
                   <div
@@ -167,29 +167,29 @@ export const NodePalette: React.FC = () => {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '8px 10px',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: 'var(--bg-glass)',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: 8,
                       cursor: 'grab',
                       transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)';
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                      e.currentTarget.style.background = 'var(--bg-card-hover)';
+                      e.currentTarget.style.borderColor = 'var(--border-medium)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+                      e.currentTarget.style.background = 'var(--bg-glass)';
+                      e.currentTarget.style.borderColor = 'var(--border-subtle)';
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ color: item.color }}>{item.icon}</div>
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: '#f1f5f9' }}>{item.label}</div>
-                        <div style={{ fontSize: 10, color: '#64748b' }}>{item.desc}</div>
+                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{item.label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.desc}</div>
                       </div>
                     </div>
-                    <Plus size={14} style={{ color: '#64748b' }} />
+                    <Plus size={14} style={{ color: 'var(--text-muted)' }} />
                   </div>
                 ))}
               </div>

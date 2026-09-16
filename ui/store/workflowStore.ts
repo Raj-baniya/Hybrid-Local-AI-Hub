@@ -43,16 +43,27 @@ interface WorkflowState {
   tabs: TabData[];
   activeTabId: string;
   selectedNodeId: string | null;
-  activePanel: 'none' | 'chat' | 'logs' | 'models' | 'inspector';
+  activePanel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help';
   nodeStatusMap: Record<string, NodeExecutionState>;
   executionRecord: ExecutionRecord | null;
   isExecuting: boolean;
+  theme: 'dark' | 'light';
+  
+  isPreRunDialogOpen: boolean;
+  setPreRunDialogOpen: (isOpen: boolean) => void;
 
   // Tab management
   createTab: (title?: string, initialGraph?: Graph) => string;
   closeTab: (tabId: string) => void;
+  requestCloseTab: (tabId: string) => void;
+  confirmCloseTab: () => void;
+  cancelCloseTab: () => void;
+  markTabClean: (tabId: string) => void;
   switchTab: (tabId: string) => void;
   setTabFilePath: (tabId: string, path: string, title?: string) => void;
+  
+  tabToClose: string | null;
+  isSavePromptOpen: boolean;
 
   // Canvas Actions
   onNodesChange: (changes: NodeChange[]) => void;
@@ -65,7 +76,8 @@ interface WorkflowState {
 
   // Selection & UI
   setSelectedNodeId: (nodeId: string | null) => void;
-  setActivePanel: (panel: 'none' | 'chat' | 'logs' | 'models' | 'inspector') => void;
+  setActivePanel: (panel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help') => void;
+  setTheme: (theme: 'dark' | 'light') => void;
 
   // Execution & Logs
   setNodeStatus: (nodeId: string, status: NodeExecutionState) => void;
@@ -80,40 +92,8 @@ interface WorkflowState {
 
 const defaultInitialGraph: Graph = {
   version: 1,
-  nodes: [
-    {
-      id: 'input_1',
-      position: [100, 150],
-      data: {
-        type: 'TextInputNode',
-        text: 'Analyze the fitness goals from the intake form and formulate a 4-week workout plan.',
-      },
-    },
-    {
-      id: 'llm_1',
-      position: [480, 150],
-      data: {
-        type: 'OllamaSelectorNode',
-        model: 'llama3.2',
-        temperature: 0.7,
-        promptTemplate: 'You are an expert fitness coach. Instructions: {{input}}',
-        jsonMode: false,
-      },
-    },
-    {
-      id: 'writer_1',
-      position: [860, 150],
-      data: {
-        type: 'LocalFileWriterNode',
-        outputPath: './output/workout_plan.txt',
-        append: false,
-      },
-    },
-  ],
-  edges: [
-    { id: 'e1', source: 'input_1', target: 'llm_1', sourceHandle: null, targetHandle: null },
-    { id: 'e2', source: 'llm_1', target: 'writer_1', sourceHandle: null, targetHandle: null },
-  ],
+  nodes: [],
+  edges: [],
 };
 
 function graphToCanvas(graph: Graph): { nodes: Node[]; edges: Edge[] } {
@@ -176,6 +156,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodeStatusMap: {},
   executionRecord: null,
   isExecuting: false,
+  theme: (localStorage.getItem('theme') as 'dark' | 'light') || 'dark',
+  isPreRunDialogOpen: false,
+  tabToClose: null,
+  isSavePromptOpen: false,
+
+  setPreRunDialogOpen: (isOpen) => set({ isPreRunDialogOpen: isOpen }),
 
   createTab: (title, initialGraph) => {
     const newId = `tab_${Date.now()}`;
@@ -183,7 +169,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const canvas = graphToCanvas(graph);
     const newTab: TabData = {
       id: newId,
-      title: title || `Workflow ${get().tabs.length + 1}`,
+      title: title || 'Untitled Workflow',
       filePath: null,
       nodes: canvas.nodes,
       edges: canvas.edges,
@@ -199,6 +185,36 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     return newId;
   },
 
+  requestCloseTab: (tabId) => {
+    const state = get();
+    const tab = state.tabs.find(t => t.id === tabId);
+    if (!tab) return;
+    
+    if (tab.isDirty) {
+      set({ tabToClose: tabId, isSavePromptOpen: true });
+    } else {
+      get().closeTab(tabId);
+    }
+  },
+
+  confirmCloseTab: () => {
+    const { tabToClose } = get();
+    if (tabToClose) {
+      get().closeTab(tabToClose);
+    }
+    set({ tabToClose: null, isSavePromptOpen: false });
+  },
+
+  cancelCloseTab: () => {
+    set({ tabToClose: null, isSavePromptOpen: false });
+  },
+
+  markTabClean: (tabId) => {
+    set((state) => ({
+      tabs: state.tabs.map(t => t.id === tabId ? { ...t, isDirty: false } : t)
+    }));
+  },
+
   closeTab: (tabId) => {
     const { tabs, activeTabId } = get();
     if (tabs.length <= 1) return; // Keep at least one tab
@@ -212,6 +228,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   switchTab: (tabId) => {
     set({ activeTabId: tabId, selectedNodeId: null, nodeStatusMap: {}, executionRecord: null });
+  },
+
+  setTheme: (theme) => {
+    localStorage.setItem('theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    set({ theme });
   },
 
   setTabFilePath: (tabId, path, title) => {

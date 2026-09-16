@@ -1,4 +1,4 @@
-﻿use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -71,7 +71,17 @@ impl OllamaClient {
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             http: Client::builder()
-                .timeout(std::time::Duration::from_secs(300))
+                .timeout(std::time::Duration::from_secs(600))
+                .no_proxy()
+                .build()
+                .expect("Failed to build HTTP client"),
+        }
+    }
+
+    pub fn new_no_timeout(base_url: &str) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            http: Client::builder()
                 .no_proxy()
                 .build()
                 .expect("Failed to build HTTP client"),

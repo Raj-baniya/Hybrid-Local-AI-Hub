@@ -16,7 +16,12 @@ import {
   Plus,
   X,
   Loader2,
+  Moon,
+  Sun,
+  Bot,
+  LifeBuoy,
 } from 'lucide-react';
+import { PreRunDialog } from './PreRunDialog';
 
 export const Navbar: React.FC = () => {
   const tabs = useWorkflowStore((s) => s.tabs);
@@ -38,6 +43,11 @@ export const Navbar: React.FC = () => {
   const setNodeStatus = useWorkflowStore((s) => s.setNodeStatus);
   const clearNodeStatuses = useWorkflowStore((s) => s.clearNodeStatuses);
   const setExecutionRecord = useWorkflowStore((s) => s.setExecutionRecord);
+  const theme = useWorkflowStore((s) => s.theme);
+  const setTheme = useWorkflowStore((s) => s.setTheme);
+
+  const isPreRunDialogOpen = useWorkflowStore((s) => s.isPreRunDialogOpen);
+  const setPreRunDialogOpen = useWorkflowStore((s) => s.setPreRunDialogOpen);
 
   // Real-time per-node progress listener
   useEffect(() => {
@@ -59,13 +69,19 @@ export const Navbar: React.FC = () => {
     return () => { unlisten.then((fn) => fn()); };
   }, [setNodeStatus]);
 
-  const handleRun = async () => {
+  const handleRunRequest = () => {
     const graph = getActiveGraph();
     if (graph.nodes.length === 0) {
       alert('Graph is empty. Add nodes before running.');
       return;
     }
+    setPreRunDialogOpen(true);
+  };
 
+  const handleRunConfirm = async () => {
+    setPreRunDialogOpen(false);
+    
+    const graph = getActiveGraph();
     setIsExecuting(true);
     clearNodeStatuses();
 
@@ -118,7 +134,11 @@ export const Navbar: React.FC = () => {
       });
 
       if (selected) {
+        // Also let's ask for the internal agent name if they want to save to the library.
+        // For simplicity, we just save via standard dialog here, but we also save to the internal library.
+        const name = selected.split(/[/\\]/).pop()?.replace('.json', '') || 'agent';
         await invoke('save_workflow', { path: selected, graph });
+        await invoke('save_agent', { name, graph });
         setTabFilePath(activeTabId, selected);
       }
     } catch (err: any) {
@@ -143,7 +163,7 @@ export const Navbar: React.FC = () => {
     }
   };
 
-  const togglePanel = (panel: 'chat' | 'logs' | 'models') => {
+  const togglePanel = (panel: 'chat' | 'logs' | 'models' | 'agents' | 'help') => {
     setActivePanel(activePanel === panel ? 'none' : panel);
   };
 
@@ -151,8 +171,8 @@ export const Navbar: React.FC = () => {
     <div
       style={{
         height: 56,
-        background: 'rgba(15, 23, 42, 0.95)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'var(--bg-card)',
+        borderBottom: '1px solid var(--border-subtle)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -161,6 +181,12 @@ export const Navbar: React.FC = () => {
         zIndex: 20,
       }}
     >
+      {isPreRunDialogOpen && (
+        <PreRunDialog 
+          onConfirm={handleRunConfirm}
+          onCancel={() => setPreRunDialogOpen(false)} 
+        />
+      )}
       {/* Left: Brand & Tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 8 }}>
@@ -180,8 +206,8 @@ export const Navbar: React.FC = () => {
           >
             H
           </div>
-          <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: -0.3, color: '#f8fafc' }}>
-            Hybrid Local <span style={{ color: '#38bdf8' }}>AI Hub</span>
+          <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: -0.3, color: 'var(--text-primary)' }}>
+            Hybrid Local <span style={{ color: 'var(--accent-cyan)' }}>AI Hub</span>
           </span>
         </div>
 
@@ -199,11 +225,11 @@ export const Navbar: React.FC = () => {
                   gap: 6,
                   padding: '6px 12px',
                   borderRadius: 6,
-                  background: isActive ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                  border: isActive ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid transparent',
+                  background: isActive ? 'var(--bg-glass)' : 'transparent',
+                  border: isActive ? '1px solid var(--border-medium)' : '1px solid transparent',
                   cursor: 'pointer',
                   fontSize: 12,
-                  color: isActive ? '#f8fafc' : '#94a3b8',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
                   fontWeight: isActive ? 600 : 400,
                   transition: 'all 0.15s ease',
                 }}
@@ -215,7 +241,7 @@ export const Navbar: React.FC = () => {
                 {tabs.length > 1 && (
                   <X
                     size={12}
-                    style={{ color: '#64748b' }}
+                    style={{ color: 'var(--text-muted)' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       closeTab(tab.id);
@@ -230,10 +256,10 @@ export const Navbar: React.FC = () => {
             title="New Workflow Tab"
             style={{
               background: 'transparent',
-              border: '1px dashed rgba(255, 255, 255, 0.15)',
+              border: '1px dashed var(--border-medium)',
               borderRadius: 6,
               padding: '5px 8px',
-              color: '#94a3b8',
+              color: 'var(--text-muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -258,9 +284,9 @@ export const Navbar: React.FC = () => {
 
         <button
           className="btn btn-primary"
-          onClick={handleRun}
+          onClick={handleRunRequest}
           disabled={isExecuting}
-          style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)' }}
+          style={{ background: 'linear-gradient(135deg, var(--accent-emerald) 0%, #10b981 100%)' }}
         >
           {isExecuting ? (
             <>
@@ -278,6 +304,13 @@ export const Navbar: React.FC = () => {
 
       {/* Right: File Ops & Panel Toggles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          className="btn btn-secondary btn-icon"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          title="Toggle Theme"
+        >
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <button className="btn btn-secondary btn-icon" onClick={handleLoad} title="Open Workflow JSON">
           <FolderOpen size={16} />
         </button>
@@ -285,7 +318,27 @@ export const Navbar: React.FC = () => {
           <Save size={16} />
         </button>
 
-        <div style={{ width: 1, height: 20, background: 'rgba(255, 255, 255, 0.1)', margin: '0 4px' }} />
+        <div style={{ width: 1, height: 20, background: 'var(--border-medium)', margin: '0 4px' }} />
+
+        <button
+          className={`btn ${activePanel === 'help' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => togglePanel('help')}
+          style={{ 
+            background: activePanel === 'help' ? 'linear-gradient(135deg, var(--accent-emerald) 0%, #10b981 100%)' : undefined,
+            color: activePanel === 'help' ? 'white' : undefined
+          }}
+        >
+          <LifeBuoy size={14} />
+          Help Agent
+        </button>
+
+        <button
+          className={`btn ${activePanel === 'agents' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => togglePanel('agents')}
+        >
+          <Bot size={14} />
+          Library
+        </button>
 
         <button
           className={`btn ${activePanel === 'chat' ? 'btn-primary' : 'btn-secondary'}`}

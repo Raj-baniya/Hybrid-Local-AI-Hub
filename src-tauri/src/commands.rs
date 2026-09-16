@@ -1,4 +1,4 @@
-﻿//! Tauri IPC commands exposing core Hybrid Local AI Hub engine to the GUI frontend.
+//! Tauri IPC commands exposing core Hybrid Local AI Hub engine to the GUI frontend.
 //!
 //! Mirrors CLI functionality without duplication: calls into `hybrid_local_ai_hub` library.
 
@@ -24,6 +24,11 @@ use hybrid_local_ai_hub::validate;
 #[derive(Default)]
 pub struct PullState {
     pub active_pulls: Mutex<HashMap<String, Arc<AtomicBool>>>,
+}
+
+#[derive(Default)]
+pub struct ChatState {
+    pub active_tasks: tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>>,
 }
 
 // â”€â”€â”€ Executor config payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -119,7 +124,7 @@ pub async fn pull_model(
     ollama_url: Option<String>,
 ) -> Result<(), String> {
     let url = ollama_url.unwrap_or_else(|| "http://127.0.0.1:11434".to_string());
-    let client = OllamaClient::new(&url);
+    let client = OllamaClient::new_no_timeout(&url);
 
     let app_handle = app.clone();
     let model_for_event = model_name.clone();
@@ -157,13 +162,27 @@ pub async fn cancel_pull(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn cancel_llm_task(
+    state: tauri::State<'_, ChatState>,
+    task_id: String,
+) -> Result<(), String> {
+    let mut tasks = state.active_tasks.lock().await;
+    if let Some(sender) = tasks.remove(&task_id) {
+        let _ = sender.send(());
+    }
+    Ok(())
+}
+
 /// 5. Generate a workflow graph from natural language instruction.
 #[tauri::command]
 pub async fn chat_generate(
+    state: tauri::State<'_, ChatState>,
     instruction: String,
     model: Option<String>,
     ollama_url: Option<String>,
     temperature: Option<f32>,
+    task_id: Option<String>,
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
     let u = ollama_url.unwrap_or_else(|| compiler::DEFAULT_OLLAMA_URL.to_string());
@@ -178,17 +197,33 @@ pub async fn chat_generate(
     }
 
     let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
-    compiler::generate_workflow(&instruction, &m, &u, t).await
+    
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    if let Some(id) = &task_id {
+        state.active_tasks.lock().await.insert(id.clone(), tx);
+    }
+
+    let result = tokio::select! {
+        res = compiler::generate_workflow(&instruction, &m, &u, t) => res,
+        _ = rx => Err("Generation cancelled by user.".to_string()),
+    };
+
+    if let Some(id) = task_id {
+        state.active_tasks.lock().await.remove(&id);
+    }
+    result
 }
 
 /// 6. Iteratively refine an existing workflow graph via natural language.
 #[tauri::command]
 pub async fn chat_edit(
+    state: tauri::State<'_, ChatState>,
     instruction: String,
     existing_graph: Graph,
     model: Option<String>,
     ollama_url: Option<String>,
     temperature: Option<f32>,
+    task_id: Option<String>,
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
     let u = ollama_url.unwrap_or_else(|| compiler::DEFAULT_OLLAMA_URL.to_string());
@@ -203,7 +238,21 @@ pub async fn chat_edit(
     }
 
     let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
-    compiler::edit_workflow(&instruction, &existing_graph, &m, &u, t).await
+    
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    if let Some(id) = &task_id {
+        state.active_tasks.lock().await.insert(id.clone(), tx);
+    }
+
+    let result = tokio::select! {
+        res = compiler::edit_workflow(&instruction, &existing_graph, &m, &u, t) => res,
+        _ = rx => Err("Generation cancelled by user.".to_string()),
+    };
+
+    if let Some(id) = task_id {
+        state.active_tasks.lock().await.remove(&id);
+    }
+    result
 }
 
 /// 7. Save a workflow graph to a local file.
@@ -232,4 +281,219 @@ pub fn load_workflow(path: String) -> Result<Graph, String> {
         .map_err(|e| format!("Invalid workflow JSON in '{path}': {e}"))?;
 
     Ok(graph)
+}
+
+// ———————————————————————————————————————————————————————————————————
+// System Info (for onboarding wizard hardware-aware recommendations)
+// ———————————————————————————————————————————————————————————————————
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemInfo {
+    pub total_ram_gb: f64,
+    pub gpu_name: Option<String>,
+    pub gpu_vram_gb: Option<f64>,
+    pub os_name: String,
+    pub cpu_cores: usize,
+}
+
+/// 9. Detect system hardware specs for model recommendations.
+#[tauri::command]
+pub fn cmd_system_info() -> SystemInfo {
+    use sysinfo::System;
+
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let total_ram_gb = sys.total_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
+    let cpu_cores = sys.cpus().len();
+    let os_name = format!(
+        "{} {}",
+        System::name().unwrap_or_else(|| "Unknown".to_string()),
+        System::os_version().unwrap_or_default()
+    );
+
+    // GPU detection via wmic on Windows
+    let (gpu_name, gpu_vram_gb) = detect_gpu();
+
+    SystemInfo {
+        total_ram_gb,
+        gpu_name,
+        gpu_vram_gb,
+        os_name,
+        cpu_cores,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn detect_gpu() -> (Option<String>, Option<f64>) {
+    use std::process::Command;
+    let output = Command::new("wmic")
+        .args(["path", "win32_VideoController", "get", "Name,AdapterRAM", "/format:csv"])
+        .output();
+
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout);
+        // CSV lines: Node,AdapterRAM,Name
+        for line in text.lines().skip(1) {
+            let parts: Vec<&str> = line.split(',').collect();
+            if parts.len() >= 3 {
+                let vram_bytes: Option<u64> = parts[1].trim().parse().ok();
+                let name = parts[2].trim().to_string();
+                // Skip Microsoft Basic Display Adapter (not a real GPU)
+                if name.contains("Microsoft") || name.is_empty() {
+                    continue;
+                }
+                let vram_gb = vram_bytes.map(|b| b as f64 / (1024.0 * 1024.0 * 1024.0));
+                return (Some(name), vram_gb);
+            }
+        }
+    }
+    (None, None)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn detect_gpu() -> (Option<String>, Option<f64>) {
+    // GPU detection on Linux/macOS can be added later
+    (None, None)
+}
+
+// ———————————————————————————————————————————————————————————————————
+// Saved Agents Library Commands
+// ———————————————————————————————————————————————————————————————————
+
+#[tauri::command]
+pub fn list_agents() -> Result<Vec<String>, String> {
+    let agents_dir = std::env::current_dir()
+        .unwrap_or_default()
+        .join("Agent JSON files");
+    
+    if !agents_dir.exists() {
+        return Ok(Vec::new());
+    }
+    
+    let mut agents = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(agents_dir) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_file() {
+                    if let Some(ext) = entry.path().extension() {
+                        if ext == "json" {
+                            if let Some(name) = entry.path().file_stem().and_then(|n| n.to_str()) {
+                                agents.push(name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(agents)
+}
+
+#[tauri::command]
+pub fn save_agent(name: String, graph: Graph) -> Result<(), String> {
+    let agents_dir = std::env::current_dir()
+        .unwrap_or_default()
+        .join("Agent JSON files");
+        
+    std::fs::create_dir_all(&agents_dir).map_err(|e| format!("Failed to create agents dir: {e}"))?;
+    
+    let path = agents_dir.join(format!("{}.json", name));
+    
+    let json_str = serde_json::to_string_pretty(&graph)
+        .map_err(|e| format!("Serialization failed: {e}"))?;
+        
+    std::fs::write(&path, json_str)
+        .map_err(|e| format!("Failed to write agent file: {e}"))
+}
+
+#[tauri::command]
+pub fn load_agent(name: String) -> Result<Graph, String> {
+    let agents_dir = std::env::current_dir()
+        .unwrap_or_default()
+        .join("Agent JSON files");
+        
+    let path = agents_dir.join(format!("{}.json", name));
+    if !path.exists() {
+        return Err(format!("Agent file not found: {}", path.display()));
+    }
+    
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read agent '{name}': {e}"))?;
+
+    let graph: Graph = serde_json::from_str(&content)
+        .map_err(|e| format!("Invalid workflow JSON in '{name}': {e}"))?;
+
+    Ok(graph)
+}
+
+#[tauri::command]
+pub fn launch_agent_terminal(name: String) -> Result<(), String> {
+    let agents_dir = std::env::current_dir()
+        .unwrap_or_default()
+        .join("Agent JSON files");
+        
+    let path = agents_dir.join(format!("{}.json", name));
+    if !path.exists() {
+        return Err(format!("Agent file not found: {}", path.display()));
+    }
+    
+    let path_str = path.to_string_lossy().to_string();
+    
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new("cmd");
+        if let Ok(cwd) = std::env::current_dir() {
+            if cwd.ends_with("src-tauri") {
+                if let Some(parent) = cwd.parent() {
+                    cmd.current_dir(parent);
+                }
+            }
+        }
+        cmd.args(["/c", "start", "cmd.exe", "/k", &format!("cargo run -- run \"{}\"", path_str)])
+            .spawn()
+            .map_err(|e| format!("Failed to launch terminal: {e}"))?;
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err("Terminal launching currently only implemented for Windows.".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn help_agent_ask(
+    state: tauri::State<'_, ChatState>,
+    prompt: String,
+    images: Vec<String>,
+    model: String,
+    url: String,
+    workflow_context: Option<String>,
+    task_id: Option<String>,
+) -> Result<String, String> {
+    let client = OllamaClient::new_no_timeout(&url);
+    
+    let mut full_prompt = String::from("You are an expert developer and AI assistant. The user has encountered an error or needs help debugging.\n");
+    if let Some(ctx) = workflow_context {
+        full_prompt.push_str(&format!("\nHere is the current workflow JSON for context:\n{}\n", ctx));
+    }
+    full_prompt.push_str(&format!("\nUser's Request / Error:\n{}\n", prompt));
+
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    if let Some(id) = &task_id {
+        state.active_tasks.lock().await.insert(id.clone(), tx);
+    }
+
+    let result = tokio::select! {
+        res = client.generate(&model, &full_prompt, images, 0.2, false) => res.map_err(|e| format!("Help agent failed: {e}")),
+        _ = rx => Err("Generation cancelled by user.".to_string()),
+    };
+
+    if let Some(id) = task_id {
+        state.active_tasks.lock().await.remove(&id);
+    }
+    result
 }

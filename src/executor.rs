@@ -1,4 +1,4 @@
-﻿//! Execution engine: topological sort â†’ concurrent node execution via Kahn's algorithm.
+//! Execution engine: topological sort â†’ concurrent node execution via Kahn's algorithm.
 //!
 //! Failure policy:
 //!   - Default (`FailurePolicy::HaltOnFailure`): any node failure immediately skips
@@ -47,7 +47,7 @@ impl Default for ExecutorConfig {
             chroma_url: "http://localhost:8000".to_string(),
             failure_policy: FailurePolicy::HaltOnFailure,
             default_timeout_secs: 10,
-            llm_timeout_secs: 300,
+            llm_timeout_secs: 600,
         }
     }
 }
@@ -302,7 +302,21 @@ async fn execute_node(
         NodeType::TextInputNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
-            let resolved = interpolation::resolve(&cfg.text, &locked, single.as_deref())?;
+            
+            let mut text_val = cfg.text.clone();
+            if text_val.trim().is_empty() && predecessors.is_empty() {
+                // Interactive prompt for standalone empty text nodes
+                use std::io::Write;
+                println!();
+                print!("> Agent input required for '{}': ", node_id);
+                let _ = std::io::stdout().flush();
+                let mut input = String::new();
+                if std::io::stdin().read_line(&mut input).is_ok() {
+                    text_val = input.trim().to_string();
+                }
+            }
+            
+            let resolved = interpolation::resolve(&text_val, &locked, single.as_deref())?;
             Ok(resolved)
         }
 

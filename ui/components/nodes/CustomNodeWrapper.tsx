@@ -35,28 +35,28 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
     switch (status.status) {
       case 'running':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#38bdf8', fontSize: 11 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-cyan)', fontSize: 11 }}>
             <Loader2 size={12} className="spinning" />
             Running
           </span>
         );
       case 'success':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#10b981', fontSize: 11 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-emerald)', fontSize: 11 }}>
             <CheckCircle size={12} />
             {status.durationMs ? `${status.durationMs}ms` : 'Success'}
           </span>
         );
       case 'failed':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#f43f5e', fontSize: 11 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-rose)', fontSize: 11 }}>
             <AlertCircle size={12} />
             Error
           </span>
         );
       case 'skipped':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#94a3b8', fontSize: 11 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: 11 }}>
             <Clock size={12} />
             Skipped
           </span>
@@ -70,13 +70,13 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
       style={{
         width: 280,
         borderRadius: 12,
-        background: '#0f172a',
-        border: `1.5px solid ${selected ? '#38bdf8' : 'rgba(255, 255, 255, 0.1)'}`,
+        background: 'var(--bg-secondary)',
+        border: `1.5px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-subtle)'}`,
         boxShadow: selected
-          ? '0 0 16px rgba(56, 189, 248, 0.35)'
+          ? 'var(--shadow-glow)'
           : status?.status === 'running'
           ? '0 0 20px rgba(6, 182, 212, 0.5)'
-          : '0 4px 16px rgba(0, 0, 0, 0.4)',
+          : 'var(--shadow-md)',
         transition: 'all 0.15s ease',
         cursor: 'pointer',
         overflow: 'hidden',
@@ -98,22 +98,22 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '10px 14px',
-          background: `linear-gradient(135deg, ${headerColor}22 0%, rgba(15, 23, 42, 0.8) 100%)`,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          background: `linear-gradient(135deg, ${headerColor}22 0%, var(--bg-card) 100%)`,
+          borderBottom: '1px solid var(--border-subtle)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ color: headerColor }}>{icon}</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>{title}</div>
-            <div style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace' }}>{id}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{id}</div>
           </div>
         </div>
         <div>{getStatusBadge()}</div>
       </div>
 
       {/* Body Content */}
-      <div style={{ padding: '10px 14px', fontSize: 12, color: '#cbd5e1' }}>
+      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)' }}>
         {children}
       </div>
 
@@ -136,7 +136,7 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
             style={{
               right: -6,
               top: h.id === 'true' ? '35%' : '65%',
-              background: h.id === 'true' ? '#10b981' : '#f43f5e',
+              background: h.id === 'true' ? 'var(--accent-emerald)' : 'var(--accent-rose)',
             }}
           />
         </div>

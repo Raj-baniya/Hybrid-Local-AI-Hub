@@ -23,6 +23,7 @@ export const GraphCanvas: React.FC = () => {
   const onConnect = useWorkflowStore((s) => s.onConnect);
   const addNode = useWorkflowStore((s) => s.addNode);
   const setSelectedNodeId = useWorkflowStore((s) => s.setSelectedNodeId);
+  const theme = useWorkflowStore((s) => s.theme);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
@@ -62,7 +63,7 @@ export const GraphCanvas: React.FC = () => {
   return (
     <div
       ref={reactFlowWrapper}
-      style={{ width: '100%', height: '100%', position: 'relative', background: '#090d16' }}
+      style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg-primary)' }}
       onDrop={onDrop}
       onDragOver={onDragOver}
     >
@@ -82,24 +83,24 @@ export const GraphCanvas: React.FC = () => {
         selectionOnDrag={true}
         defaultEdgeOptions={{
           animated: true,
-          style: { stroke: '#64748b', strokeWidth: 2 },
+          style: { stroke: 'var(--text-muted)', strokeWidth: 2 },
         }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(255, 255, 255, 0.08)" />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color={theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'} />
         <Controls
           style={{
-            background: 'rgba(15, 23, 42, 0.85)',
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-            fill: '#94a3b8',
+            background: 'var(--bg-glass)',
+            borderColor: 'var(--border-subtle)',
+            fill: 'var(--text-muted)',
             borderRadius: 8,
           }}
         />
         <MiniMap
-          nodeColor={() => '#1e293b'}
-          maskColor="rgba(9, 13, 22, 0.75)"
+          nodeColor={() => 'var(--bg-tertiary)'}
+          maskColor={theme === 'dark' ? 'rgba(9, 13, 22, 0.75)' : 'rgba(255, 255, 255, 0.75)'}
           style={{
-            background: '#0f172a',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-subtle)',
             borderRadius: 8,
           }}
         />
