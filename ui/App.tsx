@@ -46,7 +46,12 @@ export const App: React.FC = () => {
   // Global Keyboard Shortcuts for Tab Management
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      const target = e.target as HTMLElement;
+      if (
+        target instanceof HTMLInputElement || 
+        target instanceof HTMLTextAreaElement || 
+        target.isContentEditable
+      ) {
         return;
       }
 

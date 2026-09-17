@@ -138,6 +138,9 @@ export const OllamaSelectorNodeComponent: React.FC<NodeProps> = ({ id, data, sel
             }}
           >
             <option value="llama3.2">llama3.2 (default)</option>
+            {cfg.model && cfg.model !== 'llama3.2' && !models.find(m => m.name === cfg.model) && (
+              <option value={cfg.model}>{cfg.model} (missing)</option>
+            )}
             {models.filter(m => m.name !== 'llama3.2').map((m) => (
               <option key={m.name} value={m.name}>
                 {m.name}

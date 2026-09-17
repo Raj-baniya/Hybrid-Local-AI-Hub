@@ -116,6 +116,9 @@ export const NodeInspector: React.FC = () => {
               style={{ ...inputStyle, appearance: 'auto', paddingRight: 24 }}
             >
               <option value="llama3.2">llama3.2 (default)</option>
+              {data.model && data.model !== 'llama3.2' && !models.find(m => m.name === data.model) && (
+                <option value={data.model}>{data.model} (missing)</option>
+              )}
               {models.filter(m => m.name !== 'llama3.2').map((m) => (
                 <option key={m.name} value={m.name}>
                   {m.name}

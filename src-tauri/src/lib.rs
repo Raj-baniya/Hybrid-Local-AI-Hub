@@ -23,6 +23,8 @@ pub fn run() {
             commands::list_agents,
             commands::save_agent,
             commands::load_agent,
+            commands::save_agent_output,
+            commands::get_agent_output,
             commands::launch_agent_terminal,
             commands::help_agent_ask,
         ])

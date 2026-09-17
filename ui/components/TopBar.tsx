@@ -80,17 +80,6 @@ export const TopBar: React.FC = () => {
     clearNodeStatuses();
 
     try {
-      const { save } = await import('@tauri-apps/plugin-dialog');
-      const outputPath = await save({
-        title: "Select where to save the Agent's output",
-        filters: [{ name: 'Text File', extensions: ['txt', 'md', 'json'] }],
-        defaultPath: 'agent_output.txt',
-      });
-      if (!outputPath) {
-        setIsExecuting(false);
-        return; // User cancelled
-      }
-
       const record = await invoke<ExecutionRecord>('run_graph', { graph });
       setExecutionRecord(record);
 
@@ -113,11 +102,18 @@ export const TopBar: React.FC = () => {
         }
       });
 
-      if (outputPath && finalOutput && finalOutput !== "No output generated.") {
-         await invoke('save_text_file', { path: outputPath, text: finalOutput });
+      if (finalOutput && finalOutput !== "No output generated." && record.overall_status === 'success') {
+         // Auto-save the output internally
+         const activeTab = useWorkflowStore.getState().tabs.find(t => t.id === useWorkflowStore.getState().activeTabId);
+         if (activeTab && activeTab.title) {
+            await invoke('save_agent_output', { name: activeTab.title, output: finalOutput });
+         }
       }
 
       if (record.overall_status !== 'success') {
+        const failedNode = record.nodes.find(n => n.status?.toLowerCase() === 'failed');
+        const errorMessage = failedNode?.error || 'Unknown error occurred during execution.';
+        alert(`Pipeline execution failed!\nNode: ${failedNode?.node_id || 'N/A'}\nError: ${errorMessage}\n\nPlease check the logs panel for more details.`);
         setActivePanel('logs');
       } else {
         setExecutionModalOutput(finalOutput);

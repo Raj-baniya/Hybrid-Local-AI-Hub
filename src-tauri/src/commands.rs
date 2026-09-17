@@ -409,12 +409,12 @@ pub fn save_agent(app: tauri::AppHandle, name: String, graph: Graph) -> Result<(
         
     std::fs::create_dir_all(&agents_dir).map_err(|e| format!("Failed to create agents dir: {e}"))?;
     
-    // Sanitize filename for Windows
-    let safe_name = name.replace(|c: char| {
-        c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*'
-    }, "_");
+    // Reject invalid characters to prevent silent collisions (e.g. a:b vs a?b mapping to same file)
+    if name.chars().any(|c| c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*') {
+        return Err("Agent name contains invalid characters. Please avoid < > : \" / \\ | ? *".to_string());
+    }
     
-    let path = agents_dir.join(format!("{}.json", safe_name));
+    let path = agents_dir.join(format!("{}.json", name));
     
     let json_str = serde_json::to_string_pretty(&graph)
         .map_err(|e| format!("Serialization failed: {e}"))?;
@@ -441,6 +441,36 @@ pub fn load_agent(app: tauri::AppHandle, name: String) -> Result<Graph, String> 
         .map_err(|e| format!("Invalid workflow JSON in '{name}': {e}"))?;
 
     Ok(graph)
+}
+
+#[tauri::command]
+pub fn save_agent_output(app: tauri::AppHandle, name: String, output: String) -> Result<(), String> {
+    let outputs_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("outputs");
+        
+    std::fs::create_dir_all(&outputs_dir).map_err(|e| format!("Failed to create outputs dir: {e}"))?;
+    
+    if name.chars().any(|c| c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*') {
+        return Err("Agent name contains invalid characters. Please avoid < > : \" / \\ | ? *".to_string());
+    }
+    
+    let path = outputs_dir.join(format!("{}_output.txt", name));
+    std::fs::write(&path, output).map_err(|e| format!("Failed to write agent output: {e}"))
+}
+
+#[tauri::command]
+pub fn get_agent_output(app: tauri::AppHandle, name: String) -> Result<String, String> {
+    let outputs_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("outputs");
+        
+    let path = outputs_dir.join(format!("{}_output.txt", name));
+    if !path.exists() {
+        return Err(format!("No saved output found for agent: {}", name));
+    }
+    
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read output: {e}"))
 }
 
 #[tauri::command]
