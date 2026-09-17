@@ -75,6 +75,16 @@ pub async fn run_graph(
         record.nodes.push(NodeRecord::new(&node.id, type_name));
     }
 
+    // Validate that all edges reference existing nodes
+    for edge in &graph.edges {
+        if !graph.nodes.iter().any(|n| n.id == edge.source) {
+            return Err(anyhow::anyhow!("Graph validation error: missing node definition for '{}'", edge.source));
+        }
+        if !graph.nodes.iter().any(|n| n.id == edge.target) {
+            return Err(anyhow::anyhow!("Graph validation error: missing node definition for '{}'", edge.target));
+        }
+    }
+
     // Build adjacency and in-degree maps.
     let (adj, mut in_degree) = build_adj_and_indegree(graph);
 
@@ -106,8 +116,7 @@ pub async fn run_graph(
             {
                 Some(n) => n,
                 None => {
-                    // Node missing from graph definition, skip gracefully
-                    continue;
+                    return Err(anyhow::anyhow!("Graph validation error: missing node definition for '{}'", node_id));
                 }
             };
 

@@ -1,144 +1,117 @@
 # Hybrid Local AI Hub
 
-**Local-first AI workflow orchestrator.** Generate, run, and manage AI automation pipelines entirely on your machine — no cloud, no API keys, no data leaving your system.
+**Local-first AI workflow orchestrator Desktop App.** Generate, run, and manage AI automation pipelines entirely on your machine via a visual node-based editor — no cloud, no API keys, no data leaving your system.
 
-Powered by [Ollama](https://ollama.com) (local LLMs) and [ChromaDB](https://www.trychroma.com) (local vector storage).
+Powered by [Ollama](https://ollama.com) for completely offline local LLMs.
+
+<p align="center">
+  <img src="./src-tauri/icons/128x128.png" alt="Hybrid Local AI Hub Logo" width="128"/>
+</p>
 
 ---
 
-## Quick Start
+## Features
+
+- **Visual Node Editor**: Build and orchestrate AI pipelines by dragging and connecting nodes on a canvas.
+- **AI-Powered Chat to Graph**: Tell the built-in AI what you want to achieve, and it will generate the workflow graph for you!
+- **Local-First Execution**: Complete privacy. Your data stays on your machine and never goes to the cloud.
+- **Built-in Assistant**: Ask the Help Agent to troubleshoot workflows or analyze errors.
+- **Library Management**: Save your favorite agents and review their past executions and outputs silently stored in the background.
+
+---
+
+## Architecture
+
+The Hybrid Local AI Hub is built using a secure, local-first architecture:
+
+```mermaid
+graph TD
+    subgraph Frontend [React + Vite]
+        UI[Canvas Node Editor]
+        State[Zustand Store]
+        Chat[Help & Generation Agents]
+        UI --> State
+        UI <--> Chat
+    end
+
+    subgraph Backend [Tauri Rust Core]
+        Dispatcher[Command Dispatcher]
+        Executor[Workflow Executor]
+        Storage[Local File Storage]
+        
+        Frontend <-->|IPC| Dispatcher
+        Dispatcher --> Executor
+        Dispatcher --> Storage
+    end
+
+    subgraph Local LLM [Ollama]
+        Models[(Local Models)]
+        API[Ollama REST API]
+        API <--> Models
+    end
+
+    Executor <-->|HTTP| API
+    Chat <-->|HTTP| API
+    
+    style Frontend fill:#0ea5e9,stroke:#0369a1,color:#fff
+    style Backend fill:#f97316,stroke:#c2410c,color:#fff
+    style Local LLM fill:#10b981,stroke:#047857,color:#fff
+```
+
+---
+
+## Quick Start (Development)
+
+### Prerequisites
+
+1. **Ollama** installed on your machine and running (default: `http://127.0.0.1:11434`)
+2. **Node.js** (v18+)
+3. **Rust** & Cargo (`rustup` recommended)
+
+### Build and Run
 
 ```bash
-# 1. Install and set up (detects Ollama, pulls default models)
-hybrid-hub init
+# 1. Clone the repository
+git clone <repo-url>
+cd hybrid-local-ai-hub
 
-# 2. Generate a workflow from plain English
-hybrid-hub chat "Watch my ./inbox folder for PDFs and summarise each one" -o summariser.json
+# 2. Install frontend dependencies
+npm install
 
-# 3. Validate it
-hybrid-hub validate summariser.json
-
-# 4. Run it
-hybrid-hub run summariser.json --watch
+# 3. Start the Tauri application in Development Mode
+npm run tauri dev
 ```
 
 That's it. Real LLM inference, real local files, zero cloud.
 
 ---
 
-## Installation
-
-### Option A: Download a pre-built binary
-
-Download the binary for your OS from the [releases page](../../releases) and put it somewhere on your PATH.
-
-### Option B: Build from source
-
-```bash
-# Requires Rust (https://rustup.rs)
-git clone <repo-url>
-cd hybrid-local-ai-hub
-cargo build --release
-# Binary: target/release/hybrid-hub (or hybrid-hub.exe on Windows)
-```
-
----
-
-## Commands
-
-| Command | Description |
-|---|---|
-| `hybrid-hub init` | Set up Ollama, pull recommended models, check ChromaDB |
-| `hybrid-hub chat "<instruction>"` | Generate a workflow from natural language |
-| `hybrid-hub validate <file>` | Check a workflow JSON for errors |
-| `hybrid-hub run <file>` | Run a workflow (once, or `--watch` for continuous) |
-| `hybrid-hub models list` | List installed Ollama models |
-| `hybrid-hub models pull <name>` | Pull an Ollama model |
-| `hybrid-hub logs <execution-id>` | Show results from a past run |
-| `hybrid-hub export <file> -o <bundle.zip>` | Package a workflow for sharing |
-| `hybrid-hub import <bundle.zip>` | Import a shared workflow bundle |
-| `hybrid-hub template list` | Browse starter templates |
-| `hybrid-hub template use <name> -o <file>` | Copy a starter template |
-| `hybrid-hub examples` | See real example `chat` instructions |
-
----
-
 ## Workflow Node Types
 
-Workflows are JSON graphs composed of 9 node types:
+Workflows are JSON graphs composed of powerful node types:
 
 | Node | Purpose |
 |---|---|
+| `OllamaNode` | Calls a local LLM via Ollama |
 | `FileWatcherNode` | Triggers on new/changed files in a folder |
 | `TextInputNode` | Provides static text or template input |
 | `ImageInputNode` | Reads an image from disk |
-| `OllamaSelectorNode` | Calls a local LLM via Ollama |
-| `LocalEmbedderNode` | Generates embeddings (for ChromaDB) |
 | `PDFExtractorNode` | Extracts text from PDFs |
-| `ChromaDbStoreNode` | Stores embeddings + documents in ChromaDB |
+| `FileWriterNode` | Writes output to a local file |
 | `ConditionalRouterNode` | Routes execution based on content |
-| `LocalFileWriterNode` | Writes output to a local file |
-
-Generate workflows with `hybrid-hub chat`, or build them manually in JSON.
+| *(More coming soon)* | Local embeddings, Vector DB integrations, etc. |
 
 ---
 
-## Recommended Models (8 GB RAM)
+## Recommended Models
+
+For the best experience, ensure you have pulled at least one capable model via Ollama. You can manage models directly within the app!
 
 | Purpose | Model | Why |
 |---|---|---|
-| **Default chat/generation** | `llama3.2` (3B) | Best all-rounder for 8 GB, strong instruction-following |
-| **Fastest** | `phi4-mini` (3.8B) | ~28 tokens/sec, good for speed-critical workflows |
-| **Best reasoning** | `qwen3:4b` | Best reasoning quality in the 8 GB tier |
+| **Default chat/generation** | `llama3.2` | Best all-rounder, strong instruction-following |
+| **Vision capabilities** | `llava` or `llama3.2-vision` | Ideal for providing screenshots to the Help Agent |
 | **Lightest fallback** | `gemma2:2b` | For very RAM-constrained machines |
-| **Embeddings** | `nomic-embed-text` | Purpose-built, ~270 MB, negligible RAM overhead |
-
-```bash
-hybrid-hub init              # pulls llama3.2 + nomic-embed-text automatically
-hybrid-hub models pull phi4-mini   # add alternate models as needed
-```
-
----
-
-## ChromaDB Setup (optional, for embedding workflows)
-
-ChromaDB is only required if your workflow uses `ChromaDbStoreNode` or `LocalEmbedderNode`.
-
-```bash
-pip install chromadb
-chroma run --host localhost --port 8000
-```
-
----
-
-## Example Workflows
-
-```bash
-# See all examples
-hybrid-hub examples
-
-# Use a starter template
-hybrid-hub template list
-hybrid-hub template use gym-intake -o gym.json
-```
-
-Or generate anything:
-```bash
-hybrid-hub chat "Watch ./invoices for new PDFs, extract vendor + amount with an LLM, append to invoices.jsonl"
-```
-
----
-
-## Sharing Workflows
-
-```bash
-# Export a workflow with its manifest (required models, paths, etc.)
-hybrid-hub export my_workflow.json -o my_bundle.zip
-
-# On the recipient's machine
-hybrid-hub import my_bundle.zip          # shows required models + flags paths to review
-hybrid-hub run imported_workflow.json    # run it
-```
 
 ---
 

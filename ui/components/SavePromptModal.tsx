@@ -13,11 +13,20 @@ export const SavePromptModal: React.FC = () => {
   if (!tab) return null;
 
   const handleSaveAndClose = async () => {
+    let nameToSave = tab.title;
+    if (nameToSave.startsWith('Untitled')) {
+      const userInput = window.prompt("Enter a name for your agent:");
+      if (!userInput || userInput.trim() === '') {
+        return; // User cancelled the save
+      }
+      nameToSave = userInput.trim();
+    }
+
     setIsSaving(true);
     setError(null);
     try {
       const graph = canvasToGraph(tab.nodes, tab.edges);
-      await invoke('save_agent', { name: tab.title, graph });
+      await invoke('save_agent', { name: nameToSave, graph });
       markTabClean(tab.id);
       confirmCloseTab();
     } catch (err: any) {

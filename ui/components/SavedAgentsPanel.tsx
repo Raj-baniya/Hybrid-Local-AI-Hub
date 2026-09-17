@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useWorkflowStore } from '../store/workflowStore';
-import { Bot, Terminal, Edit3, X, Loader2, RefreshCw } from 'lucide-react';
+import { Bot, Terminal, Edit3, X, Loader2, RefreshCw, Download } from 'lucide-react';
 import { Graph } from '../schema/graphSchema';
 
 export const SavedAgentsPanel: React.FC = () => {
@@ -44,6 +44,24 @@ export const SavedAgentsPanel: React.FC = () => {
       await invoke('launch_agent_terminal', { name });
     } catch (err: any) {
       setError(`Failed to launch terminal: ${err}`);
+    }
+  };
+
+  const handleDownloadOutput = async (name: string) => {
+    try {
+      const output = await invoke<string>('get_agent_output', { name });
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const outputPath = await save({
+        title: `Save output for ${name}`,
+        filters: [{ name: 'Text File', extensions: ['txt', 'md'] }],
+        defaultPath: `${name}_output.txt`,
+      });
+      if (outputPath) {
+        await invoke('save_text_file', { path: outputPath, text: output });
+        alert("Output successfully saved!");
+      }
+    } catch (err: any) {
+      alert(typeof err === 'string' ? err : "Failed to download output: " + err.message);
     }
   };
 
@@ -99,10 +117,13 @@ export const SavedAgentsPanel: React.FC = () => {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleOpenInCanvas(agent)}>
-                    <Edit3 size={14} /> Open in Canvas
+                    <Edit3 size={14} /> Open
                   </button>
                   <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleRunInTerminal(agent)}>
-                    <Terminal size={14} /> Run in Terminal
+                    <Terminal size={14} /> Run
+                  </button>
+                  <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} title="Download latest output" onClick={() => handleDownloadOutput(agent)}>
+                    <Download size={14} /> Output
                   </button>
                 </div>
               </div>
