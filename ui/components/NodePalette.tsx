@@ -12,6 +12,9 @@ import {
   GitFork,
   HardDrive,
   Plus,
+  Globe,
+  Terminal,
+  Braces,
 } from 'lucide-react';
 
 interface PaletteItem {
@@ -95,6 +98,30 @@ const PALETTE_ITEMS: PaletteItem[] = [
     icon: <HardDrive size={16} />,
     color: '#14b8a6',
     desc: 'Write output to local file',
+  },
+  {
+    type: 'WebScraperNode',
+    label: 'Web Scraper',
+    category: 'Triggers & Inputs',
+    icon: <Globe size={16} />,
+    color: '#3b82f6',
+    desc: 'Scrape text from a URL',
+  },
+  {
+    type: 'ShellCommandNode',
+    label: 'Shell Command',
+    category: 'AI & Processing',
+    icon: <Terminal size={16} />,
+    color: '#ef4444',
+    desc: 'Execute local shell commands',
+  },
+  {
+    type: 'RegexExtractorNode',
+    label: 'Regex Extractor',
+    category: 'AI & Processing',
+    icon: <Braces size={16} />,
+    color: '#10b981',
+    desc: 'Extract text using Regex',
   },
 ];
 

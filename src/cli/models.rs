@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -88,9 +88,8 @@ async fn pull_model(name: &str, ollama_url: &str) -> Result<()> {
 
     let pb = ProgressBar::new_spinner();
     pb.set_style(
-        ProgressStyle::with_template("{spinner:.cyan} {msg}")
-            .unwrap()
-            .tick_strings(&["â ‹", "â ™", "â ¹", "â ¸", "â ¼", "â ´", "â ¦", "â §", "â ‡", "â "]),
+        ProgressStyle::with_template("{spinner:.cyan} {msg}")?
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
     );
     pb.set_message(format!("Pulling '{}'...", name));
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
@@ -101,6 +100,6 @@ async fn pull_model(name: &str, ollama_url: &str) -> Result<()> {
         })
         .await?;
 
-    pb.finish_with_message(format!("âœ“ '{}' pulled successfully", name));
+    pb.finish_with_message(format!("✓ '{}' pulled successfully", name));
     Ok(())
 }

@@ -65,6 +65,18 @@ export const Navbar: React.FC = () => {
         outputPreview: nr.output_preview ?? undefined,
         error: nr.error ?? undefined,
       });
+
+      // Update live execution record for Log Panel streaming
+      const state = useWorkflowStore.getState();
+      if (state.executionRecord && state.executionRecord.overall_status === 'running') {
+        const updatedNodes = state.executionRecord.nodes.map(n => {
+          if (n.node_id === nr.node_id) {
+            return { ...n, ...nr, status: rawStatus || n.status };
+          }
+          return n;
+        });
+        state.setExecutionRecord({ ...state.executionRecord, nodes: updatedNodes });
+      }
     });
     return () => { unlisten.then((fn) => fn()); };
   }, [setNodeStatus]);
@@ -85,9 +97,29 @@ export const Navbar: React.FC = () => {
     setIsExecuting(true);
     clearNodeStatuses();
 
+    // Initialize pending live execution record
+    setExecutionRecord({
+      execution_id: 'live-' + Date.now(),
+      trigger_source: 'ui',
+      started_at: new Date().toISOString(),
+      overall_status: 'running',
+      nodes: graph.nodes.map(n => ({
+        node_id: n.id,
+        node_type: n.data.type,
+        status: 'pending'
+      }))
+    });
+
     try {
       const record = await invoke<ExecutionRecord>('run_graph', { graph });
       setExecutionRecord(record);
+      
+      // Persist the log
+      try {
+        await invoke('save_execution_log', { record });
+      } catch (err) {
+        console.error("Failed to save execution log:", err);
+      }
 
       // Final reconcile — ensure all final states are correct
       record.nodes.forEach((nr) => {
@@ -108,7 +140,30 @@ export const Navbar: React.FC = () => {
         setActivePanel('logs');
       }
     } catch (err: any) {
-      alert(`Execution failed:\n${typeof err === 'string' ? err : err.message}`);
+      const errorMsg = typeof err === 'string' ? err : err.message;
+      alert(`Execution failed:\n${errorMsg}`);
+      
+      const state = useWorkflowStore.getState();
+      if (state.executionRecord) {
+        setExecutionRecord({
+          ...state.executionRecord,
+          overall_status: 'failed',
+          finished_at: new Date().toISOString(),
+          nodes: state.executionRecord.nodes.map((n) => 
+            n.status === 'pending' ? { ...n, status: 'failed', error: errorMsg } : n
+          )
+        });
+        
+        state.executionRecord.nodes.forEach((n) => {
+          if (n.status === 'pending') {
+            setNodeStatus(n.node_id, {
+              status: 'failed',
+              error: errorMsg
+            });
+          }
+        });
+      }
+      setActivePanel('logs');
     } finally {
       setIsExecuting(false);
     }

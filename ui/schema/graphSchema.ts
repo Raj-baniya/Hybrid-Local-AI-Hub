@@ -20,7 +20,6 @@ export const ImageInputConfigSchema = z.object({
 export const OllamaSelectorConfigSchema = z.object({
   type: z.literal('OllamaSelectorNode'),
   model: z.string().min(1, 'Model name is required'),
-  temperature: z.number().min(0).max(2).default(0.7),
   promptTemplate: z.string().min(1, 'Prompt template is required'),
   jsonMode: z.boolean().default(false),
 });
@@ -55,6 +54,23 @@ export const LocalFileWriterConfigSchema = z.object({
   append: z.boolean().default(false),
 });
 
+export const WebScraperConfigSchema = z.object({
+  type: z.literal('WebScraperNode'),
+  url: z.string().min(1, 'URL is required'),
+});
+
+export const ShellCommandConfigSchema = z.object({
+  type: z.literal('ShellCommandNode'),
+  command: z.string(),
+  unsafeRawShell: z.boolean().optional(),
+});
+
+export const RegexExtractorConfigSchema = z.object({
+  type: z.literal('RegexExtractorNode'),
+  pattern: z.string().min(1, 'Pattern is required'),
+  group: z.number().int().nonnegative().default(0),
+});
+
 export const NodeTypeSchema = z.discriminatedUnion('type', [
   FileWatcherConfigSchema,
   TextInputConfigSchema,
@@ -65,6 +81,9 @@ export const NodeTypeSchema = z.discriminatedUnion('type', [
   ChromaDbStoreConfigSchema,
   ConditionalRouterConfigSchema,
   LocalFileWriterConfigSchema,
+  WebScraperConfigSchema,
+  ShellCommandConfigSchema,
+  RegexExtractorConfigSchema,
 ]);
 
 export const GraphNodeSchema = z.object({
@@ -83,9 +102,12 @@ export const GraphEdgeSchema = z.object({
 
 export const GraphSchema = z.object({
   version: z.number().default(1),
+  name: z.string().optional().nullable(),
   nodes: z.array(GraphNodeSchema),
   edges: z.array(GraphEdgeSchema),
 });
+
+
 
 export type FileWatcherConfig = z.infer<typeof FileWatcherConfigSchema>;
 export type TextInputConfig = z.infer<typeof TextInputConfigSchema>;
@@ -96,6 +118,9 @@ export type PDFExtractorConfig = z.infer<typeof PDFExtractorConfigSchema>;
 export type ChromaDbStoreConfig = z.infer<typeof ChromaDbStoreConfigSchema>;
 export type ConditionalRouterConfig = z.infer<typeof ConditionalRouterConfigSchema>;
 export type LocalFileWriterConfig = z.infer<typeof LocalFileWriterConfigSchema>;
+export type WebScraperConfig = z.infer<typeof WebScraperConfigSchema>;
+export type ShellCommandConfig = z.infer<typeof ShellCommandConfigSchema>;
+export type RegexExtractorConfig = z.infer<typeof RegexExtractorConfigSchema>;
 
 export type NodeType = z.infer<typeof NodeTypeSchema>;
 export type GraphNode = z.infer<typeof GraphNodeSchema>;

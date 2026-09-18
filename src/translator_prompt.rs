@@ -26,6 +26,7 @@ You must output ONLY valid JSON matching this schema â€” no prose, no markd
 ```
 {
   "version": 1,
+  "name": "<Short, descriptive title for this agent/workflow>",
   "nodes": [ GraphNode, ... ],
   "edges": [ GraphEdge, ... ]
 }
@@ -71,7 +72,7 @@ You must output ONLY valid JSON matching this schema â€” no prose, no markd
 
 **OllamaSelectorNode** â€” calls a local LLM
 ```json
-{ "type": "OllamaSelectorNode", "model": "llama3.2", "temperature": 0.7,
+{ "type": "OllamaSelectorNode", "model": "llama3.2",
   "promptTemplate": "Summarize: {{input}}", "jsonMode": false }
 ```
 (Use `{{input}}` only when this node has exactly ONE incoming edge; otherwise use `{{node_id.output}}`)
@@ -106,14 +107,30 @@ You must output ONLY valid JSON matching this schema â€” no prose, no markd
 { "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/result.txt", "append": false }
 ```
 
+**WebScraperNode** â€” fetches content from a URL
+```json
+{ "type": "WebScraperNode", "url": "https://example.com" }
+```
+
+**ShellCommandNode** â€” runs a local shell command (Powershell/Bash)
+```json
+{ "type": "ShellCommandNode", "command": "python script.py {{input}}" }
+```
+
+**RegexExtractorNode** â€” extracts structured data via regex
+```json
+{ "type": "RegexExtractorNode", "pattern": "Email: ([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})", "group": 1 }
+```
+
 ### Rules
 - Graphs MUST be DAGs (no cycles).
 - Every edge `source` and `target` must match an existing node `id`.
 - ConditionalRouterNode `trueTarget` and `falseTarget` must be existing node ids.
 - `{{input}}` is only valid on nodes with exactly one incoming edge. Otherwise use `{{node_id.output}}`.
 - A TextInputNode with zero incoming edges MUST contain real hardcoded text (e.g. "My customer complaint is about billing"). NEVER use `{{input}}` on a source TextInputNode.
-- The closed vocabulary is exactly the 9 node types above. Do not invent new types.
+- The closed vocabulary is exactly the 12 node types above. Do not invent new types.
 - ALWAYS use a highly specific filename for LocalFileWriterNode `outputPath` based on the task (e.g. `./Agent JSON files/Agent Output/fitness_plan.txt` instead of generic `result.txt`) so multiple agents don't overwrite each other's outputs.
+- YOU ARE AN EXPERT PROMPT ENGINEER. When generating `promptTemplate` for `OllamaSelectorNode`, NEVER use a basic one-liner like "Summarize this: {{input}}". You MUST generate a highly detailed, professional prompt containing: 1) A clear persona/role, 2) Step-by-step thinking instructions, and 3) Strict output formatting constraints. For example: "You are an expert financial analyst. Read the following text and extract key metrics. Think step-by-step. Output your final answer as a markdown list. Text to analyze:\n\n{{input}}"
 "#;
 
 // â”€â”€â”€ Examples section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -125,9 +142,10 @@ const EXAMPLES_SECTION: &str = r#"
 ```json
 {
   "version": 1,
+  "name": "Folder Summarizer",
   "nodes": [
     { "id": "watcher1", "position": null, "data": { "type": "FileWatcherNode", "watchPath": "./inbox", "pattern": "*.txt", "recursive": false } },
-    { "id": "llm1",     "position": null, "data": { "type": "OllamaSelectorNode", "model": "llama3.2", "temperature": 0.5, "promptTemplate": "Summarize this document concisely:\n\n{{input}}", "jsonMode": false } },
+    { "id": "llm1",     "position": null, "data": { "type": "OllamaSelectorNode", "model": "llama3.2", "promptTemplate": "You are an expert technical writer. Read the following document and provide a concise, 3-sentence summary highlighting the main conclusions. Document:\n\n{{input}}", "jsonMode": false } },
     { "id": "writer1",  "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/summary.txt", "append": false } }
   ],
   "edges": [
@@ -141,6 +159,7 @@ const EXAMPLES_SECTION: &str = r#"
 ```json
 {
   "version": 1,
+  "name": "PDF Embedder to Chroma",
   "nodes": [
     { "id": "watcher1",  "position": null, "data": { "type": "FileWatcherNode", "watchPath": "./pdfs", "pattern": "*.pdf", "recursive": false } },
     { "id": "pdf1",      "position": null, "data": { "type": "PDFExtractorNode", "pageRange": null } },
@@ -159,9 +178,10 @@ const EXAMPLES_SECTION: &str = r#"
 ```json
 {
   "version": 1,
+  "name": "Support Ticket Classifier",
   "nodes": [
     { "id": "input1",    "position": null, "data": { "type": "TextInputNode", "text": "Hi, I was charged twice on my credit card for order #12345. Please help me get a refund." } },
-    { "id": "classify1", "position": null, "data": { "type": "OllamaSelectorNode", "model": "llama3.2", "temperature": 0.1, "promptTemplate": "Classify this ticket. If it is about billing, reply with 'billing'. Otherwise reply with 'general'. Ticket:\n\n{{input1.output}}", "jsonMode": false } },
+    { "id": "classify1", "position": null, "data": { "type": "OllamaSelectorNode", "model": "llama3.2", "promptTemplate": "You are a customer support triage agent. Read the ticket below and classify it strictly as either 'billing' or 'general'. Output only the single classification word. Ticket:\n\n{{input1.output}}", "jsonMode": false } },
     { "id": "router1",   "position": null, "data": { "type": "ConditionalRouterNode", "condition": "billing", "trueTarget": "writer_billing", "falseTarget": "writer_general" } },
     { "id": "writer_billing", "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/billing_queue.txt", "append": true } },
     { "id": "writer_general", "position": null, "data": { "type": "LocalFileWriterNode", "outputPath": "./Agent JSON files/Agent Output/general_queue.txt", "append": true } }
@@ -186,14 +206,13 @@ The user will describe a workflow automation. Generate a valid JSON graph for it
 Rules:
 1. Output ONLY the JSON object â€” no markdown, no explanation, no ```json fences.
 2. Generate meaningful, descriptive node IDs (e.g. "pdf_extractor", "llm_planner", not "node1").
-3. Use the exact camelCase field names shown in the schema.
-4. Every edge must connect two real node ids in the graph.
-5. Ensure the graph is a DAG â€” no cycles.
-6. If the user's instruction implies a file trigger, use FileWatcherNode.
-7. If multiple nodes feed into ChromaDbStoreNode, always use inputMap.
-8. Make reasonable assumptions for unspecified details (model name, output paths, etc.).
-9. Do not use node types outside the 9 defined above â€” if the user asks for something
-   that maps to no node type (e.g. "send email"), explain in a comment field that it
-   is outside the vocabulary â€” actually you cannot add comment fields, just omit it
-   and use a LocalFileWriterNode to write the email content to a file as a workaround.
+3. Generate a highly descriptive, concise `name` for the graph that represents what it does.
+4. Use the exact camelCase field names shown in the schema.
+5. Every edge must connect two real node ids in the graph.
+6. Ensure the graph is a DAG â€” no cycles.
+7. If the user's instruction implies a file trigger, use FileWatcherNode.
+8. If multiple nodes feed into ChromaDbStoreNode, always use inputMap.
+9. Make reasonable assumptions for unspecified details (model name, output paths, etc.).
+10. Do not use node types outside the 12 defined above.
+11. CRITICAL: When configuring OllamaSelectorNode, ALWAYS act as an expert Prompt Engineer. Write complex, comprehensive `promptTemplate` values with persona, step-by-step instructions, and formatting rules.
 "#;

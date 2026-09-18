@@ -5,7 +5,6 @@ import { TopBar } from './components/TopBar';
 import { Sidebar } from './components/Sidebar';
 import { NodePalette } from './components/NodePalette';
 import { GraphCanvas } from './components/GraphCanvas';
-import { NodeInspector } from './components/NodeInspector';
 import { ChatPanel } from './components/ChatPanel';
 import { LogPanel } from './components/LogPanel';
 import { ModelManager } from './components/ModelManager';
@@ -22,7 +21,6 @@ type OllamaStatus =
 
 export const App: React.FC = () => {
   const activePanel = useWorkflowStore((s) => s.activePanel);
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const [showWizard, setShowWizard] = useState<boolean | null>(null);
   const theme = useWorkflowStore((s) => s.theme);
 
@@ -143,21 +141,6 @@ export const App: React.FC = () => {
               <GraphCanvas />
             </div>
 
-            {/* Floating Inspector (Right Side) */}
-            <div style={{ 
-              display: (activePanel === 'inspector' || (!activePanel && selectedNodeId)) ? 'block' : 'none', 
-              position: 'absolute', 
-              right: 16, 
-              top: 16, 
-              bottom: 16, 
-              width: 320, 
-              boxShadow: '0 8px 32px rgba(0,0,0,0.2)', 
-              borderRadius: 12, 
-              overflow: 'hidden',
-              zIndex: 10 
-            }}>
-              <NodeInspector />
-            </div>
           </div>
         </div>
       </div>

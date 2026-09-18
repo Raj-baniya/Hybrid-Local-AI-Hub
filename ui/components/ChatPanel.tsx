@@ -18,11 +18,12 @@ export const ChatPanel: React.FC = () => {
 
   const {
     status,
+    messages, addMessage, clearHistory,
     instruction: prompt, setInstruction: setPrompt,
     model, setModel,
-    temperature, setTemperature,
     isEditMode, setIsEditMode,
     resultGraph: generatedGraph,
+    resultMode, resultPrompt,
     errorMessage: error,
     startGeneration, setSuccess, setError, reset
   } = useChatStore();
@@ -69,27 +70,33 @@ export const ChatPanel: React.FC = () => {
       return;
     }
 
-    startGeneration();
+    addMessage({ role: 'user', content: prompt });
+    const userPrompt = prompt;
+    setPrompt(""); // Clear input box
+
+    startGeneration(isEditMode, userPrompt);
     const newTaskId = crypto.randomUUID();
     setTaskId(newTaskId);
 
     const isEdit = isEditMode;
     const currentGraph = isEditMode ? getActiveGraph() : null;
+    
+    // Construct the payload message history by taking existing + the new one
+    const payloadMessages = [...messages, { role: 'user', content: userPrompt }];
 
     invoke<Graph>(isEdit ? 'chat_edit' : 'chat_generate', isEdit ? {
-      instruction: prompt,
+      messages: payloadMessages,
       existingGraph: currentGraph,
       model,
-      temperature,
       taskId: newTaskId,
     } : {
-      instruction: prompt,
+      messages: payloadMessages,
       model,
-      temperature,
       taskId: newTaskId,
     })
       .then((result) => {
         console.log("[DIAGNOSTIC] Generation promise RESOLVED!", result);
+        addMessage({ role: 'assistant', content: `Generated graph: ${result.name || 'Untitled'} (${result.nodes.length} nodes)` });
         setSuccess(result);
       })
       .catch((err: any) => {
@@ -100,13 +107,35 @@ export const ChatPanel: React.FC = () => {
       });
   };
 
-  const handleLoadOntoCanvas = (inNewTab = false) => {
+  const handleLoadOntoCanvas = async (inNewTab = false) => {
     if (!generatedGraph) return;
 
+    // Use generated name if available, otherwise fallback
+    const fallbackSource = resultPrompt || (messages.length > 0 ? messages[messages.length - 1].content : "");
+    const safePrompt = fallbackSource.slice(0, 20).replace(/[<>:"/\\|?*]/g, '').trim();
+    const uniqueId = Math.random().toString(36).substring(2, 6);
+    
+    // In edit mode, we want to overwrite the existing agent. We use the active tab's title to do this.
+    // If not in edit mode, we use the LLM-provided name, or a generated string if missing.
+    let agentName = generatedGraph.name || `AI - ${safePrompt} - ${uniqueId}`;
+    
+    if (resultMode) {
+      const activeTab = useWorkflowStore.getState().tabs.find(t => t.id === useWorkflowStore.getState().activeTabId);
+      if (activeTab) {
+        agentName = activeTab.title;
+      }
+    }
+
+    try {
+      await invoke('save_agent', { name: agentName, graph: generatedGraph });
+    } catch (err) {
+      console.error("Failed to auto-save generated agent:", err);
+    }
+
     if (inNewTab) {
-      createTab(`AI: ${prompt.slice(0, 20)}...`, generatedGraph);
+      createTab(agentName, generatedGraph);
     } else {
-      loadGraphIntoActiveTab(generatedGraph, `AI: ${prompt.slice(0, 20)}...`);
+      loadGraphIntoActiveTab(generatedGraph, agentName);
     }
     setActivePanel('none');
     reset();
@@ -145,15 +174,55 @@ export const ChatPanel: React.FC = () => {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        
+        {/* Chat History View */}
+        {messages.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Conversation History</span>
+              <button 
+                onClick={() => {
+                  if (status === 'generating' || loading) return;
+                  clearHistory();
+                }}
+                disabled={status === 'generating' || loading}
+                style={{ background: 'transparent', border: 'none', color: (status === 'generating' || loading) ? 'var(--text-disabled)' : 'var(--accent-rose)', fontSize: 11, cursor: (status === 'generating' || loading) ? 'not-allowed' : 'pointer' }}
+              >
+                Clear
+              </button>
+            </div>
+            {messages.map((msg, idx) => (
+              <div 
+                key={idx} 
+                style={{ 
+                  padding: '10px 14px', 
+                  borderRadius: 8, 
+                  fontSize: 12, 
+                  background: msg.role === 'user' ? 'rgba(56, 189, 248, 0.1)' : 'var(--bg-secondary)',
+                  border: msg.role === 'user' ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid var(--border-medium)',
+                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '90%',
+                  color: msg.role === 'user' ? 'var(--text-primary)' : 'var(--text-secondary)'
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 4, color: msg.role === 'user' ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                  {msg.role === 'user' ? 'You' : 'Agent'}
+                </div>
+                <div>{msg.content}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div>
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-            Natural Language Instruction
+            {messages.length === 0 ? "Initial Instruction" : "Refinement Instruction"}
           </label>
           <textarea
-            rows={5}
+            rows={3}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g. Watch my ./gym_intake folder for PDFs, extract text, formulate a workout plan using llama3.2, and write the plan to ./output/plan.txt"
+            placeholder={messages.length === 0 ? "e.g. Watch my ./gym folder for PDFs..." : "e.g. Add a node to also write to a CSV file"}
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -196,21 +265,6 @@ export const ChatPanel: React.FC = () => {
                 ))
               )}
             </select>
-          </div>
-
-          <div style={{ width: 100 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-              Temp ({temperature})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={temperature}
-              onChange={(e) => setTemperature(parseFloat(e.target.value))}
-              style={{ width: '100%', accentColor: 'var(--accent-cyan)' }}
-            />
           </div>
         </div>
 
@@ -296,22 +350,45 @@ export const ChatPanel: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button
-                className="btn btn-success"
-                style={{ justifyContent: 'center' }}
-                onClick={() => handleLoadOntoCanvas(false)}
-              >
-                <ArrowRight size={14} />
-                Load onto Active Canvas
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{ justifyContent: 'center' }}
-                onClick={() => handleLoadOntoCanvas(true)}
-              >
-                <RefreshCw size={14} />
-                Open in New Tab
-              </button>
+              {resultMode ? (
+                <>
+                  <button
+                    className="btn btn-success"
+                    style={{ justifyContent: 'center' }}
+                    onClick={() => handleLoadOntoCanvas(false)}
+                  >
+                    <ArrowRight size={14} />
+                    Update Active Canvas
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ justifyContent: 'center' }}
+                    onClick={() => handleLoadOntoCanvas(true)}
+                  >
+                    <RefreshCw size={14} />
+                    Open as New Workflow
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-success"
+                    style={{ justifyContent: 'center' }}
+                    onClick={() => handleLoadOntoCanvas(true)}
+                  >
+                    <ArrowRight size={14} />
+                    Open in New Tab
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    style={{ justifyContent: 'center', background: 'transparent', border: '1px solid var(--accent-rose)', color: 'var(--accent-rose)' }}
+                    onClick={() => handleLoadOntoCanvas(false)}
+                  >
+                    <RefreshCw size={14} />
+                    Overwrite Active Canvas
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

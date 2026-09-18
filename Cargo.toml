@@ -34,6 +34,8 @@ sysinfo = "0.30"
 futures = "0.3"
 async-trait = "0.1"
 base64 = "0.23.1"
+regex = "1.13.1"
+shlex = "2.0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

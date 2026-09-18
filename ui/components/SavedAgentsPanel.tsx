@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useWorkflowStore } from '../store/workflowStore';
-import { Bot, Terminal, Edit3, X, Loader2, RefreshCw, Download } from 'lucide-react';
 import { Graph } from '../schema/graphSchema';
+import { Bot, X, Download, Play, RefreshCw, Loader2, Edit3, Terminal, Copy } from 'lucide-react';
 
 export const SavedAgentsPanel: React.FC = () => {
   const setActivePanel = useWorkflowStore((s) => s.setActivePanel);
@@ -11,6 +11,8 @@ export const SavedAgentsPanel: React.FC = () => {
   const [agents, setAgents] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewingOutput, setViewingOutput] = useState<{name: string, text: string, isPlaceholder?: boolean} | null>(null);
+  const [cliCommand, setCliCommand] = useState<string | null>(null);
 
   const fetchAgents = async () => {
     setLoading(true);
@@ -36,34 +38,107 @@ export const SavedAgentsPanel: React.FC = () => {
       setActivePanel('none');
     } catch (err: any) {
       setError(`Failed to open agent: ${err}`);
+      throw err;
     }
   };
 
-  const handleRunInTerminal = async (name: string) => {
+  const handleRunAgent = async (name: string) => {
     try {
-      await invoke('launch_agent_terminal', { name });
+      await handleOpenInCanvas(name);
+      useWorkflowStore.getState().setPreRunDialogOpen(true);
     } catch (err: any) {
-      setError(`Failed to launch terminal: ${err}`);
+      // Error already set by handleOpenInCanvas
     }
   };
 
-  const handleDownloadOutput = async (name: string) => {
+  const handleViewOutput = async (name: string) => {
     try {
+      setLoading(true);
       const output = await invoke<string>('get_agent_output', { name });
+      setViewingOutput({ name, text: output });
+    } catch (err: any) {
+      const errStr = typeof err === 'string' ? err : err.message || '';
+      if (errStr.includes("No saved output found")) {
+        setViewingOutput({ name, text: "Execute to get output", isPlaceholder: true });
+      } else {
+        setError(`Failed to load output: ${errStr}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRenameAgent = async (oldName: string) => {
+    const newName = window.prompt(`Rename agent '${oldName}' to:`, oldName);
+    if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+    
+    setLoading(true);
+    try {
+      await invoke('rename_agent', { oldName, newName: newName.trim() });
+      await fetchAgents();
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : err.message || 'Failed to rename agent');
+      setLoading(false);
+    }
+  };
+
+  const handleShowCliCommand = async (name: string) => {
+    try {
+      const path = await invoke<string>('get_agent_path', { name });
+      const command = await invoke<string>('get_cli_command', { agentPath: path });
+      setCliCommand(command);
+    } catch (err: any) {
+      setError("Failed to get CLI path");
+    }
+  };
+
+  const handleDownloadOutput = async () => {
+    if (!viewingOutput || viewingOutput.isPlaceholder) return;
+    try {
       const { save } = await import('@tauri-apps/plugin-dialog');
       const outputPath = await save({
-        title: `Save output for ${name}`,
+        title: `Save output for ${viewingOutput.name}`,
         filters: [{ name: 'Text File', extensions: ['txt', 'md'] }],
-        defaultPath: `${name}_output.txt`,
+        defaultPath: `${viewingOutput.name}_output.txt`,
       });
       if (outputPath) {
-        await invoke('save_text_file', { path: outputPath, text: output });
-        alert("Output successfully saved!");
+        await invoke('save_text_file', { path: outputPath, text: viewingOutput.text });
       }
     } catch (err: any) {
       alert(typeof err === 'string' ? err : "Failed to download output: " + err.message);
     }
   };
+
+  if (viewingOutput) {
+    return (
+      <div className="animate-slide-in-right" style={{ width: '100%', height: '100%', background: 'var(--bg-card)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Terminal size={18} color="var(--accent-cyan)" />
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Output: {viewingOutput.name}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button 
+              onClick={handleDownloadOutput} 
+              style={{ background: 'transparent', border: 'none', color: viewingOutput.isPlaceholder ? 'var(--text-disabled)' : 'var(--text-muted)', cursor: viewingOutput.isPlaceholder ? 'not-allowed' : 'pointer' }} 
+              title="Download Output"
+              disabled={viewingOutput.isPlaceholder}
+            >
+              <Download size={16} />
+            </button>
+            <button onClick={() => setViewingOutput(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 18, background: 'var(--bg-body)' }}>
+          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 13, color: 'var(--text-primary)', margin: 0 }}>
+            {viewingOutput.text}
+          </pre>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -111,19 +186,34 @@ export const SavedAgentsPanel: React.FC = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {agents.map((agent) => (
-              <div key={agent} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
-                  {agent}
+              <div key={agent} style={{ background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ padding: 8, background: 'rgba(56,189,248,0.1)', borderRadius: 8, color: 'var(--accent-cyan)' }}>
+                      <Bot size={16} />
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-word', lineHeight: 1.3 }}>
+                      {agent}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button onClick={() => handleShowCliCommand(agent)} title="Show CLI Command" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex' }}>
+                      <Terminal size={14} />
+                    </button>
+                    <button onClick={() => handleRenameAgent(agent)} title="Rename Agent" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex' }}>
+                      <Edit3 size={14} />
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleOpenInCanvas(agent)}>
-                    <Edit3 size={14} /> Open
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <button className="btn btn-secondary" style={{ fontSize: 11, padding: '6px 0', justifyContent: 'center' }} onClick={() => handleOpenInCanvas(agent)}>
+                    <Edit3 size={12} /> Open
                   </button>
-                  <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleRunInTerminal(agent)}>
-                    <Terminal size={14} /> Run
+                  <button className="btn btn-primary" style={{ fontSize: 11, padding: '6px 0', justifyContent: 'center' }} onClick={() => handleRunAgent(agent)}>
+                    <Play size={12} /> Run
                   </button>
-                  <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} title="Download latest output" onClick={() => handleDownloadOutput(agent)}>
-                    <Download size={14} /> Output
+                  <button className="btn btn-secondary" style={{ fontSize: 11, padding: '6px 0', justifyContent: 'center' }} onClick={() => handleViewOutput(agent)}>
+                    Output
                   </button>
                 </div>
               </div>
@@ -131,6 +221,35 @@ export const SavedAgentsPanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* CLI Command Modal */}
+      {cliCommand && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: 'var(--bg-panel)', padding: 24, borderRadius: 12, width: 500, border: '1px solid var(--border-medium)' }}>
+            <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-primary)' }}>Run via Terminal</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
+              You can run this agent autonomously from your terminal without opening the GUI.<br/><br/>
+              <span style={{ color: 'var(--text-muted)' }}>We have auto-generated the exact command you need to run, pointing directly to the compiled executable and your saved agent file:</span>
+            </p>
+            <div style={{ background: 'var(--bg-card)', padding: 12, borderRadius: 6, border: '1px solid var(--border-subtle)', fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-cyan)', wordBreak: 'break-all', marginBottom: 16 }}>
+              {cliCommand}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button className="btn btn-secondary" onClick={() => setCliCommand(null)}>Close</button>
+              <button className="btn btn-primary" onClick={async () => { 
+                try {
+                  await navigator.clipboard.writeText(cliCommand); 
+                  setCliCommand(null);
+                } catch (err) {
+                  alert("Failed to copy to clipboard.");
+                }
+              }}>
+                <Copy size={14}/> Copy to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

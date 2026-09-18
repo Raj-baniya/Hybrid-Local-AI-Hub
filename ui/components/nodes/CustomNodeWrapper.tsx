@@ -1,5 +1,6 @@
 import React from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, NodeToolbar } from '@xyflow/react';
+import { NodeInspector } from '../NodeInspector';
 import { useWorkflowStore } from '../../store/workflowStore';
 import { CheckCircle, AlertCircle, Clock, Loader2 } from 'lucide-react';
 
@@ -27,6 +28,7 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
   children,
 }) => {
   const status = useWorkflowStore((s) => s.nodeStatusMap[id]);
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useWorkflowStore((s) => s.setSelectedNodeId);
 
   const getStatusBadge = () => {
@@ -65,7 +67,12 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
   };
 
   return (
-    <div
+    <>
+      <NodeToolbar isVisible={selected && selectedNodeId === id} position={Position.Bottom} offset={15}>
+        <NodeInspector />
+      </NodeToolbar>
+      <div
+      className="custom-node-card"
       onClick={() => setSelectedNodeId(id)}
       style={{
         width: 280,
@@ -142,5 +149,6 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
         </div>
       ))}
     </div>
+    </>
   );
 };

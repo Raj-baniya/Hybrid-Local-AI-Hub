@@ -18,7 +18,11 @@ use hybrid_local_ai_hub::ollama::{ModelInfo, OllamaClient, OllamaStatus, check_o
 use hybrid_local_ai_hub::schema::Graph;
 use hybrid_local_ai_hub::validate;
 
-// â”€â”€â”€ Shared state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Shared state & helpers ──────────────────────────────────────────────────
+
+fn is_valid_filename(name: &str) -> bool {
+    !name.chars().any(|c| c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*')
+}
 
 /// Tracks in-progress model pulls so they can be cancelled.
 #[derive(Default)]
@@ -43,7 +47,35 @@ pub struct ExecutorConfigPayload {
     pub llm_timeout_secs: Option<u64>,
 }
 
-// â”€â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Execution Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+#[tauri::command]
+pub fn get_cli_command(agent_path: String) -> String {
+    let escaped_path = agent_path.replace("'", "''");
+    
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            // Check if hybrid-hub.exe exists in the same directory (like target/release)
+            // or in a parent directory (like target/release vs target/release/bundle)
+            let sibling1 = dir.join("hybrid-hub.exe");
+            let sibling2 = dir.join("../../hybrid-hub.exe");
+            let sibling3 = dir.join("../../../target/release/hybrid-hub.exe"); // from src-tauri dev
+
+            if sibling1.exists() {
+                return format!("& '{}' run '{}'", sibling1.display().to_string().replace("'", "''"), escaped_path);
+            } else if sibling2.exists() {
+                return format!("& '{}' run '{}'", sibling2.display().to_string().replace("'", "''"), escaped_path);
+            } else if sibling3.exists() {
+                return format!("& '{}' run '{}'", sibling3.display().to_string().replace("'", "''"), escaped_path);
+            }
+        }
+    }
+    
+    // Fallback if binary not found, suggest using cargo run
+    format!("cargo run --bin hybrid-hub -- run '{}'", escaped_path)
+}
+
+// â”€â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// 1. Run a workflow graph end-to-end.
 #[tauri::command]
@@ -163,6 +195,16 @@ pub async fn cancel_pull(
 }
 
 #[tauri::command]
+pub async fn delete_model(
+    model_name: String,
+    ollama_url: Option<String>,
+) -> Result<(), String> {
+    let url = ollama_url.unwrap_or_else(|| "http://127.0.0.1:11434".to_string());
+    let client = OllamaClient::new_no_timeout(&url);
+    client.delete_model(&model_name).await.map_err(|e| format!("{e}"))
+}
+
+#[tauri::command]
 pub async fn cancel_llm_task(
     state: tauri::State<'_, ChatState>,
     task_id: String,
@@ -178,10 +220,9 @@ pub async fn cancel_llm_task(
 #[tauri::command]
 pub async fn chat_generate(
     state: tauri::State<'_, ChatState>,
-    instruction: String,
+    messages: Vec<hybrid_local_ai_hub::schema::ChatMessage>,
     model: Option<String>,
     ollama_url: Option<String>,
-    temperature: Option<f32>,
     task_id: Option<String>,
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
@@ -196,15 +237,14 @@ pub async fn chat_generate(
         return Err(format!("Model '{m}' is not installed. Installed models: {:?}", installed));
     }
 
-    let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
-    
+
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     if let Some(id) = &task_id {
         state.active_tasks.lock().await.insert(id.clone(), tx);
     }
 
     let result = tokio::select! {
-        res = compiler::generate_workflow(&instruction, &m, &u, t) => res,
+        res = compiler::generate_workflow(&messages, &m, &u) => res,
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
 
@@ -218,11 +258,10 @@ pub async fn chat_generate(
 #[tauri::command]
 pub async fn chat_edit(
     state: tauri::State<'_, ChatState>,
-    instruction: String,
+    messages: Vec<hybrid_local_ai_hub::schema::ChatMessage>,
     existing_graph: Graph,
     model: Option<String>,
     ollama_url: Option<String>,
-    temperature: Option<f32>,
     task_id: Option<String>,
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
@@ -237,15 +276,14 @@ pub async fn chat_edit(
         return Err(format!("Model '{m}' is not installed. Installed models: {:?}", installed));
     }
 
-    let t = temperature.unwrap_or(compiler::DEFAULT_TEMPERATURE);
-    
+
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     if let Some(id) = &task_id {
         state.active_tasks.lock().await.insert(id.clone(), tx);
     }
 
     let result = tokio::select! {
-        res = compiler::edit_workflow(&instruction, &existing_graph, &m, &u, t) => res,
+        res = compiler::edit_workflow(&messages, &existing_graph, &m, &u) => res,
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
 
@@ -409,8 +447,7 @@ pub fn save_agent(app: tauri::AppHandle, name: String, graph: Graph) -> Result<(
         
     std::fs::create_dir_all(&agents_dir).map_err(|e| format!("Failed to create agents dir: {e}"))?;
     
-    // Reject invalid characters to prevent silent collisions (e.g. a:b vs a?b mapping to same file)
-    if name.chars().any(|c| c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*') {
+    if !is_valid_filename(&name) {
         return Err("Agent name contains invalid characters. Please avoid < > : \" / \\ | ? *".to_string());
     }
     
@@ -429,6 +466,10 @@ pub fn load_agent(app: tauri::AppHandle, name: String) -> Result<Graph, String> 
         .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
         .join("agents");
         
+    if !is_valid_filename(&name) {
+        return Err("Invalid agent name.".to_string());
+    }
+        
     let path = agents_dir.join(format!("{}.json", name));
     if !path.exists() {
         return Err(format!("Agent file not found: {}", path.display()));
@@ -443,6 +484,94 @@ pub fn load_agent(app: tauri::AppHandle, name: String) -> Result<Graph, String> 
     Ok(graph)
 }
 
+// ———————————————————————————————————————————————————————————————————
+// Execution Logs
+// ———————————————————————————————————————————————————————————————————
+
+#[tauri::command]
+pub fn save_execution_log(app: tauri::AppHandle, record: ExecutionRecord) -> Result<(), String> {
+    let logs_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("logs");
+        
+    std::fs::create_dir_all(&logs_dir).map_err(|e| format!("Failed to create logs dir: {e}"))?;
+    
+    let uuid = uuid::Uuid::parse_str(&record.execution_id)
+        .map_err(|e| format!("Invalid execution ID: {e}"))?;
+        
+    // Save file named after the execution_id
+    let path = logs_dir.join(format!("{}.json", uuid.as_simple()));
+    
+    let json_str = serde_json::to_string_pretty(&record)
+        .map_err(|e| format!("Serialization failed: {e}"))?;
+        
+    std::fs::write(&path, json_str)
+        .map_err(|e| format!("Failed to write log file: {e}"))
+}
+
+#[tauri::command]
+pub fn list_execution_logs(app: tauri::AppHandle) -> Result<Vec<ExecutionRecord>, String> {
+    let logs_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("logs");
+        
+    let mut records = Vec::new();
+    if logs_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(logs_dir) {
+            for entry in entries.flatten() {
+                if let Some(ext) = entry.path().extension() {
+                    if ext == "json" {
+                        if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                            if let Ok(record) = serde_json::from_str::<ExecutionRecord>(&content) {
+                                records.push(record);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Sort descending by started_at
+    records.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    
+    Ok(records)
+}
+
+#[tauri::command]
+pub fn rename_agent(app: tauri::AppHandle, old_name: String, new_name: String) -> Result<(), String> {
+    if !is_valid_filename(&old_name) || !is_valid_filename(&new_name) {
+        return Err("Agent name contains invalid characters. Please avoid < > : \" / \\ | ? *".to_string());
+    }
+
+    let agents_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("agents");
+        
+    let old_path = agents_dir.join(format!("{}.json", old_name));
+    let new_path = agents_dir.join(format!("{}.json", new_name));
+    
+    if !old_path.exists() {
+        return Err(format!("Agent file not found: {}", old_path.display()));
+    }
+    if new_path.exists() {
+        return Err(format!("An agent with the name '{}' already exists.", new_name));
+    }
+    
+    std::fs::rename(&old_path, &new_path).map_err(|e| format!("Failed to rename agent file: {e}"))?;
+
+    let outputs_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("outputs");
+    let old_output = outputs_dir.join(format!("{}_output.txt", old_name));
+    let new_output = outputs_dir.join(format!("{}_output.txt", new_name));
+    if old_output.exists() {
+        let _ = std::fs::rename(old_output, new_output);
+    }
+    
+    Ok(())
+}
+
 #[tauri::command]
 pub fn save_agent_output(app: tauri::AppHandle, name: String, output: String) -> Result<(), String> {
     let outputs_dir = app.path().app_local_data_dir()
@@ -451,7 +580,7 @@ pub fn save_agent_output(app: tauri::AppHandle, name: String, output: String) ->
         
     std::fs::create_dir_all(&outputs_dir).map_err(|e| format!("Failed to create outputs dir: {e}"))?;
     
-    if name.chars().any(|c| c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*') {
+    if !is_valid_filename(&name) {
         return Err("Agent name contains invalid characters. Please avoid < > : \" / \\ | ? *".to_string());
     }
     
@@ -465,6 +594,10 @@ pub fn get_agent_output(app: tauri::AppHandle, name: String) -> Result<String, S
         .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
         .join("outputs");
         
+    if !is_valid_filename(&name) {
+        return Err("Invalid agent name.".to_string());
+    }
+        
     let path = outputs_dir.join(format!("{}_output.txt", name));
     if !path.exists() {
         return Err(format!("No saved output found for agent: {}", name));
@@ -474,6 +607,21 @@ pub fn get_agent_output(app: tauri::AppHandle, name: String) -> Result<String, S
 }
 
 #[tauri::command]
+pub fn get_agent_path(app: tauri::AppHandle, name: String) -> Result<String, String> {
+    let agents_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("agents");
+    
+    if !is_valid_filename(&name) {
+        return Err("Invalid agent name.".to_string());
+    }
+        
+    let path = agents_dir.join(format!("{}.json", name));
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+#[allow(unused_variables)]
 pub fn launch_agent_terminal(app: tauri::AppHandle, name: String) -> Result<(), String> {
     #[cfg(not(debug_assertions))]
     {
@@ -541,7 +689,7 @@ pub async fn help_agent_ask(
     }
 
     let result = tokio::select! {
-        res = client.generate(&model, &full_prompt, images, 0.2, false) => res.map_err(|e| format!("Help agent failed: {e}")),
+        res = client.generate(&model, &full_prompt, images, false) => res.map_err(|e| format!("Help agent failed: {e}")),
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
 

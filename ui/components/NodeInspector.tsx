@@ -1,7 +1,7 @@
 import React from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { NodeType } from '../schema/graphSchema';
-import { Trash2, X } from 'lucide-react';
+import { Trash2, X, Activity, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 export const NodeInspector: React.FC = () => {
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
@@ -9,7 +9,8 @@ export const NodeInspector: React.FC = () => {
   const activeTabId = useWorkflowStore((s) => s.activeTabId);
   const tabs = useWorkflowStore((s) => s.tabs);
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
-  const deleteNode = useWorkflowStore((s) => s.deleteNode);
+  const deleteNodes = useWorkflowStore((s) => s.deleteNodes);
+  const nodeStatusMap = useWorkflowStore((s) => s.nodeStatusMap);
 
   const [models, setModels] = React.useState<{ name: string }[]>([]);
 
@@ -25,25 +26,10 @@ export const NodeInspector: React.FC = () => {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const selectedNode = activeTab?.nodes.find((n) => n.id === selectedNodeId);
+  const selectedNodeStatus = selectedNode ? nodeStatusMap[selectedNode.id] : null;
 
   if (!selectedNode) {
-    return (
-      <div
-        style={{
-          width: 320,
-          background: 'var(--bg-card)',
-          borderLeft: '1px solid var(--border-subtle)',
-          padding: 20,
-          color: 'var(--text-muted)',
-          fontSize: 13,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        Select a node to inspect and configure parameters.
-      </div>
-    );
+    return null;
   }
 
   const data = selectedNode.data as NodeType;
@@ -125,16 +111,6 @@ export const NodeInspector: React.FC = () => {
                 </option>
               ))}
             </select>
-            <label style={labelStyle}>Temperature ({data.temperature})</label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.05"
-              value={data.temperature}
-              onChange={(e) => updateNodeData(selectedNode.id, { temperature: parseFloat(e.target.value) })}
-              style={{ width: '100%', accentColor: 'var(--accent-cyan)' }}
-            />
             <label style={labelStyle}>Prompt Template</label>
             <textarea
               rows={6}
@@ -266,19 +242,78 @@ export const NodeInspector: React.FC = () => {
             </div>
           </>
         );
+      case 'WebScraperNode':
+        return (
+          <>
+            <label style={labelStyle}>URL</label>
+            <input
+              type="text"
+              value={data.url}
+              onChange={(e) => updateNodeData(selectedNode.id, { url: e.target.value })}
+              style={inputStyle}
+              placeholder="https://example.com or {{input}}"
+            />
+          </>
+        );
+
+      case 'ShellCommandNode':
+        return (
+          <>
+            <label style={labelStyle}>Command</label>
+            <input
+              type="text"
+              value={data.command}
+              onChange={(e) => updateNodeData(selectedNode.id, { command: e.target.value })}
+              style={inputStyle}
+              placeholder="echo {{input}}"
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <input
+                type="checkbox"
+                checked={data.unsafeRawShell || false}
+                onChange={(e) => updateNodeData(selectedNode.id, { unsafeRawShell: e.target.checked })}
+              />
+              <span style={{ fontSize: 12, color: 'var(--accent-rose)' }}>Unsafe raw shell (allows injection)</span>
+            </div>
+          </>
+        );
+
+      case 'RegexExtractorNode':
+        return (
+          <>
+            <label style={labelStyle}>Regex Pattern</label>
+            <input
+              type="text"
+              value={data.pattern}
+              onChange={(e) => updateNodeData(selectedNode.id, { pattern: e.target.value })}
+              style={inputStyle}
+              placeholder="(?i)Total: \$([0-9.]+)"
+            />
+            <label style={labelStyle}>Capture Group (0 = full match)</label>
+            <input
+              type="number"
+              value={data.group}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                updateNodeData(selectedNode.id, { group: isNaN(val) ? 0 : val });
+              }}
+              style={inputStyle}
+            />
+          </>
+        );
     }
   };
 
   return (
     <div
-      className="animate-slide-in-right"
+      className="nowheel nodrag nopan glass-panel"
       style={{
-        width: 320,
-        background: 'var(--bg-card)',
-        borderLeft: '1px solid var(--border-subtle)',
+        width: 340,
+        maxHeight: 450,
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
+        userSelect: 'text',
+        cursor: 'auto',
       }}
     >
       <div
@@ -304,13 +339,89 @@ export const NodeInspector: React.FC = () => {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {renderFields()}
+
+        {selectedNodeStatus && selectedNodeStatus.status !== 'idle' && (
+          <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: 'var(--text-primary)', fontWeight: 600, fontSize: 12 }}>
+              <Activity size={14} style={{ color: 'var(--accent-cyan)' }} />
+              Live Telemetry
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 11 }}>
+              <span style={{ color: 'var(--text-muted)' }}>Status:</span>
+              <span style={{ 
+                color: selectedNodeStatus.status === 'success' ? 'var(--accent-emerald)' 
+                     : selectedNodeStatus.status === 'failed' ? 'var(--accent-rose)' 
+                     : selectedNodeStatus.status === 'running' ? 'var(--accent-cyan)' 
+                     : 'var(--text-secondary)',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4
+              }}>
+                {selectedNodeStatus.status === 'success' && <CheckCircle size={10} />}
+                {selectedNodeStatus.status === 'failed' && <AlertCircle size={10} />}
+                {selectedNodeStatus.status === 'running' && <Clock size={10} />}
+                {selectedNodeStatus.status.charAt(0).toUpperCase() + selectedNodeStatus.status.slice(1)}
+              </span>
+            </div>
+            
+            {selectedNodeStatus.durationMs && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 11 }}>
+                <span style={{ color: 'var(--text-muted)' }}>Duration:</span>
+                <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{selectedNodeStatus.durationMs} ms</span>
+              </div>
+            )}
+            
+            {selectedNodeStatus.outputPreview && (
+              <div style={{ marginTop: 8 }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Output:</span>
+                <div style={{ 
+                  marginTop: 4, 
+                  padding: 8, 
+                  background: 'var(--bg-secondary)', 
+                  borderRadius: 4, 
+                  fontSize: 11, 
+                  fontFamily: 'monospace', 
+                  color: 'var(--text-primary)',
+                  maxHeight: 120,
+                  overflowY: 'auto',
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  {selectedNodeStatus.outputPreview}
+                </div>
+              </div>
+            )}
+            
+            {selectedNodeStatus.error && (
+              <div style={{ marginTop: 8 }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Error:</span>
+                <div style={{ 
+                  marginTop: 4, 
+                  padding: 8, 
+                  background: 'rgba(244, 63, 94, 0.1)', 
+                  border: '1px solid rgba(244, 63, 94, 0.2)',
+                  borderRadius: 4, 
+                  fontSize: 11, 
+                  fontFamily: 'monospace', 
+                  color: 'var(--accent-rose)',
+                  maxHeight: 80,
+                  overflowY: 'auto'
+                }}>
+                  {selectedNodeStatus.error}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: 14, borderTop: '1px solid var(--border-subtle)' }}>
         <button
           className="btn btn-danger"
           style={{ width: '100%', justifyContent: 'center' }}
-          onClick={() => deleteNode(selectedNode.id)}
+          onClick={() => deleteNodes([selectedNode.id])}
         >
           <Trash2 size={14} />
           Delete Node

@@ -1,4 +1,4 @@
-﻿use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -297,6 +297,9 @@ fn build_readme(graph: &Graph, manifest: &BundleManifest, source_path: &std::pat
                 NodeType::ChromaDbStoreNode(_) => "ChromaDbStoreNode",
                 NodeType::ConditionalRouterNode(_) => "ConditionalRouterNode",
                 NodeType::LocalFileWriterNode(_) => "LocalFileWriterNode",
+                NodeType::WebScraperNode(_) => "WebScraperNode",
+                NodeType::ShellCommandNode(_) => "ShellCommandNode",
+                NodeType::RegexExtractorNode(_) => "RegexExtractorNode",
             };
             format!("- **{}** ({})", n.id, type_name)
         })

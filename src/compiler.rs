@@ -1,11 +1,11 @@
-﻿//! Chat-to-graph compiler core: shared between CLI (`chat.rs`) and GUI IPC (`commands.rs`).
+//! Chat-to-graph compiler core: shared between CLI (`chat.rs`) and GUI IPC (`commands.rs`).
 //!
 //! Generates a valid `Graph` from plain-English instructions using a local LLM via Ollama.
 //! Employs an iterative validation and targeted-repair loop (up to 3 rounds) before returning.
 
 use anyhow::Result;
 use crate::ollama::OllamaClient;
-use crate::schema::Graph;
+use crate::schema::{Graph, ChatMessage};
 use crate::translator_prompt::build_system_prompt;
 use crate::validate::validate_graph;
 
@@ -16,30 +16,37 @@ pub const MAX_REPAIR_ROUNDS: usize = 3;
 
 /// Generate a new workflow graph from plain-English instructions.
 pub async fn generate_workflow(
-    instruction: &str,
+    messages: &[ChatMessage],
     model: &str,
     ollama_url: &str,
-    temperature: f32,
 ) -> Result<Graph, String> {
-    let user_message = format!("Generate a workflow graph for: {}", instruction);
-    run_compiler_loop(&user_message, model, ollama_url, temperature).await
+    let mut user_message = String::from("Generate a workflow graph for the following conversation:\n");
+    for msg in messages {
+        user_message.push_str(&format!("{}: {}\n", msg.role.to_uppercase(), msg.content));
+    }
+    run_compiler_loop(&user_message, model, ollama_url).await
 }
 
 /// Modify an existing workflow graph according to plain-English instructions.
 pub async fn edit_workflow(
-    instruction: &str,
+    messages: &[ChatMessage],
     existing: &Graph,
     model: &str,
     ollama_url: &str,
-    temperature: f32,
 ) -> Result<Graph, String> {
     let existing_json = serde_json::to_string_pretty(existing)
         .map_err(|e| format!("Failed to serialize existing graph: {e}"))?;
+    
+    let mut conversation = String::new();
+    for msg in messages {
+        conversation.push_str(&format!("{}: {}\n", msg.role.to_uppercase(), msg.content));
+    }
+    
     let user_message = format!(
-        "Existing workflow JSON:\n{}\n\nModification request: {}",
-        existing_json, instruction
+        "Existing workflow JSON:\n{}\n\nModification request conversation:\n{}",
+        existing_json, conversation
     );
-    run_compiler_loop(&user_message, model, ollama_url, temperature).await
+    run_compiler_loop(&user_message, model, ollama_url).await
 }
 
 /// Core generation, validation, and multi-round repair loop.
@@ -47,7 +54,6 @@ async fn run_compiler_loop(
     user_message: &str,
     model: &str,
     ollama_url: &str,
-    temperature: f32,
 ) -> Result<Graph, String> {
     let client = OllamaClient::new(ollama_url);
 
@@ -78,7 +84,7 @@ async fn run_compiler_loop(
         };
 
         let raw_output = client
-            .generate(model, &prompt, vec![], temperature, false)
+            .generate(model, &prompt, vec![], false)
             .await
             .map_err(|e| format!("LLM generation request failed: {e}"))?;
 

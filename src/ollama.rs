@@ -96,7 +96,6 @@ impl OllamaClient {
         model: &str,
         prompt: &str,
         images: Vec<String>,
-        temperature: f32,
         json_mode: bool,
     ) -> Result<String> {
         let req = GenerateRequest {
@@ -105,7 +104,7 @@ impl OllamaClient {
             stream: false,
             format: if json_mode { Some("json") } else { None },
             images: images.iter().map(|s| s.as_str()).collect(),
-            options: GenerateOptions { temperature },
+            options: GenerateOptions { temperature: 0.2 },
         };
         let resp = self
             .http
@@ -235,6 +234,26 @@ impl OllamaClient {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Deletes a model from the local Ollama instance.
+    pub async fn delete_model(&self, model: &str) -> Result<()> {
+        let req_body = json!({ "name": model });
+        let resp = self
+            .http
+            .delete(format!("{}/api/delete", self.base_url))
+            .json(&req_body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("Failed to send delete request: {e}"))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Ollama delete failed ({status}): {text}"));
+        }
+
         Ok(())
     }
 

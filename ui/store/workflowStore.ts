@@ -39,8 +39,24 @@ export interface ExecutionRecord {
   }>;
 }
 
+interface HistorySnapshot {
+  tabs: TabData[];
+  activeTabId: string;
+}
+
+interface HistoryState {
+  past: HistorySnapshot[];
+  future: HistorySnapshot[];
+}
+
 interface WorkflowState {
   tabs: TabData[];
+  history: HistoryState;
+  pushHistory: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
   activeTabId: string;
   selectedNodeId: string | null;
   activePanel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help';
@@ -71,7 +87,7 @@ interface WorkflowState {
   onConnect: (connection: Connection) => boolean;
   addNode: (type: NodeType['type'], position?: { x: number; y: number }) => string;
   updateNodeData: (nodeId: string, data: Partial<NodeType>) => void;
-  deleteNode: (nodeId: string) => void;
+  deleteNodes: (nodeIds: string[]) => void;
   autoLayout: (direction?: 'LR' | 'TB') => void;
 
   // Selection & UI
@@ -151,6 +167,43 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     },
   ],
   activeTabId: initialTabId,
+  history: { past: [], future: [] },
+  
+  pushHistory: () => {
+    const { tabs, activeTabId, history } = get();
+    const snapshot = { tabs: JSON.parse(JSON.stringify(tabs)), activeTabId };
+    const newPast = [...history.past, snapshot].slice(-50);
+    set({ history: { past: newPast, future: [] } });
+  },
+  undo: () => {
+    const { tabs, activeTabId, history } = get();
+    if (history.past.length === 0) return;
+    const previous = history.past[history.past.length - 1];
+    const newPast = history.past.slice(0, -1);
+    const currentSnapshot = { tabs: JSON.parse(JSON.stringify(tabs)), activeTabId };
+    set({
+      tabs: previous.tabs,
+      activeTabId: previous.activeTabId,
+      history: { past: newPast, future: [currentSnapshot, ...history.future] },
+      selectedNodeId: null,
+    });
+  },
+  redo: () => {
+    const { tabs, activeTabId, history } = get();
+    if (history.future.length === 0) return;
+    const next = history.future[0];
+    const newFuture = history.future.slice(1);
+    const currentSnapshot = { tabs: JSON.parse(JSON.stringify(tabs)), activeTabId };
+    set({
+      tabs: next.tabs,
+      activeTabId: next.activeTabId,
+      history: { past: [...history.past, currentSnapshot], future: newFuture },
+      selectedNodeId: null,
+    });
+  },
+  canUndo: () => get().history.past.length > 0,
+  canRedo: () => get().history.future.length > 0,
+
   selectedNodeId: null,
   activePanel: 'none',
   nodeStatusMap: {},
@@ -186,15 +239,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   requestCloseTab: (tabId) => {
-    const state = get();
-    const tab = state.tabs.find(t => t.id === tabId);
-    if (!tab) return;
-    
-    if (tab.isDirty) {
-      set({ tabToClose: tabId, isSavePromptOpen: true });
-    } else {
-      get().closeTab(tabId);
-    }
+    get().closeTab(tabId);
   },
 
   confirmCloseTab: () => {
@@ -282,7 +327,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   onConnect: (connection) => {
-    const { tabs, activeTabId } = get();
+    const { tabs, activeTabId, pushHistory } = get();
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (!activeTab || !connection.source || !connection.target) return false;
 
@@ -290,6 +335,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (wouldCreateCycle(activeTab.nodes, activeTab.edges, { source: connection.source, target: connection.target })) {
       return false; // Reject cycle
     }
+
+    pushHistory();
 
     const newEdges = addEdge(
       {
@@ -309,9 +356,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   addNode: (type, position) => {
-    const { tabs, activeTabId } = get();
+    const { tabs, activeTabId, pushHistory } = get();
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (!activeTab) return '';
+
+    pushHistory();
 
     const id = `${type.toLowerCase().replace('node', '')}_${Date.now().toString().slice(-4)}`;
     const pos = position || {
@@ -331,7 +380,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         defaultData = { type, imagePath: './image.png' };
         break;
       case 'OllamaSelectorNode':
-        defaultData = { type, model: 'llama3.2', temperature: 0.7, promptTemplate: 'Summarize: {{input}}', jsonMode: false };
+        defaultData = { type, model: 'llama3.2', promptTemplate: 'Summarize: {{input}}', jsonMode: false };
         break;
       case 'LocalEmbedderNode':
         defaultData = { type, model: 'nomic-embed-text' };
@@ -347,6 +396,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         break;
       case 'LocalFileWriterNode':
         defaultData = { type, outputPath: './output/result.txt', append: false };
+        break;
+      case 'WebScraperNode':
+        defaultData = { type, url: 'https://example.com' };
+        break;
+      case 'ShellCommandNode':
+        defaultData = { type, command: 'echo "Hello World"' };
+        break;
+      case 'RegexExtractorNode':
+        defaultData = { type, pattern: '.*', group: 0 };
+        break;
+      default:
+        // Fallback for typescript compiler
+        defaultData = { type: 'TextInputNode', text: '' } as unknown as NodeType;
         break;
     }
 
@@ -370,7 +432,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   updateNodeData: (nodeId, partialData) => {
-    const { tabs, activeTabId } = get();
+    const { tabs, activeTabId, pushHistory } = get();
+    pushHistory();
     set({
       tabs: tabs.map((tab) =>
         tab.id === activeTabId
@@ -386,20 +449,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     });
   },
 
-  deleteNode: (nodeId) => {
-    const { tabs, activeTabId, selectedNodeId } = get();
+  deleteNodes: (nodeIds) => {
+    const { tabs, activeTabId, selectedNodeId, pushHistory } = get();
+    pushHistory();
     set({
       tabs: tabs.map((tab) =>
         tab.id === activeTabId
           ? {
               ...tab,
-              nodes: tab.nodes.filter((n) => n.id !== nodeId),
-              edges: tab.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+              nodes: tab.nodes.filter((n) => !nodeIds.includes(n.id)),
+              edges: tab.edges.filter((e) => !nodeIds.includes(e.source) && !nodeIds.includes(e.target)),
               isDirty: true,
             }
           : tab
       ),
-      selectedNodeId: selectedNodeId === nodeId ? null : selectedNodeId,
+      selectedNodeId: selectedNodeId && nodeIds.includes(selectedNodeId) ? null : selectedNodeId,
     });
   },
 

@@ -20,7 +20,6 @@ fn ollama_node(id: &str, prompt: &str) -> GraphNode {
         position: None,
         data: NodeType::OllamaSelectorNode(OllamaSelectorConfig {
             model: "llama3.2".to_string(),
-            temperature: 0.7,
             prompt_template: prompt.to_string(),
             json_mode: false,
         }),
@@ -105,6 +104,7 @@ fn edge(id: &str, source: &str, target: &str) -> GraphEdge {
 fn simple_graph(nodes: Vec<GraphNode>, edges: Vec<GraphEdge>) -> Graph {
     Graph {
         version: 1,
+        name: Some("Test Graph".to_string()),
         nodes,
         edges,
     }
@@ -327,6 +327,7 @@ fn graph_json_round_trips() {
 
     let graph = Graph {
         version: 1,
+        name: Some("Test Graph".to_string()),
         nodes,
         edges: vec![],
     };

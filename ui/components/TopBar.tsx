@@ -42,6 +42,7 @@ export const TopBar: React.FC = () => {
   const isPreRunDialogOpen = useWorkflowStore((s) => s.isPreRunDialogOpen);
   const setPreRunDialogOpen = useWorkflowStore((s) => s.setPreRunDialogOpen);
 
+  const [preflightStatus, setPreflightStatus] = React.useState<string | null>(null);
   const [executionModalOutput, setExecutionModalOutput] = React.useState<string | null>(null);
 
   useEffect(() => {
@@ -80,6 +81,44 @@ export const TopBar: React.FC = () => {
     clearNodeStatuses();
 
     try {
+      // 1. Scan graph for required models
+      const requiredModels = new Set<string>();
+      graph.nodes.forEach(n => {
+        if (n.data.type === 'OllamaSelectorNode') {
+          const m = n.data.model || 'llama3.2';
+          requiredModels.add(m);
+        }
+      });
+
+      // 2. Check installed models
+      const status = await invoke<any>('cmd_check_ollama');
+      if (status.state === 'Ready' || status.state === 'NoModels') {
+        const installed = (status.models || []).map((m: any) => m.name);
+        for (const m of requiredModels) {
+          if (!installed.includes(m)) {
+            // 3. Auto-pull missing model
+            setPreflightStatus(`Pulling required model '${m}'...`);
+            const unlisten = await listen<any>('pull-progress', (event) => {
+              if (event.payload.model === m) {
+                 if (event.payload.total && event.payload.completed) {
+                   const percent = ((event.payload.completed / event.payload.total) * 100).toFixed(1);
+                   setPreflightStatus(`Pulling '${m}': ${event.payload.status} (${percent}%)`);
+                 } else {
+                   setPreflightStatus(`Pulling '${m}': ${event.payload.status}`);
+                 }
+              }
+            });
+            try {
+              await invoke('pull_model', { modelName: m });
+            } finally {
+              unlisten();
+            }
+          }
+        }
+      }
+
+      setPreflightStatus(null);
+
       const record = await invoke<ExecutionRecord>('run_graph', { graph });
       setExecutionRecord(record);
 
@@ -106,7 +145,11 @@ export const TopBar: React.FC = () => {
          // Auto-save the output internally
          const activeTab = useWorkflowStore.getState().tabs.find(t => t.id === useWorkflowStore.getState().activeTabId);
          if (activeTab && activeTab.title) {
-            await invoke('save_agent_output', { name: activeTab.title, output: finalOutput });
+            try {
+               await invoke('save_agent_output', { name: activeTab.title, output: finalOutput });
+            } catch (err) {
+               console.warn("Could not auto-save output, tab name might be invalid:", err);
+            }
          }
       }
 
@@ -122,6 +165,7 @@ export const TopBar: React.FC = () => {
       alert(`Execution failed:\n${typeof err === 'string' ? err : err.message}`);
     } finally {
       setIsExecuting(false);
+      setPreflightStatus(null);
     }
   };
 
@@ -183,6 +227,22 @@ export const TopBar: React.FC = () => {
           onConfirm={handleRunConfirm}
           onCancel={() => setPreRunDialogOpen(false)} 
         />
+      )}
+
+      {preflightStatus && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{ background: 'var(--bg-panel)', padding: 24, borderRadius: 12, border: '1px solid var(--border-medium)', color: 'var(--text-primary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Loader2 className="spinning" size={24} color="var(--accent-cyan)" />
+              <div style={{ fontSize: 16 }}>{preflightStatus}</div>
+            </div>
+          </div>
+        </div>
       )}
 
       {executionModalOutput !== null && (

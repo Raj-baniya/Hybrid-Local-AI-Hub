@@ -5,37 +5,43 @@ export type ChatGenerationStatus = "idle" | "generating" | "success" | "error";
 
 interface ChatState {
   status: ChatGenerationStatus;
+  messages: { role: 'user' | 'assistant', content: string }[];
   instruction: string;
   model: string;
-  temperature: number;
   isEditMode: boolean;
   resultGraph: Graph | null;
+  resultMode: boolean | null;
+  resultPrompt: string | null;
   errorMessage: string | null;
   setInstruction: (val: string) => void;
   setModel: (val: string) => void;
-  setTemperature: (val: number) => void;
   setIsEditMode: (val: boolean) => void;
-  startGeneration: () => void;
+  addMessage: (msg: { role: 'user' | 'assistant', content: string }) => void;
+  startGeneration: (mode: boolean, prompt: string) => void;
   setSuccess: (graph: Graph) => void;
   setError: (message: string) => void;
   reset: () => void;
+  clearHistory: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   status: "idle",
+  messages: [],
   instruction: "",
   model: "",
-  temperature: 0.2,
   isEditMode: false,
   resultGraph: null,
+  resultMode: null,
+  resultPrompt: null,
   errorMessage: null,
   setInstruction: (val) => set({ instruction: val }),
   setModel: (val) => set({ model: val }),
-  setTemperature: (val) => set({ temperature: val }),
   setIsEditMode: (val) => set({ isEditMode: val }),
-  startGeneration: () =>
-    set({ status: "generating", resultGraph: null, errorMessage: null }),
+  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+  startGeneration: (mode, prompt) =>
+    set({ status: "generating", resultGraph: null, errorMessage: null, resultMode: mode, resultPrompt: prompt }),
   setSuccess: (graph) => set({ status: "success", resultGraph: graph }),
   setError: (message) => set({ status: "error", errorMessage: message }),
-  reset: () => set({ status: "idle", resultGraph: null, errorMessage: null }),
+  reset: () => set({ status: "idle", resultGraph: null, errorMessage: null, instruction: "", resultMode: null, resultPrompt: null }),
+  clearHistory: () => set({ messages: [], instruction: "", status: "idle", resultGraph: null, errorMessage: null, resultMode: null, resultPrompt: null }),
 }));

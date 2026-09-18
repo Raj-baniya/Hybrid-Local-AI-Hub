@@ -1,4 +1,4 @@
-﻿use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result};
 use clap::Args;
 use std::path::PathBuf;
 
@@ -31,10 +31,6 @@ pub struct ChatArgs {
     /// Ollama base URL.
     #[arg(long, default_value = "http://127.0.0.1:11434")]
     pub ollama_url: String,
-
-    /// Temperature (lower = more deterministic JSON output).
-    #[arg(long, default_value_t = 0.2)]
-    pub temperature: f32,
 
     /// Output the raw generated JSON without the "what now" summary.
     #[arg(long)]
@@ -110,7 +106,7 @@ pub async fn chat(args: ChatArgs) -> Result<()> {
         }
 
         let raw_output = client
-            .generate(&args.model, &prompt, vec![], args.temperature, false)
+            .generate(&args.model, &prompt, vec![], false)
             .await
             .map_err(|e| anyhow!("LLM failed: {e}"))?;
 

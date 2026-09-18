@@ -1,10 +1,37 @@
-import React from 'react';
-import { useWorkflowStore } from '../store/workflowStore';
-import { ScrollText, CheckCircle, AlertCircle, Clock, X, Copy } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useWorkflowStore, ExecutionRecord } from '../store/workflowStore';
+import { ScrollText, CheckCircle, AlertCircle, Clock, X, Copy, History } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 
 export const LogPanel: React.FC = () => {
   const setActivePanel = useWorkflowStore((s) => s.setActivePanel);
-  const executionRecord = useWorkflowStore((s) => s.executionRecord);
+  const globalExecutionRecord = useWorkflowStore((s) => s.executionRecord);
+
+  const [history, setHistory] = useState<ExecutionRecord[]>([]);
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    invoke<ExecutionRecord[]>('list_execution_logs')
+      .then(setHistory)
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (globalExecutionRecord && (globalExecutionRecord.overall_status === 'success' || globalExecutionRecord.overall_status === 'failed' || globalExecutionRecord.overall_status === 'partialfailure')) {
+      setHistory(prev => {
+        const exists = prev.some(r => r.execution_id === globalExecutionRecord.execution_id);
+        if (exists) {
+          return prev.map(r => r.execution_id === globalExecutionRecord.execution_id ? globalExecutionRecord : r);
+        } else {
+          return [globalExecutionRecord, ...prev];
+        }
+      });
+    }
+  }, [globalExecutionRecord]);
+
+  const executionRecord = selectedLogId 
+    ? history.find(r => r.execution_id === selectedLogId) || globalExecutionRecord
+    : globalExecutionRecord;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -86,6 +113,34 @@ export const LogPanel: React.FC = () => {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        
+        {/* History Dropdown */}
+        {history.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-medium)' }}>
+            <History size={14} style={{ color: 'var(--text-muted)' }} />
+            <select
+              value={selectedLogId || ""}
+              onChange={(e) => setSelectedLogId(e.target.value === "" ? null : e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 12,
+                outline: 'none',
+                flex: 1,
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">Live / Current Session</option>
+              {history.map(record => (
+                <option key={record.execution_id} value={record.execution_id}>
+                  {new Date(record.started_at).toLocaleString()} - {record.overall_status.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {!executionRecord ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
             No execution logs yet. Run the active workflow to view per-node execution telemetry.

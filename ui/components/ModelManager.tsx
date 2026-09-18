@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useWorkflowStore } from '../store/workflowStore';
-import { Cpu, Download, CheckCircle, AlertCircle, Loader2, RefreshCw, X, StopCircle } from 'lucide-react';
+import { Cpu, Download, CheckCircle, AlertCircle, Loader2, RefreshCw, X, StopCircle, Trash2 } from 'lucide-react';
 
 type OllamaStatus =
   | { state: "NotRunning" }
@@ -95,6 +95,19 @@ export const ModelManager: React.FC = () => {
   const handleCancel = async () => {
     if (!pullingModel) return;
     try { await invoke('cancel_pull', { modelName: pullingModel }); } catch (_) {}
+  };
+
+  const handleDelete = async (modelName: string) => {
+    if (!confirm(`Are you sure you want to delete the model '${modelName}' from your device?`)) return;
+    setLoading(true);
+    try {
+      await invoke('delete_model', { modelName });
+      await fetchModels();
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : err.message || 'Failed to delete model');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isInstalled = (name: string) => models.some((m) => m.name.startsWith(name) || m.name === name);
@@ -205,7 +218,16 @@ export const ModelManager: React.FC = () => {
               {models.map((m) => (
                 <div key={m.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 6, fontSize: 12 }}>
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{m.name}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(m.size)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(m.size)}</span>
+                    <button 
+                      onClick={() => handleDelete(m.name)} 
+                      title="Delete Model"
+                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', display: 'flex' }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -242,7 +264,7 @@ export const ModelManager: React.FC = () => {
 
         {/* Custom */}
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>Pull Custom Model</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 6 }}>Pull Custom Model</div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="text" placeholder="e.g. mistral:7b" value={customModel} onChange={(e) => setCustomModel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePull(customModel)}
               style={{ flex: 1, padding: '7px 10px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#f8fafc', fontSize: 12 }} />

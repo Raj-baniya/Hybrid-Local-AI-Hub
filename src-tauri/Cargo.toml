@@ -22,3 +22,4 @@ anyhow = "1"
 sysinfo = "0.33"
 dirs = "5.0.1"
 hybrid-local-ai-hub = { path = ".." }
+uuid = "1.26.1"

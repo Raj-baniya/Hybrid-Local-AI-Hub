@@ -69,17 +69,14 @@ function getRecommendations(info: SystemInfo): ModelRecommendation[] {
 
 const wizardOverlay: React.CSSProperties = {
   position: 'fixed', inset: 0, zIndex: 9999,
-  background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 50%, var(--bg-secondary) 100%)',
+  background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.9) 100%)',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   fontFamily: "'Inter', 'Segoe UI', sans-serif",
 };
 
 const wizardCard: React.CSSProperties = {
   width: 560, maxHeight: '90vh', overflowY: 'auto',
-  background: 'var(--bg-card)',
-  border: '1px solid var(--border-subtle)',
-  borderRadius: 16, padding: 0,
-  boxShadow: 'var(--shadow-lg)',
+  padding: 0,
   position: 'relative', zIndex: 10,
 };
 
@@ -231,15 +228,21 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
 
   return (
     <div style={wizardOverlay} className="wizard-overlay">
-      {/* Background animated glow */}
-      <div style={{
+      {/* Background animated glows */}
+      <div className="pulse-glow" style={{
         position: 'absolute', width: 600, height: 600, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(6,182,212,0.08) 0%, transparent 70%)',
-        top: '20%', left: '30%', filter: 'blur(60px)', animation: 'pulse 4s ease-in-out infinite',
+        background: 'radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%)',
+        top: '10%', left: '20%', filter: 'blur(80px)', animation: 'pulse 4s ease-in-out infinite',
+        pointerEvents: 'none', zIndex: 0,
+      }} />
+      <div className="floatBlob-glow" style={{
+        position: 'absolute', width: 500, height: 500, borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)',
+        bottom: '10%', right: '20%', filter: 'blur(80px)', animation: 'floatBlob 8s ease-in-out infinite',
         pointerEvents: 'none', zIndex: 0,
       }} />
 
-      <div style={wizardCard} className="wizard-card">
+      <div style={wizardCard} className="wizard-card glass-panel animate-slide-in-right">
         {/* ——— STEP 1: Ollama Check ——— */}
         {step === 1 && (
           <>
@@ -255,15 +258,15 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
             <div style={bodyStyle}>
               {ollamaStatus?.state === 'NotRunning' ? (
                 <>
-                  <div style={{
-                    padding: 16, background: 'rgba(234,179,8,0.07)',
-                    border: '1px solid rgba(234,179,8,0.25)', borderRadius: 10,
+                  <div className="glass-card animate-stagger-1" style={{
+                    padding: 16,
+                    border: '1px solid rgba(234,179,8,0.25)',
                     display: 'flex', flexDirection: 'column', gap: 12,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#facc15', fontWeight: 600, fontSize: 14 }}>
                       <AlertCircle size={18} /> Ollama is not detected
                     </div>
-                    <p style={{ margin: 0, color: '#cbd5e1', fontSize: 13, lineHeight: 1.6 }}>
+                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
                       Hybrid Local AI Hub requires <strong>Ollama</strong> to run AI models locally on your device.
                       It's free, lightweight, and takes about 2 minutes to install.
                     </p>
@@ -283,9 +286,8 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
                     </a>
                   </div>
 
-                  <div style={{
-                    padding: 14, background: 'var(--bg-glass)',
-                    border: '1px solid var(--border-subtle)', borderRadius: 8,
+                  <div className="glass-card animate-stagger-2" style={{
+                    padding: 14,
                   }}>
                     <p style={{ margin: '0 0 8px', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase' }}>
                       After installing:
@@ -297,7 +299,7 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
                     </ol>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 12, justifyContent: 'center' }}>
+                  <div className="animate-stagger-3" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 12, justifyContent: 'center' }}>
                     <Loader2 size={14} className="spinning" /> Waiting for Ollama to start...
                   </div>
                 </>
@@ -325,10 +327,10 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
             <div style={bodyStyle}>
               {/* System specs card */}
               {systemInfo && (
-                <div style={{
-                  padding: 14, background: 'rgba(6,182,212,0.05)',
-                  border: '1px solid rgba(6,182,212,0.15)', borderRadius: 10,
+                <div className="glass-card animate-stagger-1" style={{
+                  padding: 14,
                   display: 'flex', flexWrap: 'wrap', gap: 16,
+                  border: '1px solid rgba(6,182,212,0.15)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                     <HardDrive size={14} style={{ color: 'var(--accent-cyan)' }} />
@@ -353,9 +355,9 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
 
               {/* Pull progress */}
               {pullingModel && (
-                <div style={{
-                  padding: 14, background: 'rgba(56,189,248,0.07)',
-                  border: '1px solid rgba(56,189,248,0.25)', borderRadius: 10,
+                <div className="glass-card animate-stagger-2" style={{
+                  padding: 14,
+                  border: '1px solid rgba(56,189,248,0.25)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontWeight: 600, fontSize: 12, marginBottom: 8 }}>
                     <Loader2 size={14} className="spinning" /> Downloading {pullingModel}...
@@ -385,11 +387,10 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
                 {recommendations.map(rec => {
                   const installed = isInstalled(rec.name);
                   return (
-                    <div key={rec.name} style={{
+                    <div key={rec.name} className="glass-card animate-stagger-3" style={{
                       padding: '14px 16px',
-                      background: rec.isBest ? 'rgba(6,182,212,0.06)' : 'rgba(255,255,255,0.02)',
-                      border: rec.isBest ? '1px solid rgba(6,182,212,0.25)' : '1px solid rgba(255,255,255,0.06)',
-                      borderRadius: 10,
+                      background: rec.isBest ? 'rgba(6,182,212,0.08)' : undefined,
+                      border: rec.isBest ? '1px solid rgba(6,182,212,0.25)' : undefined,
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -448,14 +449,15 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
               <button
                 onClick={() => setStep(3)}
                 disabled={!hasAnyLlm}
-                className={`btn-wizard-continue ${hasAnyLlm ? 'ready' : ''}`}
+                className={`btn-wizard-continue animate-stagger-4 ${hasAnyLlm ? 'ready' : ''}`}
                 style={{
                   padding: '12px 24px', fontSize: 14, fontWeight: 600,
                   background: hasAnyLlm ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.05)',
-                  color: hasAnyLlm ? '#fff' : '#64748b',
+                  color: hasAnyLlm ? '#fff' : 'var(--text-muted)',
                   border: 'none', borderRadius: 8, cursor: hasAnyLlm ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   marginTop: 4,
+                  transition: 'all 0.3s ease',
                 }}
               >
                 {hasAnyLlm ? (
@@ -481,22 +483,21 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
               </p>
             </div>
             <div style={bodyStyle}>
-              <div style={{
-                padding: 16, background: 'rgba(16,185,129,0.07)',
-                border: '1px solid rgba(16,185,129,0.25)', borderRadius: 10,
+              <div className="glass-card animate-stagger-1" style={{
+                padding: 16,
+                border: '1px solid rgba(16,185,129,0.25)',
                 display: 'flex', flexDirection: 'column', gap: 10,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#10b981', fontWeight: 600, fontSize: 14 }}>
                   <CheckCircle size={18} /> Everything is configured
                 </div>
-                <div style={{ color: '#cbd5e1', fontSize: 13, lineHeight: 1.6 }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
                   <strong>Installed models:</strong> {installedModels.length > 0 ? installedModels.join(', ') : 'Checked — ready'}
                 </div>
               </div>
 
-              <div style={{
-                padding: 14, background: 'var(--bg-glass)',
-                border: '1px solid var(--border-subtle)', borderRadius: 8,
+              <div className="glass-card animate-stagger-2" style={{
+                padding: 14,
                 color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.6,
               }}>
                 <strong style={{ color: 'var(--text-primary)' }}>Quick tips:</strong>
@@ -510,14 +511,15 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
 
               <button
                 onClick={handleComplete}
-                className="btn-wizard-launch"
+                className="btn-wizard-launch animate-stagger-3"
                 style={{
                   padding: '14px 28px', fontSize: 15, fontWeight: 700,
                   background: 'linear-gradient(135deg, #06b6d4, #8b5cf6, #06b6d4)',
-                  color: '#fff', border: 'none', borderRadius: 10,
+                  color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
                   cursor: 'pointer', display: 'flex', alignItems: 'center',
                   justifyContent: 'center', gap: 8,
                   marginTop: 4,
+                  boxShadow: '0 8px 20px rgba(139, 92, 246, 0.4)',
                 }}
               >
                 <Sparkles size={18} /> Launch Workspace

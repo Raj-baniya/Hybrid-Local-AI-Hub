@@ -12,6 +12,9 @@ import {
   Database,
   GitFork,
   HardDrive,
+  Globe,
+  Terminal,
+  Braces,
 } from 'lucide-react';
 import {
   FileWatcherConfig,
@@ -23,6 +26,9 @@ import {
   ChromaDbStoreConfig,
   ConditionalRouterConfig,
   LocalFileWriterConfig,
+  WebScraperConfig,
+  ShellCommandConfig,
+  RegexExtractorConfig,
 } from '../../schema/graphSchema';
 
 export const FileWatcherNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
@@ -39,12 +45,12 @@ export const FileWatcherNodeComponent: React.FC<NodeProps> = ({ id, data, select
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div>
-          <span style={{ color: '#64748b' }}>Path: </span>
+          <span style={{ color: 'var(--text-muted)' }}>Path: </span>
           <span style={{ fontFamily: 'monospace', color: '#38bdf8' }}>{cfg.watchPath}</span>
         </div>
         {cfg.pattern && (
           <div>
-            <span style={{ color: '#64748b' }}>Pattern: </span>
+            <span style={{ color: 'var(--text-muted)' }}>Pattern: </span>
             <span style={{ fontFamily: 'monospace' }}>{cfg.pattern}</span>
           </div>
         )}
@@ -65,7 +71,7 @@ export const TextInputNodeComponent: React.FC<NodeProps> = ({ id, data, selected
       hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ maxHeight: 60, overflow: 'hidden', textOverflow: 'ellipsis', color: '#94a3b8' }}>
+      <div style={{ maxHeight: 60, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-secondary)' }}>
         {cfg.text || '(empty)'}
       </div>
     </CustomNodeWrapper>
@@ -147,9 +153,8 @@ export const OllamaSelectorNodeComponent: React.FC<NodeProps> = ({ id, data, sel
               </option>
             ))}
           </select>
-          <span style={{ color: '#64748b', fontSize: 11 }}>T={cfg.temperature}</span>
         </div>
-        <div style={{ maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', color: '#94a3b8', fontSize: 11 }}>
+        <div style={{ maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-secondary)', fontSize: 11 }}>
           {cfg.promptTemplate}
         </div>
       </div>
@@ -186,7 +191,7 @@ export const PDFExtractorNodeComponent: React.FC<NodeProps> = ({ id, data, selec
       hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ color: '#94a3b8' }}>
+      <div style={{ color: 'var(--text-secondary)' }}>
         {cfg.pageRange ? `Pages ${cfg.pageRange[0]}–${cfg.pageRange[1]}` : 'Extract all pages'}
       </div>
     </CustomNodeWrapper>
@@ -207,11 +212,11 @@ export const ChromaDbStoreNodeComponent: React.FC<NodeProps> = ({ id, data, sele
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div>
-          <span style={{ color: '#64748b' }}>Coll: </span>
+          <span style={{ color: 'var(--text-muted)' }}>Coll: </span>
           <span style={{ color: '#818cf8', fontWeight: 500 }}>{cfg.collectionName}</span>
         </div>
         {cfg.inputMap && (
-          <div style={{ fontSize: 10, color: '#64748b' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
             Bindings: {Object.keys(cfg.inputMap).join(', ')}
           </div>
         )}
@@ -265,9 +270,66 @@ export const LocalFileWriterNodeComponent: React.FC<NodeProps> = ({ id, data, se
         <div style={{ fontFamily: 'monospace', color: '#2dd4bf', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {cfg.outputPath}
         </div>
-        <div style={{ fontSize: 10, color: '#64748b' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
           {cfg.append ? 'Append mode' : 'Overwrite mode'}
         </div>
+      </div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const WebScraperNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as WebScraperConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Web Scraper"
+      icon={<Globe size={16} />}
+      headerColor="#3b82f6"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {cfg.url}
+      </div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const ShellCommandNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as ShellCommandConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Shell Command"
+      icon={<Terminal size={16} />}
+      headerColor="#ef4444"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ fontFamily: 'monospace', color: '#f87171', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {cfg.command}
+      </div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const RegexExtractorNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as RegexExtractorConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Regex Extractor"
+      icon={<Braces size={16} />}
+      headerColor="#10b981"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {cfg.pattern}
       </div>
     </CustomNodeWrapper>
   );
@@ -283,4 +345,7 @@ export const customNodeTypes = {
   ChromaDbStoreNode: ChromaDbStoreNodeComponent,
   ConditionalRouterNode: ConditionalRouterNodeComponent,
   LocalFileWriterNode: LocalFileWriterNodeComponent,
+  WebScraperNode: WebScraperNodeComponent,
+  ShellCommandNode: ShellCommandNodeComponent,
+  RegexExtractorNode: RegexExtractorNodeComponent,
 };

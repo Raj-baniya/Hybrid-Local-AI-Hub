@@ -41,7 +41,7 @@ fn edge(id: &str, source: &str, target: &str) -> GraphEdge {
 }
 
 fn make_graph(nodes: Vec<GraphNode>, edges: Vec<GraphEdge>) -> Graph {
-    Graph { version: 1, nodes, edges }
+    Graph { version: 1, name: Some("Test Graph".to_string()), nodes, edges }
 }
 
 fn test_config() -> ExecutorConfig {

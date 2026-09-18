@@ -305,6 +305,9 @@ fn node_type_name(data: &NodeType) -> &'static str {
         NodeType::ChromaDbStoreNode(_) => "ChromaDbStoreNode",
         NodeType::ConditionalRouterNode(_) => "ConditionalRouterNode",
         NodeType::LocalFileWriterNode(_) => "LocalFileWriterNode",
+        NodeType::WebScraperNode(_) => "WebScraperNode",
+        NodeType::ShellCommandNode(_) => "ShellCommandNode",
+        NodeType::RegexExtractorNode(_) => "RegexExtractorNode",
     }
 }
 
@@ -319,7 +322,7 @@ async fn execute_node(
     skipped: Arc<Mutex<HashSet<String>>>,
 ) -> Result<String> {
     match node_data {
-        // â”€â”€ TextInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── TextInputNode ──────────────────────────────────────────────────────────
         NodeType::TextInputNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -341,14 +344,14 @@ async fn execute_node(
             Ok(resolved)
         }
 
-        // â”€â”€ FileWatcherNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── FileWatcherNode ──────────────────────────────────────────────────
         NodeType::FileWatcherNode(_cfg) => {
             // In `run` (one-shot) mode, a FileWatcherNode yields a static placeholder;
             // in `--watch` mode, the watcher module feeds events from outside.
-            Ok("[FileWatcherNode: event-driven â€” use --watch mode]".to_string())
+            Ok("[FileWatcherNode: event-driven — use --watch mode]".to_string())
         }
 
-        // â”€â”€ ImageInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── ImageInputNode ───────────────────────────────────────────────────
         NodeType::ImageInputNode(cfg) => {
             // Read image bytes and base64-encode them for downstream LLM nodes.
             let bytes = tokio::fs::read(&cfg.image_path).await.map_err(|e| {
@@ -359,7 +362,7 @@ async fn execute_node(
             Ok(format!("<image>{}</image>", b64))
         }
 
-        // â”€â”€ PDFExtractorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── PDFExtractorNode ─────────────────────────────────────────────────
         NodeType::PDFExtractorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -370,7 +373,7 @@ async fn execute_node(
             extract_pdf_text(&node_id, &pdf_path, cfg.page_range)
         }
 
-        // â”€â”€ OllamaSelectorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── OllamaSelectorNode ───────────────────────────────────────────────
         NodeType::OllamaSelectorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -392,12 +395,12 @@ async fn execute_node(
             }
 
             ollama
-                .generate(&cfg.model, &prompt, images, cfg.temperature, cfg.json_mode)
+                .generate(&cfg.model, &prompt, images, cfg.json_mode)
                 .await
                 .map_err(|e| anyhow!("OllamaSelectorNode '{}': {e}", node_id))
         }
 
-        // â”€â”€ LocalEmbedderNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── LocalEmbedderNode ────────────────────────────────────────────────
         NodeType::LocalEmbedderNode(cfg) => {
             let locked = outputs.lock().await;
             let text = single_input_value(&predecessors, &locked)
@@ -409,7 +412,7 @@ async fn execute_node(
             Ok(serde_json::to_string(&embedding)?)
         }
 
-        // â”€â”€ ChromaDbStoreNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── ChromaDbStoreNode ────────────────────────────────────────────────
         NodeType::ChromaDbStoreNode(cfg) => {
             let locked = outputs.lock().await;
 
@@ -446,7 +449,7 @@ async fn execute_node(
             Ok(format!("Stored document '{}' in collection '{}'", id, cfg.collection_name))
         }
 
-        // â”€â”€ ConditionalRouterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── ConditionalRouterNode ────────────────────────────────────────────
         NodeType::ConditionalRouterNode(cfg) => {
             let locked = outputs.lock().await;
             let input = single_input_value(&predecessors, &locked)
@@ -469,36 +472,130 @@ async fn execute_node(
             Ok(format!("routed:{}", routed_to))
         }
 
-        // â”€â”€ LocalFileWriterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── LocalFileWriterNode ──────────────────────────────────────────────
         NodeType::LocalFileWriterNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
             let content = single
                 .ok_or_else(|| anyhow!("LocalFileWriterNode '{}' has no incoming input", node_id))?;
             let path = interpolation::resolve(&cfg.output_path, &locked, None)?;
+            let actual_path = path;
             drop(locked);
 
             // Ensure parent directory exists.
-            if let Some(parent) = std::path::Path::new(&path).parent() {
+            let out_path = std::path::Path::new(&actual_path);
+            if let Some(parent) = out_path.parent() {
                 tokio::fs::create_dir_all(parent).await?;
             }
 
             if cfg.append {
-                use tokio::io::AsyncWriteExt;
                 let mut file = tokio::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
-                    .open(&path)
-                    .await
-                    .map_err(|e| anyhow!("LocalFileWriterNode '{}': cannot open '{}': {e}", node_id, path))?;
+                    .open(&actual_path)
+                    .await?;
+                use tokio::io::AsyncWriteExt;
                 file.write_all(content.as_bytes()).await?;
             } else {
-                tokio::fs::write(&path, &content).await.map_err(|e| {
-                    anyhow!("LocalFileWriterNode '{}': cannot write '{}': {e}", node_id, path)
-                })?;
+                tokio::fs::write(&actual_path, &content).await?;
             }
+            Ok(format!("Wrote {} bytes to {}", content.len(), actual_path))
+        }
 
-            Ok(format!("Written {} bytes to '{}'", content.len(), path))
+        // ── WebScraperNode ───────────────────────────────────────────────────
+        NodeType::WebScraperNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let url = interpolation::resolve(&cfg.url, &locked, single.as_deref())?;
+            drop(locked);
+
+            let client = reqwest::Client::new();
+            let response = client.get(&url).send().await
+                .map_err(|e| anyhow!("WebScraperNode '{}': Failed to fetch URL: {e}", node_id))?
+                .error_for_status()
+                .map_err(|e| anyhow!("WebScraperNode '{}': HTTP error: {e}", node_id))?;
+            
+            let text = response.text().await
+                .map_err(|e| anyhow!("WebScraperNode '{}': Failed to read body: {e}", node_id))?;
+            
+            Ok(text)
+        }
+
+        // ── ShellCommandNode ─────────────────────────────────────────────────
+        NodeType::ShellCommandNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            
+            if cfg.unsafe_raw_shell.unwrap_or(false) {
+                let command_str = interpolation::resolve(&cfg.command, &locked, single.as_deref())?;
+                drop(locked);
+                
+                let output = tokio::process::Command::new("powershell")
+                    .args(["-Command", &command_str])
+                    .kill_on_drop(true)
+                    .output()
+                    .await
+                    .map_err(|e| anyhow!("ShellCommandNode '{}': Execution failed: {e}", node_id))?;
+                    
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                
+                if !output.status.success() {
+                    return Err(anyhow!("ShellCommandNode '{}': Command failed with status {}. Stderr: {}", node_id, output.status, stderr));
+                }
+                Ok(stdout)
+            } else {
+                if cfg.command.contains("{{") {
+                    return Err(anyhow!("ShellCommandNode '{}': Input interpolation is rejected by default to prevent shell injection. Enable unsafeRawShell in config if raw shell execution is intended.", node_id));
+                }
+                drop(locked);
+                
+                let mut parts = shlex::split(&cfg.command)
+                    .ok_or_else(|| anyhow!("ShellCommandNode '{}': Malformed command string (check quotes)", node_id))?
+                    .into_iter();
+                let prog = parts.next().ok_or_else(|| anyhow!("ShellCommandNode '{}': Empty command provided", node_id))?;
+                
+                let mut cmd = tokio::process::Command::new(&prog);
+                cmd.args(parts);
+                
+                if let Some(input_val) = single.as_deref() {
+                    cmd.arg(input_val);
+                }
+                
+                let output = cmd
+                    .kill_on_drop(true)
+                    .output()
+                    .await
+                    .map_err(|e| anyhow!("ShellCommandNode '{}': Execution failed: {e}", node_id))?;
+                    
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                
+                if !output.status.success() {
+                    return Err(anyhow!("ShellCommandNode '{}': Command failed with status {}. Stderr: {}", node_id, output.status, stderr));
+                }
+                Ok(stdout)
+            }
+        }
+
+        // ── RegexExtractorNode ───────────────────────────────────────────────
+        NodeType::RegexExtractorNode(cfg) => {
+            let locked = outputs.lock().await;
+            let content = single_input_value(&predecessors, &locked)
+                .ok_or_else(|| anyhow!("RegexExtractorNode '{}': no incoming input", node_id))?;
+            drop(locked);
+
+            let re = regex::Regex::new(&cfg.pattern)
+                .map_err(|e| anyhow!("RegexExtractorNode '{}': Invalid regex: {e}", node_id))?;
+                
+            if let Some(caps) = re.captures(&content) {
+                if let Some(m) = caps.get(cfg.group) {
+                    return Ok(m.as_str().to_string());
+                } else {
+                    return Err(anyhow!("RegexExtractorNode '{}': Group {} not found in match", node_id, cfg.group));
+                }
+            }
+            Err(anyhow!("RegexExtractorNode '{}': Pattern did not match", node_id))
         }
     }
 }

@@ -1,5 +1,11 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
 
 // â”€â”€â”€ Node type enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -17,6 +23,9 @@ pub enum NodeType {
     ChromaDbStoreNode(ChromaDbStoreConfig),
     ConditionalRouterNode(ConditionalRouterConfig),
     LocalFileWriterNode(LocalFileWriterConfig),
+    WebScraperNode(WebScraperConfig),
+    ShellCommandNode(ShellCommandConfig),
+    RegexExtractorNode(RegexExtractorConfig),
 }
 
 // â”€â”€â”€ Per-variant config structs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -50,11 +59,7 @@ pub struct ImageInputConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct OllamaSelectorConfig {
-    /// Ollama model identifier (e.g. "llama3.2", "phi4-mini").
     pub model: String,
-    /// Sampling temperature (0.0â€“2.0; default 0.7).
-    #[serde(default = "default_temperature")]
-    pub temperature: f32,
     /// Prompt template. Use `{{input}}` (single-input shorthand) or
     /// `{{node_id.output}}` for explicit references.
     pub prompt_template: String,
@@ -111,6 +116,32 @@ pub struct LocalFileWriterConfig {
     pub append: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WebScraperConfig {
+    /// The URL to scrape. Supports `{{node_id.output}}` or `{{input}}`.
+    pub url: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellCommandConfig {
+    /// The shell command to run. Supports `{{node_id.output}}` or `{{input}}`.
+    pub command: String,
+    /// Must be explicitly enabled to execute raw shell commands containing input interpolation
+    pub unsafe_raw_shell: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RegexExtractorConfig {
+    /// The regex pattern to apply to the input.
+    pub pattern: String,
+    /// The group index to extract (0 for full match).
+    #[serde(default)]
+    pub group: usize,
+}
+
 // â”€â”€â”€ Graph structs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// A node in the graph. `position` is optional/unused in CLI mode but kept for
@@ -139,15 +170,12 @@ pub struct GraphEdge {
 pub struct Graph {
     #[serde(default = "default_version")]
     pub version: u32,
+    pub name: Option<String>,
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
 }
 
 // â”€â”€â”€ Defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-fn default_temperature() -> f32 {
-    0.7
-}
 
 fn default_chroma_url() -> String {
     "http://localhost:8000".to_string()
