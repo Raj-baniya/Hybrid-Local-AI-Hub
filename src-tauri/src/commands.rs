@@ -153,7 +153,7 @@ pub async fn run_graph(
         }
     });
 
-    match executor::run_graph(&graph, None, executor_cfg, "gui", Some(tx)).await {
+    match executor::run_graph(&graph, None, executor_cfg, "gui", Some(tx), None).await {
         Ok(record) => {
             let _ = app.emit("execution-completed", &record);
             Ok(record)
@@ -1032,7 +1032,7 @@ pub fn get_providers(app: tauri::AppHandle) -> Result<Vec<ProviderConfig>, Strin
 pub fn delete_provider(app: tauri::AppHandle, name: String) -> Result<(), String> {
     let entry = Entry::new("hybrid-local-ai-hub", &name)
         .map_err(|e| format!("Failed to access keyring: {e}"))?;
-    match entry.delete_password() {
+    match entry.delete_credential() {
         Ok(_) => {}
         Err(keyring::Error::NoEntry) => {} // Ignore if already not there
         Err(e) => return Err(format!("Failed to delete credential: {e}")),
