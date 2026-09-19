@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { useWorkflowStore, ExecutionRecord } from '../store/workflowStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { Graph } from '../schema/graphSchema';
 import {
   Play,
@@ -16,6 +18,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { PreRunDialog } from './PreRunDialog';
+import { SettingsModal } from './SettingsModal';
 
 export const TopBar: React.FC = () => {
   const tabs = useWorkflowStore((s) => s.tabs);
@@ -24,6 +27,8 @@ export const TopBar: React.FC = () => {
   const requestCloseTab = useWorkflowStore((s) => s.requestCloseTab);
   const createTab = useWorkflowStore((s) => s.createTab);
   const setTabFilePath = useWorkflowStore((s) => s.setTabFilePath);
+
+  const isOfflineMode = useSettingsStore((s) => s.isOfflineMode);
 
   const getActiveGraph = useWorkflowStore((s) => s.getActiveGraph);
   const loadGraphIntoActiveTab = useWorkflowStore((s) => s.loadGraphIntoActiveTab);
@@ -86,7 +91,9 @@ export const TopBar: React.FC = () => {
       graph.nodes.forEach(n => {
         if (n.data.type === 'OllamaSelectorNode') {
           const m = n.data.model || 'llama3.2';
-          requiredModels.add(m);
+          if (!m.startsWith('API|')) {
+            requiredModels.add(m);
+          }
         }
       });
 
@@ -118,8 +125,16 @@ export const TopBar: React.FC = () => {
       }
 
       setPreflightStatus(null);
-
-      const record = await invoke<ExecutionRecord>('run_graph', { graph });
+      // 4. Run!
+      const record = await invoke<ExecutionRecord>('run_graph', {
+        graph,
+        config: {
+          continueOnFailure: false,
+          defaultTimeoutSecs: 15,
+          llmTimeoutSecs: 600,
+        },
+        offlineMode: isOfflineMode,
+      });
       setExecutionRecord(record);
 
       let finalOutput = "No output generated.";
@@ -146,7 +161,7 @@ export const TopBar: React.FC = () => {
          const activeTab = useWorkflowStore.getState().tabs.find(t => t.id === useWorkflowStore.getState().activeTabId);
          if (activeTab && activeTab.title) {
             try {
-               await invoke('save_agent_output', { name: activeTab.title, output: finalOutput });
+               await invoke('save_agent_output', { offlineMode: isOfflineMode,  name: activeTab.title, output: finalOutput });
             } catch (err) {
                console.warn("Could not auto-save output, tab name might be invalid:", err);
             }
@@ -154,15 +169,13 @@ export const TopBar: React.FC = () => {
       }
 
       if (record.overall_status !== 'success') {
-        const failedNode = record.nodes.find(n => n.status?.toLowerCase() === 'failed');
-        const errorMessage = failedNode?.error || 'Unknown error occurred during execution.';
-        alert(`Pipeline execution failed!\nNode: ${failedNode?.node_id || 'N/A'}\nError: ${errorMessage}\n\nPlease check the logs panel for more details.`);
         setActivePanel('logs');
       } else {
         setExecutionModalOutput(finalOutput);
       }
     } catch (err: any) {
-      alert(`Execution failed:\n${typeof err === 'string' ? err : err.message}`);
+      console.error("Execution failed:", err);
+      setActivePanel('logs');
     } finally {
       setIsExecuting(false);
       setPreflightStatus(null);
@@ -182,7 +195,7 @@ export const TopBar: React.FC = () => {
       if (selected) {
         const name = selected.split(/[/\\]/).pop()?.replace('.json', '') || 'agent';
         await invoke('save_workflow', { path: selected, graph });
-        await invoke('save_agent', { name, graph });
+        await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode,  name, graph });
         setTabFilePath(activeTabId, selected);
       }
     } catch (err: any) {
@@ -222,14 +235,15 @@ export const TopBar: React.FC = () => {
         zIndex: 20,
       }}
     >
-      {isPreRunDialogOpen && (
+      {isPreRunDialogOpen && ReactDOM.createPortal(
         <PreRunDialog 
           onConfirm={handleRunConfirm}
           onCancel={() => setPreRunDialogOpen(false)} 
-        />
+        />,
+        document.body
       )}
 
-      {preflightStatus && (
+      {preflightStatus && ReactDOM.createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
@@ -404,15 +418,7 @@ export const TopBar: React.FC = () => {
         </button>
       </div>
 
-      {/* Right: File Ops & Theme */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button
-          className="btn btn-secondary btn-icon"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          title="Toggle Theme"
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
         <button className="btn btn-secondary btn-icon" onClick={handleLoad} title="Open Workflow JSON">
           <FolderOpen size={16} />
         </button>

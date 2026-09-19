@@ -92,6 +92,23 @@ export const NodeInspector: React.FC = () => {
           </>
         );
 
+      case 'ScheduleNode':
+        return (
+          <>
+            <label style={labelStyle}>Cron Expression</label>
+            <input
+              type="text"
+              value={data.cronExpression}
+              onChange={(e) => updateNodeData(selectedNode.id, { cronExpression: e.target.value })}
+              style={inputStyle}
+              placeholder="0 */2 * * *"
+            />
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              Standard cron syntax. E.g., "0 */2 * * *" for every 2 hours.
+            </p>
+          </>
+        );
+
       case 'OllamaSelectorNode':
         return (
           <>

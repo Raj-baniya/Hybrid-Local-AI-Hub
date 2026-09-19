@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { X, Play, Edit3 } from 'lucide-react';
@@ -36,7 +37,7 @@ export const PreRunDialog: React.FC<{ onConfirm: () => void; onCancel: () => voi
   };
 
   if (inputNodes.length === 0) {
-    return (
+    return createPortal(
       <div style={overlayStyle}>
         <div className="wizard-card" style={cardStyle}>
           <div style={{ marginBottom: 20 }}>
@@ -50,11 +51,12 @@ export const PreRunDialog: React.FC<{ onConfirm: () => void; onCancel: () => voi
             <button className="btn btn-primary" onClick={handleProceed}><Play size={14}/> Run Now</button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <div style={overlayStyle}>
       <div className="wizard-card" style={{...cardStyle, width: 450, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -100,7 +102,8 @@ export const PreRunDialog: React.FC<{ onConfirm: () => void; onCancel: () => voi
           <button className="btn btn-primary" onClick={handleProceed}><Play size={14}/> Confirm & Run</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

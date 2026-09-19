@@ -1,9 +1,12 @@
+import { useSettingsStore } from '../store/settingsStore';
 import React, { useEffect, useState } from 'react';
 import { useWorkflowStore, ExecutionRecord } from '../store/workflowStore';
 import { ScrollText, CheckCircle, AlertCircle, Clock, X, Copy, History } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 
 export const LogPanel: React.FC = () => {
+  const isOfflineMode = useSettingsStore(s => s.isOfflineMode);
+
   const setActivePanel = useWorkflowStore((s) => s.setActivePanel);
   const globalExecutionRecord = useWorkflowStore((s) => s.executionRecord);
 
@@ -11,10 +14,17 @@ export const LogPanel: React.FC = () => {
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke<ExecutionRecord[]>('list_execution_logs')
-      .then(setHistory)
+    let superseded = false;
+    const requestedMode = isOfflineMode;
+    invoke('list_execution_logs', { offlineMode: requestedMode })
+      .then((res: any) => {
+        if (!superseded && requestedMode === useSettingsStore.getState().isOfflineMode) {
+          setHistory(res);
+        }
+      })
       .catch(console.error);
-  }, []);
+    return () => { superseded = true; };
+  }, [isOfflineMode]);
 
   useEffect(() => {
     if (globalExecutionRecord && (globalExecutionRecord.overall_status === 'success' || globalExecutionRecord.overall_status === 'failed' || globalExecutionRecord.overall_status === 'partialfailure')) {

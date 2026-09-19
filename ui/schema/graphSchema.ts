@@ -71,6 +71,47 @@ export const RegexExtractorConfigSchema = z.object({
   group: z.number().int().nonnegative().default(0),
 });
 
+export const ScheduleConfigSchema = z.object({
+  type: z.literal('ScheduleNode'),
+  cronExpression: z.string().min(1, 'Cron expression is required'),
+});
+
+export const SourceFileConfigSchema = z.object({
+  type: z.literal('SourceFileNode'),
+  path: z.string().min(1, 'Path is required'),
+  connector: z.string().default('auto'),
+});
+
+export const DatasetProfileConfigSchema = z.object({
+  type: z.literal('DatasetProfileNode'),
+  mode: z.string().default('auto'),
+});
+
+export const TransformAggregateConfigSchema = z.object({
+  type: z.literal('TransformAggregateNode'),
+  groupBy: z.array(z.string()).default([]),
+  aggregations: z.array(z.string()).default([]),
+});
+
+export const AnalysisStatsHypothesisTestConfigSchema = z.object({
+  type: z.literal('AnalysisStatsHypothesisTestNode'),
+  test: z.string().default('t-test'),
+  groupColumn: z.string().default(''),
+  valueColumn: z.string().default(''),
+});
+
+export const AiInterpretConfigSchema = z.object({
+  type: z.literal('AiInterpretNode'),
+  requiresFacts: z.array(z.string()).default([]),
+  maxClaims: z.number().int().default(5),
+});
+
+export const AiPlanConfigSchema = z.object({
+  type: z.literal('AiPlanNode'),
+  objective: z.string().default(''),
+  modelRole: z.string().default('planner'),
+});
+
 export const NodeTypeSchema = z.discriminatedUnion('type', [
   FileWatcherConfigSchema,
   TextInputConfigSchema,
@@ -84,6 +125,13 @@ export const NodeTypeSchema = z.discriminatedUnion('type', [
   WebScraperConfigSchema,
   ShellCommandConfigSchema,
   RegexExtractorConfigSchema,
+  ScheduleConfigSchema,
+  SourceFileConfigSchema,
+  DatasetProfileConfigSchema,
+  TransformAggregateConfigSchema,
+  AnalysisStatsHypothesisTestConfigSchema,
+  AiInterpretConfigSchema,
+  AiPlanConfigSchema,
 ]);
 
 export const GraphNodeSchema = z.object({
@@ -121,6 +169,13 @@ export type LocalFileWriterConfig = z.infer<typeof LocalFileWriterConfigSchema>;
 export type WebScraperConfig = z.infer<typeof WebScraperConfigSchema>;
 export type ShellCommandConfig = z.infer<typeof ShellCommandConfigSchema>;
 export type RegexExtractorConfig = z.infer<typeof RegexExtractorConfigSchema>;
+export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
+export type SourceFileConfig = z.infer<typeof SourceFileConfigSchema>;
+export type DatasetProfileConfig = z.infer<typeof DatasetProfileConfigSchema>;
+export type TransformAggregateConfig = z.infer<typeof TransformAggregateConfigSchema>;
+export type AnalysisStatsHypothesisTestConfig = z.infer<typeof AnalysisStatsHypothesisTestConfigSchema>;
+export type AiInterpretConfig = z.infer<typeof AiInterpretConfigSchema>;
+export type AiPlanConfig = z.infer<typeof AiPlanConfigSchema>;
 
 export type NodeType = z.infer<typeof NodeTypeSchema>;
 export type GraphNode = z.infer<typeof GraphNodeSchema>;

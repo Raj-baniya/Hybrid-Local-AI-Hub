@@ -1,3 +1,4 @@
+import { useSettingsStore } from '../store/settingsStore';
 import React, { useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -116,7 +117,7 @@ export const Navbar: React.FC = () => {
       
       // Persist the log
       try {
-        await invoke('save_execution_log', { record });
+        await invoke('save_execution_log', { offlineMode: isOfflineMode,  record });
       } catch (err) {
         console.error("Failed to save execution log:", err);
       }
@@ -193,7 +194,7 @@ export const Navbar: React.FC = () => {
         // For simplicity, we just save via standard dialog here, but we also save to the internal library.
         const name = selected.split(/[/\\]/).pop()?.replace('.json', '') || 'agent';
         await invoke('save_workflow', { path: selected, graph });
-        await invoke('save_agent', { name, graph });
+        await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode,  name, graph });
         setTabFilePath(activeTabId, selected);
       }
     } catch (err: any) {
@@ -359,13 +360,6 @@ export const Navbar: React.FC = () => {
 
       {/* Right: File Ops & Panel Toggles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button
-          className="btn btn-secondary btn-icon"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          title="Toggle Theme"
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
         <button className="btn btn-secondary btn-icon" onClick={handleLoad} title="Open Workflow JSON">
           <FolderOpen size={16} />
         </button>
@@ -388,14 +382,6 @@ export const Navbar: React.FC = () => {
         </button>
 
         <button
-          className={`btn ${activePanel === 'agents' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => togglePanel('agents')}
-        >
-          <Bot size={14} />
-          Library
-        </button>
-
-        <button
           className={`btn ${activePanel === 'chat' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => togglePanel('chat')}
         >
@@ -409,14 +395,6 @@ export const Navbar: React.FC = () => {
         >
           <ScrollText size={14} />
           Logs
-        </button>
-
-        <button
-          className={`btn ${activePanel === 'models' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => togglePanel('models')}
-        >
-          <Cpu size={14} />
-          Models
         </button>
       </div>
     </div>

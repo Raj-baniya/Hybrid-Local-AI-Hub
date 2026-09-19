@@ -49,7 +49,7 @@ pub async fn chat(args: ChatArgs) -> Result<()> {
         );
     }
 
-    let system_prompt = build_system_prompt();
+    let system_prompt = build_system_prompt(true);
 
     // Build the user message: include existing graph if --edit.
     let user_message = if let Some(ref edit_path) = args.edit {

@@ -3,8 +3,8 @@
 //! Generates a valid `Graph` from plain-English instructions using a local LLM via Ollama.
 //! Employs an iterative validation and targeted-repair loop (up to 3 rounds) before returning.
 
-use anyhow::Result;
 use crate::ollama::OllamaClient;
+use crate::providers::ProviderManager;
 use crate::schema::{Graph, ChatMessage};
 use crate::translator_prompt::build_system_prompt;
 use crate::validate::validate_graph;
@@ -19,12 +19,15 @@ pub async fn generate_workflow(
     messages: &[ChatMessage],
     model: &str,
     ollama_url: &str,
+    is_offline: bool,
+    online_keys: Vec<crate::providers::ApiKeyConfig>,
+    progress_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 ) -> Result<Graph, String> {
     let mut user_message = String::from("Generate a workflow graph for the following conversation:\n");
     for msg in messages {
         user_message.push_str(&format!("{}: {}\n", msg.role.to_uppercase(), msg.content));
     }
-    run_compiler_loop(&user_message, model, ollama_url).await
+    run_compiler_loop(&user_message, model, ollama_url, is_offline, online_keys, progress_tx).await
 }
 
 /// Modify an existing workflow graph according to plain-English instructions.
@@ -33,6 +36,9 @@ pub async fn edit_workflow(
     existing: &Graph,
     model: &str,
     ollama_url: &str,
+    is_offline: bool,
+    online_keys: Vec<crate::providers::ApiKeyConfig>,
+    progress_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 ) -> Result<Graph, String> {
     let existing_json = serde_json::to_string_pretty(existing)
         .map_err(|e| format!("Failed to serialize existing graph: {e}"))?;
@@ -46,7 +52,7 @@ pub async fn edit_workflow(
         "Existing workflow JSON:\n{}\n\nModification request conversation:\n{}",
         existing_json, conversation
     );
-    run_compiler_loop(&user_message, model, ollama_url).await
+    run_compiler_loop(&user_message, model, ollama_url, is_offline, online_keys, progress_tx).await
 }
 
 /// Core generation, validation, and multi-round repair loop.
@@ -54,17 +60,15 @@ async fn run_compiler_loop(
     user_message: &str,
     model: &str,
     ollama_url: &str,
+    is_offline: bool,
+    online_keys: Vec<crate::providers::ApiKeyConfig>,
+    progress_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 ) -> Result<Graph, String> {
-    let client = OllamaClient::new(ollama_url);
+    let client = ProviderManager::new(ollama_url, is_offline, online_keys);
 
-    if !client.is_reachable().await {
-        return Err(format!(
-            "Ollama is not reachable at '{}'. Please start Ollama before compiling.",
-            ollama_url
-        ));
-    }
+    // Note: ProviderManager handles its own connection checking during generate
 
-    let system_prompt = build_system_prompt();
+    let system_prompt = build_system_prompt(is_offline);
     let initial_prompt = format!("{}\n\nUser: {}", system_prompt, user_message);
 
     let mut last_json = String::new();
@@ -83,6 +87,11 @@ async fn run_compiler_loop(
             )
         };
 
+        if let Some(tx) = &progress_tx {
+            let msg = if round == 0 { "Analyzing prompt..." } else { "Refining graph..." };
+            let _ = tx.send(msg.to_string());
+        }
+
         let raw_output = client
             .generate(model, &prompt, vec![], false)
             .await
@@ -95,6 +104,9 @@ async fn run_compiler_loop(
             Ok(g) => g,
             Err(e) => {
                 last_errors = vec![format!("JSON syntax parse error: {e}")];
+                if let Some(tx) = &progress_tx {
+                    let _ = tx.send("Syntax error detected. Retrying...".to_string());
+                }
                 if round == MAX_REPAIR_ROUNDS {
                     break;
                 }
@@ -102,10 +114,17 @@ async fn run_compiler_loop(
             }
         };
 
+        if let Some(tx) = &progress_tx {
+            let _ = tx.send("Validating graph...".to_string());
+        }
+
         match validate_graph(&parsed) {
             Ok(()) => return Ok(parsed),
-            Err(errs) => {
-                last_errors = errs;
+            Err(errors) => {
+                last_errors = errors;
+                if let Some(tx) = &progress_tx {
+                    let _ = tx.send("Validation failed. Instructing AI to fix...".to_string());
+                }
                 if round == MAX_REPAIR_ROUNDS {
                     break;
                 }
@@ -113,12 +132,38 @@ async fn run_compiler_loop(
         }
     }
 
+    // Step 26: Return detailed validation errors instead of generic failure
     Err(format!(
-        "Failed to generate a valid workflow after {} repair rounds.\nLast validation errors:\n{}\n\nLast model output:\n{}",
-        MAX_REPAIR_ROUNDS,
-        last_errors.iter().map(|e| format!(" â€¢ {e}")).collect::<Vec<_>>().join("\n"),
-        last_json
+        "Failed to generate a valid workflow after {} attempts.\n\nThe AI model couldn't fix these issues:\n- {}",
+        MAX_REPAIR_ROUNDS + 1,
+        last_errors.join("\n- ")
     ))
+}
+
+/// Step 27: Generate a concise title for the workflow based on its actual structure.
+pub async fn auto_name_graph(
+    graph: &Graph,
+    model: &str,
+    ollama_url: &str,
+) -> Result<String, String> {
+    let client = OllamaClient::new(ollama_url);
+    if !client.is_reachable().await {
+        return Err("Ollama not reachable".to_string());
+    }
+
+    let summary: Vec<String> = graph.nodes.iter().map(|n| format!("{:?}", n.data)).collect();
+    let prompt = format!(
+        "You are an expert naming assistant. I have generated a workflow with the following nodes:\n{}\n\nGenerate a very short, concise, and professional title (3-5 words) for this workflow. Output ONLY the title, no quotes, no extra text.",
+        summary.join(", ")
+    );
+
+    let raw_output = client
+        .generate(model, &prompt, vec![], false)
+        .await
+        .map_err(|e| format!("Naming request failed: {e}"))?;
+
+    let title = raw_output.trim().trim_matches('"').to_string();
+    Ok(if title.is_empty() { "Untitled Workflow".to_string() } else { title })
 }
 
 /// Extract the first valid JSON object `{ ... }` from a string that may contain markdown or prose.

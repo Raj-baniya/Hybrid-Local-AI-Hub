@@ -1,4 +1,4 @@
-﻿use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result};
 use crate::schema::Graph;
 
 /// Resolve all `{{...}}` template placeholders in a string.
@@ -31,23 +31,35 @@ pub fn resolve(
         remaining = &after[end + 2..];
 
         if placeholder == "input" {
-            let val = single_input.ok_or_else(|| {
+            let val_raw = single_input.ok_or_else(|| {
                 anyhow!(
                     "{{{{input}}}} used but no single-input value is available. \
                      This should have been caught by validation."
                 )
             })?;
-            result.push_str(val);
+            let val = if val_raw.starts_with("FILE_EVENT:") {
+                let p = val_raw.trim_start_matches("FILE_EVENT:");
+                std::fs::read_to_string(p).unwrap_or_else(|_| val_raw.to_string())
+            } else {
+                val_raw.to_string()
+            };
+            result.push_str(&val);
         } else if let Some(dot) = placeholder.find('.') {
             let node_id = &placeholder[..dot];
-            let output = outputs.get(node_id).ok_or_else(|| {
+            let output_raw = outputs.get(node_id).ok_or_else(|| {
                 anyhow!(
                     "Template references {{{{{}}}}} but node '{}' has no output yet. \
-                     Check execution order.",
+                     This likely indicates a missing edge in the workflow graph.",
                     placeholder, node_id
                 )
             })?;
-            result.push_str(output);
+            let output = if output_raw.starts_with("FILE_EVENT:") {
+                let p = output_raw.trim_start_matches("FILE_EVENT:");
+                std::fs::read_to_string(p).unwrap_or_else(|_| output_raw.to_string())
+            } else {
+                output_raw.to_string()
+            };
+            result.push_str(&output);
         } else {
             return Err(anyhow!(
                 "Unrecognized placeholder {{{{{}}}}}: must be '{{{{input}}}}' or \

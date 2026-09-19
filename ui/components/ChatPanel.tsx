@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useChatStore } from '../store/chatStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { Graph } from '../schema/graphSchema';
-import { Sparkles, ArrowRight, CheckCircle, AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
+import { Sparkles, ArrowRight, CheckCircle, AlertCircle, Loader2, RefreshCw, X, Send, Bot, User, StopCircle } from 'lucide-react';
+import { ChatHistorySidebar } from './ChatHistorySidebar';
 
 type OllamaStatus =
   | { state: "NotRunning" }
@@ -28,28 +31,69 @@ export const ChatPanel: React.FC = () => {
     startGeneration, setSuccess, setError, reset
   } = useChatStore();
 
+  const isOfflineMode = useSettingsStore((s) => s.isOfflineMode);
   const loading = status === "generating";
 
   const [installedModels, setInstalledModels] = useState<{ name: string }[]>([]);
+  const [providers, setProviders] = useState<{ name: string, model: string }[]>([]);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<string>('');
+  
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, generationProgress, error, generatedGraph]);
+
+  useEffect(() => {
     invoke<OllamaStatus>('cmd_check_ollama').then((s) => {
       if (s.state === 'Ready' && s.models.length > 0) {
         setInstalledModels(s.models);
-        // Only set default model if it's not already set in the global store
         if (!useChatStore.getState().model) {
           setModel(s.models[0].name);
         }
       }
     });
+
+    invoke<{name: string, model: string}[]>('get_providers')
+      .then(res => setProviders(res))
+      .catch(console.error);
   }, [setModel]);
 
-  const [taskId, setTaskId] = useState<string | null>(null);
+  useEffect(() => {
+    if (isOfflineMode) {
+      if (installedModels.length > 0) setModel(installedModels[0].name);
+    } else {
+      if (providers.length > 0) setModel(`API|${providers[0].name}|${providers[0].model}`);
+    }
+  }, [isOfflineMode, installedModels, providers, setModel]);
 
-  React.useEffect(() => {
-    console.log("[DIAGNOSTIC] ChatPanel mounted");
+  const taskIdRef = useRef(taskId);
+  useEffect(() => {
+    taskIdRef.current = taskId;
+  }, [taskId]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    
+    listen<{ taskId: string, message: string }>('generation-progress', (event) => {
+      if (event.payload.taskId !== taskIdRef.current) return;
+      // Append streaming text smoothly instead of flashing
+      setGenerationProgress(event.payload.message);
+    }).then(u => {
+      if (disposed) {
+        u();
+      } else {
+        unlisten = u;
+      }
+    });
+
     return () => {
-      console.log("[DIAGNOSTIC] ChatPanel UNMOUNTED mid-request");
+      disposed = true;
+      if (unlisten) unlisten();
     };
   }, []);
 
@@ -72,16 +116,16 @@ export const ChatPanel: React.FC = () => {
 
     addMessage({ role: 'user', content: prompt });
     const userPrompt = prompt;
-    setPrompt(""); // Clear input box
+    setPrompt(""); 
 
     startGeneration(isEditMode, userPrompt);
     const newTaskId = crypto.randomUUID();
     setTaskId(newTaskId);
+    setGenerationProgress('');
 
     const isEdit = isEditMode;
     const currentGraph = isEditMode ? getActiveGraph() : null;
     
-    // Construct the payload message history by taking existing + the new one
     const payloadMessages = [...messages, { role: 'user', content: userPrompt }];
 
     invoke<Graph>(isEdit ? 'chat_edit' : 'chat_generate', isEdit ? {
@@ -89,34 +133,44 @@ export const ChatPanel: React.FC = () => {
       existingGraph: currentGraph,
       model,
       taskId: newTaskId,
+      offlineMode: isOfflineMode,
     } : {
       messages: payloadMessages,
       model,
       taskId: newTaskId,
+      offlineMode: isOfflineMode,
     })
       .then((result) => {
-        console.log("[DIAGNOSTIC] Generation promise RESOLVED!", result);
         addMessage({ role: 'assistant', content: `Generated graph: ${result.name || 'Untitled'} (${result.nodes.length} nodes)` });
         setSuccess(result);
+        
+        const entry = {
+          id: newTaskId,
+          timestamp: new Date().toISOString(),
+          instruction: userPrompt,
+          model,
+          graph: result
+        };
+        invoke('save_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode,  entry }).then(() => {
+          useChatStore.getState().fetchHistory();
+        }).catch(err => console.error("Failed to save history", err));
       })
       .catch((err: any) => {
         setError(typeof err === 'string' ? err : err.message || 'Generation failed');
       })
       .finally(() => {
         setTaskId(null);
+        setGenerationProgress('');
       });
   };
 
   const handleLoadOntoCanvas = async (inNewTab = false) => {
     if (!generatedGraph) return;
 
-    // Use generated name if available, otherwise fallback
     const fallbackSource = resultPrompt || (messages.length > 0 ? messages[messages.length - 1].content : "");
     const safePrompt = fallbackSource.slice(0, 20).replace(/[<>:"/\\|?*]/g, '').trim();
     const uniqueId = Math.random().toString(36).substring(2, 6);
     
-    // In edit mode, we want to overwrite the existing agent. We use the active tab's title to do this.
-    // If not in edit mode, we use the LLM-provided name, or a generated string if missing.
     let agentName = generatedGraph.name || `AI - ${safePrompt} - ${uniqueId}`;
     
     if (resultMode) {
@@ -127,7 +181,7 @@ export const ChatPanel: React.FC = () => {
     }
 
     try {
-      await invoke('save_agent', { name: agentName, graph: generatedGraph });
+      await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode,  name: agentName, graph: generatedGraph });
     } catch (err) {
       console.error("Failed to auto-save generated agent:", err);
     }
@@ -147,251 +201,325 @@ export const ChatPanel: React.FC = () => {
       style={{
         width: '100%',
         height: '100%',
-        background: 'var(--bg-card)',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
       }}
     >
-      <div
-        style={{
-          padding: '14px 18px',
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Sparkles size={18} style={{ color: 'var(--accent-cyan)' }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Chat-to-Graph Compiler</span>
-        </div>
-        <button
-          onClick={() => setActivePanel('none')}
-          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+      <ChatHistorySidebar />
+      <div style={{
+        flex: 1,
+        background: 'var(--bg-secondary)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        {/* Header */}
+        <div
+          style={{
+            padding: '16px 20px',
+            background: 'var(--bg-card)',
+            borderBottom: '1px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            zIndex: 10,
+          }}
         >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        
-        {/* Chat History View */}
-        {messages.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Conversation History</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ padding: 8, background: 'rgba(6, 182, 212, 0.15)', borderRadius: 10 }}>
+              <Sparkles size={20} style={{ color: 'var(--accent-cyan)' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Chat-to-Graph Compiler</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  style={{
+                    padding: '4px 8px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 6,
+                    color: 'var(--text-primary)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isOfflineMode ? (
+                    installedModels.length === 0 ? (
+                      <option value="">No local models</option>
+                    ) : (
+                      installedModels.map((m) => (
+                        <option key={m.name} value={m.name}>{m.name}</option>
+                      ))
+                    )
+                  ) : (
+                    providers.length === 0 ? (
+                      <option value="">No API models configured</option>
+                    ) : (
+                      providers.map((p) => (
+                        <option key={`api-${p.name}`} value={`API|${p.name}|${p.model}`}>
+                          {p.name} ({p.model})
+                        </option>
+                      ))
+                    )
+                  )}
+                </select>
+                
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={isEditMode}
+                    onChange={(e) => setIsEditMode(e.target.checked)}
+                    style={{ cursor: 'pointer', accentColor: 'var(--accent-cyan)' }}
+                  />
+                  Edit Mode
+                </label>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {messages.length > 0 && (
               <button 
+                className="btn btn-secondary"
                 onClick={() => {
-                  if (status === 'generating' || loading) return;
+                  if (loading) return;
                   clearHistory();
                 }}
-                disabled={status === 'generating' || loading}
-                style={{ background: 'transparent', border: 'none', color: (status === 'generating' || loading) ? 'var(--text-disabled)' : 'var(--accent-rose)', fontSize: 11, cursor: (status === 'generating' || loading) ? 'not-allowed' : 'pointer' }}
+                disabled={loading}
+                style={{ padding: '6px 12px', fontSize: 12 }}
               >
-                Clear
+                Clear History
               </button>
+            )}
+            <button
+              className="btn btn-icon"
+              onClick={() => {
+                if (taskId) {
+                  handleStop();
+                }
+                setActivePanel('none');
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Chat Area */}
+        <div 
+          ref={scrollRef}
+          style={{ 
+            flex: 1, 
+            overflowY: 'auto', 
+            padding: '24px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: 20 
+          }}
+        >
+          {messages.length === 0 && !loading && !error && !generatedGraph ? (
+            <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', maxWidth: 400 }}>
+              <Sparkles size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
+              <h3 style={{ fontSize: 18, color: 'var(--text-primary)', marginBottom: 8 }}>How can I help you?</h3>
+              <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+                Describe a workflow you want to build, and I will generate the nodes and connections for you.
+              </p>
             </div>
-            {messages.map((msg, idx) => (
+          ) : (
+            messages.map((msg, idx) => (
               <div 
                 key={idx} 
                 style={{ 
-                  padding: '10px 14px', 
-                  borderRadius: 8, 
-                  fontSize: 12, 
-                  background: msg.role === 'user' ? 'rgba(56, 189, 248, 0.1)' : 'var(--bg-secondary)',
-                  border: msg.role === 'user' ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid var(--border-medium)',
+                  display: 'flex',
+                  gap: 12,
                   alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: '90%',
-                  color: msg.role === 'user' ? 'var(--text-primary)' : 'var(--text-secondary)'
+                  maxWidth: '85%',
+                  flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
                 }}
               >
-                <div style={{ fontWeight: 600, marginBottom: 4, color: msg.role === 'user' ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
-                  {msg.role === 'user' ? 'You' : 'Agent'}
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: msg.role === 'user' ? 'var(--accent-cyan)' : 'var(--bg-tertiary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  color: msg.role === 'user' ? '#fff' : 'var(--text-primary)'
+                }}>
+                  {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
                 </div>
-                <div>{msg.content}</div>
+                <div style={{ 
+                  padding: '12px 16px', 
+                  borderRadius: 16,
+                  borderTopRightRadius: msg.role === 'user' ? 4 : 16,
+                  borderTopLeftRadius: msg.role === 'user' ? 16 : 4,
+                  fontSize: 14, 
+                  background: msg.role === 'user' ? 'rgba(6, 182, 212, 0.1)' : 'var(--bg-card)',
+                  border: msg.role === 'user' ? '1px solid rgba(6, 182, 212, 0.2)' : '1px solid var(--border-subtle)',
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.5,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                }}>
+                  {msg.content}
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
 
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-            {messages.length === 0 ? "Initial Instruction" : "Refinement Instruction"}
-          </label>
-          <textarea
-            rows={3}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder={messages.length === 0 ? "e.g. Watch my ./gym folder for PDFs..." : "e.g. Add a node to also write to a CSV file"}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-medium)',
-              borderRadius: 8,
-              color: 'var(--text-primary)',
-              fontSize: 13,
-              outline: 'none',
-              resize: 'vertical',
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-              Ollama Model
-            </label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-medium)',
-                borderRadius: 6,
-                color: 'var(--text-primary)',
-                fontSize: 12,
-              }}
-            >
-              {installedModels.length === 0 ? (
-                <option value="">No models installed</option>
-              ) : (
-                installedModels.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="checkbox"
-            id="editModeToggle"
-            checked={isEditMode}
-            onChange={(e) => setIsEditMode(e.target.checked)}
-          />
-          <label htmlFor="editModeToggle" style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-            Modify existing canvas workflow (Edit mode)
-          </label>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1, justifyContent: 'center', padding: '10px' }}
-            onClick={handleGenerate}
-            disabled={loading || !prompt.trim()}
-          >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="spinning" />
-                Compiling...
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} />
-                {isEditMode ? 'Refine' : 'Synthesize'}
-              </>
-            )}
-          </button>
           {loading && (
-            <button
-              className="btn btn-secondary"
-              style={{ padding: '10px', color: 'var(--accent-red)' }}
-              onClick={handleStop}
-              title="Stop Generation"
-            >
-              <X size={16} />
-            </button>
+            <div style={{ display: 'flex', gap: 12, maxWidth: '85%' }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: 'var(--bg-tertiary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                color: 'var(--text-primary)'
+              }}>
+                <Bot size={18} />
+              </div>
+              <div style={{ 
+                padding: '12px 16px', 
+                borderRadius: 16,
+                borderTopLeftRadius: 4,
+                fontSize: 14, 
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+                lineHeight: 1.5,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', marginBottom: generationProgress ? 8 : 0 }}>
+                  <Loader2 size={14} className="spinning" />
+                  <span style={{ fontSize: 13 }}>Thinking...</span>
+                </div>
+                {generationProgress && (
+                  <div style={{ color: 'var(--text-primary)', opacity: 0.9, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 13, background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: 8 }}>
+                    {generationProgress}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div style={{
+                padding: 16,
+                background: 'rgba(244, 63, 94, 0.1)',
+                border: '1px solid rgba(244, 63, 94, 0.2)',
+                borderRadius: 12,
+                color: 'var(--accent-rose)',
+                alignSelf: 'center',
+                width: '100%',
+                maxWidth: 600
+              }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 8 }}>
+                <AlertCircle size={16} /> Error
+              </div>
+              <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, fontFamily: 'monospace', opacity: 0.9 }}>{error}</pre>
+            </div>
+          )}
+
+          {generatedGraph && (
+            <div style={{
+                padding: 20,
+                background: loading ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)',
+                border: `1px solid ${loading ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.2)'}`,
+                borderRadius: 16,
+                alignSelf: 'center',
+                width: '100%',
+                maxWidth: 600,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+                opacity: loading ? 0.7 : 1,
+                transition: 'all 0.3s ease',
+              }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-emerald)', fontWeight: 600, fontSize: 15 }}>
+                <CheckCircle size={18} />
+                {loading ? 'Previous Workflow (new one generating…)' : 'Workflow Generated Successfully'}
+              </div>
+              <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                Contains <b>{generatedGraph.nodes.length}</b> nodes and <b>{generatedGraph.edges.length}</b> connections.
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                {resultMode ? (
+                  <>
+                    <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(false)} disabled={loading}>
+                      <ArrowRight size={16} /> Update Current Canvas
+                    </button>
+                    <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(true)} disabled={loading}>
+                      <RefreshCw size={16} /> Open as New Tab
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(true)} disabled={loading}>
+                      <ArrowRight size={16} /> Open in New Tab
+                    </button>
+                    <button className="btn btn-danger" style={{ flex: 1, justifyContent: 'center', background: 'transparent', border: '1px solid var(--accent-rose)', color: 'var(--accent-rose)' }} onClick={() => handleLoadOntoCanvas(false)} disabled={loading}>
+                      <RefreshCw size={16} /> Overwrite Current
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
-        {error && (
-          <div
-            style={{
-              padding: 12,
-              background: 'rgba(244, 63, 94, 0.12)',
-              border: '1px solid rgba(244, 63, 94, 0.3)',
-              borderRadius: 8,
-              color: 'var(--accent-rose)',
-              fontSize: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, marginBottom: 4 }}>
-              <AlertCircle size={14} />
-              Compiler Error
-            </div>
-            <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11, fontFamily: 'monospace' }}>{error}</pre>
+        {/* Input Area */}
+        <div style={{ padding: '20px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)', zIndex: 10 }}>
+          
+          {/* Text Area Row */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+            <textarea
+              rows={Math.min(5, prompt.split('\n').length || 1)}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Describe the workflow you want to build..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (loading) return;
+                  handleGenerate();
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: '14px 16px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-medium)',
+                borderRadius: 16,
+                color: 'var(--text-primary)',
+                fontSize: 14,
+                outline: 'none',
+                resize: 'none',
+                lineHeight: 1.5,
+                maxHeight: 150
+              }}
+              disabled={loading}
+            />
+            {loading ? (
+              <button
+                className="btn btn-secondary"
+                onClick={handleStop}
+                style={{ height: 50, width: 50, borderRadius: '50%', justifyContent: 'center', padding: 0, color: 'var(--accent-rose)' }}
+                title="Stop Generation"
+              >
+                <StopCircle size={24} />
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={handleGenerate}
+                disabled={!prompt.trim() || !model}
+                style={{ height: 50, width: 50, borderRadius: '50%', justifyContent: 'center', padding: 0 }}
+                title="Send Request"
+              >
+                <Send size={20} />
+              </button>
+            )}
           </div>
-        )}
-        {generatedGraph && (
-          <div
-            style={{
-              padding: 14,
-              background: 'rgba(16, 185, 129, 0.1)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              borderRadius: 8,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent-emerald)', fontWeight: 600, fontSize: 13 }}>
-              <CheckCircle size={16} />
-              Workflow Graph Validated!
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Generated <b>{generatedGraph.nodes.length}</b> nodes and <b>{generatedGraph.edges.length}</b> connections.
-            </div>
+        </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {resultMode ? (
-                <>
-                  <button
-                    className="btn btn-success"
-                    style={{ justifyContent: 'center' }}
-                    onClick={() => handleLoadOntoCanvas(false)}
-                  >
-                    <ArrowRight size={14} />
-                    Update Active Canvas
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ justifyContent: 'center' }}
-                    onClick={() => handleLoadOntoCanvas(true)}
-                  >
-                    <RefreshCw size={14} />
-                    Open as New Workflow
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="btn btn-success"
-                    style={{ justifyContent: 'center' }}
-                    onClick={() => handleLoadOntoCanvas(true)}
-                  >
-                    <ArrowRight size={14} />
-                    Open in New Tab
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    style={{ justifyContent: 'center', background: 'transparent', border: '1px solid var(--accent-rose)', color: 'var(--accent-rose)' }}
-                    onClick={() => handleLoadOntoCanvas(false)}
-                  >
-                    <RefreshCw size={14} />
-                    Overwrite Active Canvas
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

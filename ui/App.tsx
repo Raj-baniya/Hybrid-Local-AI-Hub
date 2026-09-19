@@ -12,6 +12,7 @@ import { SavedAgentsPanel } from './components/SavedAgentsPanel';
 import { HelpAgentPanel } from './components/HelpAgentPanel';
 import { SetupWizard } from './components/SetupWizard';
 import { SavePromptModal } from './components/SavePromptModal';
+import { SettingsModal } from './components/SettingsModal';
 import { useWorkflowStore } from './store/workflowStore';
 
 type OllamaStatus =
@@ -114,7 +115,7 @@ export const App: React.FC = () => {
             
             {/* Active Side Panel */}
             {activePanel !== 'none' && (
-              <div style={{ width: 360, height: '100%', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ width: (activePanel === 'chat' || activePanel === 'help' || activePanel === 'logs') ? 750 : 360, height: '100%', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'width 0.2s ease-in-out' }}>
                 <div style={{ display: activePanel === 'nodes' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
                   <NodePalette />
                 </div>
@@ -145,6 +146,7 @@ export const App: React.FC = () => {
         </div>
       </div>
       <SavePromptModal />
+      <SettingsModal />
     </ReactFlowProvider>
   );
 };

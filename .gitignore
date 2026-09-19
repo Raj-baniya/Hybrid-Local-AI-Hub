@@ -12,7 +12,14 @@ dist/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# system files
 .DS_Store
+
+# local configuration
+.env.local
+local_providers.json
+
 *.suo
 *.ntvs*
 *.njsproj

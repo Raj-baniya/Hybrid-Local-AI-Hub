@@ -1,4 +1,4 @@
-﻿//! Hybrid Local AI Hub â€” library crate.
+//! Hybrid Local AI Hub — library crate.
 //!
 //! All core modules exposed here for use by:
 //!   - `src/main.rs` (CLI binary)
@@ -15,3 +15,6 @@ pub mod chroma;
 pub mod watcher;
 pub mod translator_prompt;
 pub mod compiler;
+pub mod network;
+pub mod providers;
+pub mod state_store;

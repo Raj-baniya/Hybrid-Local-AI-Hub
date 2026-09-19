@@ -15,6 +15,7 @@ import {
   Globe,
   Terminal,
   Braces,
+  Clock,
 } from 'lucide-react';
 import {
   FileWatcherConfig,
@@ -29,6 +30,13 @@ import {
   WebScraperConfig,
   ShellCommandConfig,
   RegexExtractorConfig,
+  ScheduleConfig,
+  SourceFileConfig,
+  DatasetProfileConfig,
+  TransformAggregateConfig,
+  AnalysisStatsHypothesisTestConfig,
+  AiInterpretConfig,
+  AiPlanConfig,
 } from '../../schema/graphSchema';
 
 export const FileWatcherNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
@@ -54,6 +62,28 @@ export const FileWatcherNodeComponent: React.FC<NodeProps> = ({ id, data, select
             <span style={{ fontFamily: 'monospace' }}>{cfg.pattern}</span>
           </div>
         )}
+      </div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const ScheduleNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as ScheduleConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Schedule"
+      icon={<Clock size={16} />}
+      headerColor="#f59e0b"
+      selected={selected}
+      hasTargetHandle={false}
+      hasSourceHandle={true}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>Cron: </span>
+          <span style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{cfg.cronExpression}</span>
+        </div>
       </div>
     </CustomNodeWrapper>
   );
@@ -290,8 +320,13 @@ export const WebScraperNodeComponent: React.FC<NodeProps> = ({ id, data, selecte
       hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {cfg.url}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {cfg.url}
+        </div>
+        <div style={{ fontSize: 9, alignSelf: 'flex-start', padding: '2px 6px', background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>
+          REQUIRES INTERNET
+        </div>
       </div>
     </CustomNodeWrapper>
   );
@@ -328,9 +363,122 @@ export const RegexExtractorNodeComponent: React.FC<NodeProps> = ({ id, data, sel
       hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {cfg.pattern}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>Pattern: </span>
+          <span style={{ fontFamily: 'monospace', color: '#34d399' }}>{cfg.pattern}</span>
+        </div>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>Group: </span>
+          <span>{cfg.group}</span>
+        </div>
       </div>
+    </CustomNodeWrapper>
+  );
+};
+
+// ─── Phase 2 Nodes ─────────────────────────────────────────────────────────
+
+export const SourceFileNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as SourceFileConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Dataset Source"
+      icon={<FileSpreadsheet size={16} />}
+      headerColor="#0284c7"
+      selected={selected}
+      hasTargetHandle={false}
+      hasSourceHandle={true}
+    >
+      <div style={{ fontFamily: 'monospace', color: '#38bdf8', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {cfg.path}
+      </div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const DatasetProfileNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as DatasetProfileConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Data Profiler"
+      icon={<Database size={16} />}
+      headerColor="#0f766e"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ color: 'var(--text-secondary)' }}>Mode: {cfg.mode}</div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const TransformAggregateNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as TransformAggregateConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Aggregate"
+      icon={<GitFork size={16} />}
+      headerColor="#b45309"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ color: 'var(--text-secondary)' }}>Group By: {cfg.groupBy.join(', ')}</div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const AnalysisStatsHypothesisTestNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as AnalysisStatsHypothesisTestConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="Hypothesis Test"
+      icon={<Binary size={16} />}
+      headerColor="#4338ca"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ color: 'var(--text-secondary)' }}>Test: {cfg.test}</div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const AiInterpretNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as AiInterpretConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="AI Interpreter"
+      icon={<Sparkles size={16} />}
+      headerColor="#a21caf"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ color: 'var(--text-secondary)' }}>Facts Required: {cfg.requiresFacts.length}</div>
+    </CustomNodeWrapper>
+  );
+};
+
+export const AiPlanNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as unknown as AiPlanConfig;
+  return (
+    <CustomNodeWrapper
+      id={id}
+      title="AI Planner"
+      icon={<Sparkles size={16} />}
+      headerColor="#e11d48"
+      selected={selected}
+      hasTargetHandle={true}
+      hasSourceHandle={true}
+    >
+      <div style={{ color: 'var(--text-secondary)' }}>Role: {cfg.modelRole}</div>
     </CustomNodeWrapper>
   );
 };
@@ -348,4 +496,11 @@ export const customNodeTypes = {
   WebScraperNode: WebScraperNodeComponent,
   ShellCommandNode: ShellCommandNodeComponent,
   RegexExtractorNode: RegexExtractorNodeComponent,
+  ScheduleNode: ScheduleNodeComponent,
+  SourceFileNode: SourceFileNodeComponent,
+  DatasetProfileNode: DatasetProfileNodeComponent,
+  TransformAggregateNode: TransformAggregateNodeComponent,
+  AnalysisStatsHypothesisTestNode: AnalysisStatsHypothesisTestNodeComponent,
+  AiInterpretNode: AiInterpretNodeComponent,
+  AiPlanNode: AiPlanNodeComponent,
 };

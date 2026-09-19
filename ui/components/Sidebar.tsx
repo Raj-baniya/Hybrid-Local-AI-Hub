@@ -1,9 +1,11 @@
 import React from 'react';
 import { Network, Bot, Sparkles, Terminal, Box, LifeBuoy, Settings } from 'lucide-react';
 import { useWorkflowStore } from '../store/workflowStore';
+import { useSettingsStore } from '../store/settingsStore';
 
 export const Sidebar: React.FC = () => {
   const { activePanel, setActivePanel } = useWorkflowStore();
+  const setSettingsModalOpen = useSettingsStore((s) => s.setSettingsModalOpen);
 
   const togglePanel = (panel: 'nodes' | 'chat' | 'logs' | 'models' | 'agents' | 'help') => {
     setActivePanel(activePanel === panel ? 'none' : panel);
@@ -11,10 +13,8 @@ export const Sidebar: React.FC = () => {
 
   const navItems = [
     { id: 'nodes', icon: Network, title: 'Node Palette' },
-    { id: 'agents', icon: Bot, title: 'Library' },
     { id: 'chat', icon: Sparkles, title: 'Chat AI' },
     { id: 'logs', icon: Terminal, title: 'Execution Logs' },
-    { id: 'models', icon: Box, title: 'Local Models' },
     { id: 'help', icon: LifeBuoy, title: 'Help Agent' },
   ] as const;
 
@@ -64,7 +64,8 @@ export const Sidebar: React.FC = () => {
 
       <button
         className="btn btn-icon"
-        title="Settings (Coming soon)"
+        title="Settings"
+        onClick={() => setSettingsModalOpen(true)}
         style={{
           width: 40,
           height: 40,

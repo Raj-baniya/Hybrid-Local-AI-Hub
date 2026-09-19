@@ -251,6 +251,19 @@ fn build_manifest(graph: &Graph) -> BundleManifest {
             NodeType::LocalEmbedderNode(cfg) => {
                 models.insert(cfg.model.clone());
             }
+            NodeType::AiPlanNode(cfg) => {
+                models.insert(cfg.model.clone().unwrap_or_else(|| "llama3.2".to_string()));
+            }
+            NodeType::AiInterpretNode(cfg) => {
+                models.insert(cfg.model.clone().unwrap_or_else(|| "llama3.2".to_string()));
+            }
+            NodeType::SourceFileNode(cfg) => {
+                machine_paths.push(MachineSpecificPath {
+                    node_id: node.id.clone(),
+                    field: "path".to_string(),
+                    value: cfg.path.clone(),
+                });
+            }
             NodeType::ChromaDbStoreNode(cfg) => {
                 collections.insert(cfg.collection_name.clone());
             }
@@ -300,6 +313,21 @@ fn build_readme(graph: &Graph, manifest: &BundleManifest, source_path: &std::pat
                 NodeType::WebScraperNode(_) => "WebScraperNode",
                 NodeType::ShellCommandNode(_) => "ShellCommandNode",
                 NodeType::RegexExtractorNode(_) => "RegexExtractorNode",
+                NodeType::ScheduleNode(_) => "ScheduleNode",
+                NodeType::SourceFileNode(_) => "SourceFileNode",
+                NodeType::DatasetProfileNode(_) => "DatasetProfileNode",
+                NodeType::TransformAggregateNode(_) => "TransformAggregateNode",
+                NodeType::AnalysisStatsHypothesisTestNode(_) => "AnalysisStatsHypothesisTestNode",
+                NodeType::AiInterpretNode(_) => "AiInterpretNode",
+                NodeType::AiPlanNode(_) => "AiPlanNode",
+                NodeType::ClipboardTriggerNode(_) => "ClipboardTriggerNode",
+                NodeType::CsvReaderNode(_) => "CsvReaderNode",
+                NodeType::DelayNode(_) => "DelayNode",
+                NodeType::TemplateFormatterNode(_) => "TemplateFormatterNode",
+                NodeType::MergeNode(_) => "MergeNode",
+                NodeType::NotifyDesktopNode(_) => "NotifyDesktopNode",
+                NodeType::NotifyWebhookNode(_) => "NotifyWebhookNode",
+
             };
             format!("- **{}** ({})", n.id, type_name)
         })

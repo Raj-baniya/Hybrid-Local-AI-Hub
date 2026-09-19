@@ -17,8 +17,26 @@ use tokio::time::timeout;
 use crate::chroma::ChromaClient;
 use crate::execution_record::{ExecutionRecord, NodeRecord, NodeStatus};
 use crate::interpolation;
-use crate::ollama::OllamaClient;
-use crate::schema::{Graph, NodeType};
+use crate::providers::ProviderManager;
+use crate::schema::{AgentDefinition, Graph, NodeType};
+
+// ─── Permission Broker Stub ──────────────────────────────────────────────────
+
+pub struct PermissionBroker;
+
+impl PermissionBroker {
+    pub fn authorize(agent: Option<&AgentDefinition>, capability: &str) -> Result<()> {
+        if let Some(agent) = agent {
+            // Check if the agent's autonomy allows the capability, or if it requires approval
+            if agent.autonomy.requires_approval_for.iter().any(|c| capability.starts_with(c)) {
+                return Err(anyhow::anyhow!("Capability '{}' requires explicit user approval based on agent autonomy policy.", capability));
+            }
+        }
+        // In Phase 1, we default to allow unless it matches a known requires_approval_for rule.
+        Ok(())
+    }
+}
+
 
 // â”€â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -38,6 +56,8 @@ pub struct ExecutorConfig {
     pub default_timeout_secs: u64,
     /// Timeout for OllamaSelectorNode and LocalEmbedderNode in seconds.
     pub llm_timeout_secs: u64,
+    pub is_offline: bool,
+    pub online_keys: Vec<crate::providers::ApiKeyConfig>,
 }
 
 impl Default for ExecutorConfig {
@@ -48,6 +68,8 @@ impl Default for ExecutorConfig {
             failure_policy: FailurePolicy::HaltOnFailure,
             default_timeout_secs: 10,
             llm_timeout_secs: 600,
+            is_offline: true,
+            online_keys: vec![],
         }
     }
 }
@@ -57,6 +79,7 @@ impl Default for ExecutorConfig {
 /// Returns the `ExecutionRecord` describing what happened (saved to disk on completion).
 pub async fn run_graph(
     graph: &Graph,
+    agent: Option<&AgentDefinition>,
     config: ExecutorConfig,
     trigger_source: &str,
     event_sender: Option<tokio::sync::mpsc::UnboundedSender<crate::execution_record::NodeRecord>>,
@@ -64,10 +87,25 @@ pub async fn run_graph(
     // Pre-validate templates before any node runs.
     interpolation::validate_templates(graph)?;
 
-    let ollama = OllamaClient::new(&config.ollama_url);
+    let ollama = ProviderManager::new(&config.ollama_url, config.is_offline, config.online_keys.clone());
     let chroma = ChromaClient::new(&config.chroma_url);
+    
+    let base_dir = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join(".hybrid-hub");
+    let state_store = crate::state_store::StateStore::new(&base_dir).unwrap();
 
     let mut record = ExecutionRecord::new(trigger_source, None);
+    let run_id = record.execution_id.clone();
+    
+    let outputs: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    // Attempt crash recovery: load checkpoints for this run_id (or if we passed a specific run_id to resume)
+    // For now we'll just prepopulate from any existing checkpoint
+    if let Ok(Some(cp)) = state_store.load_checkpoint(&run_id).await {
+        let mut out = outputs.lock().await;
+        for (k, v) in cp.state {
+            out.insert(k, v);
+        }
+    }
+
 
     // Initialise per-node records.
     for node in &graph.nodes {
@@ -92,7 +130,6 @@ pub async fn run_graph(
     let failure_policy = config.failure_policy;
 
     // Shared state.
-    let outputs: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     let skipped: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
     // Kahn's BFS: start with all zero-in-degree nodes.
@@ -122,7 +159,7 @@ pub async fn run_graph(
 
             let node_data = node.data.clone();
             let node_id = node_id.clone();
-            let ollama = ollama.clone();
+            let ollama = std::sync::Arc::new(ollama.clone());
             let chroma = chroma.clone();
             let outputs = Arc::clone(&outputs);
             let skipped = Arc::clone(&skipped);
@@ -151,17 +188,47 @@ pub async fn run_graph(
                 let _ = s.send(ir);
             }
 
+            let agent_clone = agent.cloned();
+            let trigger_source_cloned = trigger_source.to_string();
+            let state_store = state_store.clone();
+            let run_id_clone = run_id.clone();
             let handle = tokio::spawn(async move {
                 // If this node was skipped (because an upstream failed), skip it too.
                 if skipped.lock().await.contains(&node_id) {
                     return (node_id.clone(), Err::<String, anyhow::Error>(anyhow!("SKIP")));
                 }
+                
+                // Authorize node capabilities
+                let capability = match &node_data {
+                    NodeType::LocalFileWriterNode(_) => Some("fs.write"),
+                    NodeType::ImageInputNode(_) | NodeType::PDFExtractorNode(_) | NodeType::FileWatcherNode(_) | NodeType::CsvReaderNode(_) => Some("fs.read"),
+                    NodeType::ShellCommandNode(_) => Some("shell.execute"),
+                    NodeType::WebScraperNode(_) => Some("net.egress"),
+                    NodeType::NotifyWebhookNode(_) => Some("net.egress"),
+                    NodeType::ChromaDbStoreNode(_) => Some("db.write"),
+                    _ => None,
+                };
+                
+                if let Some(cap) = capability {
+                    if let Err(e) = PermissionBroker::authorize(agent_clone.as_ref(), cap) {
+                        return (node_id.clone(), Err(e));
+                    }
+                }
 
-                let fut = execute_node(node_id.clone(), node_data, outputs, chroma, ollama, predecessors, skipped.clone());
+                
+                // If output already exists from checkpoint, skip execution and return it
+                {
+                    let out = outputs.lock().await;
+                    if let Some(res) = out.get(&node_id) {
+                        return (node_id.clone(), Ok(res.clone()));
+                    }
+                }
+                
+                let fut = execute_node(node_id.clone(), node_data.clone(), outputs.clone(), chroma.clone(), ollama.clone(), predecessors.clone(), skipped.clone(), trigger_source_cloned, run_id_clone, state_store.clone());
                 let result = timeout(Duration::from_secs(timeout_secs), fut).await;
 
                 match result {
-                    Ok(inner) => (node_id, inner),
+                    Ok(res) => (node_id, res),
                     Err(_) => (
                         node_id.clone(),
                         Err(anyhow!(
@@ -197,7 +264,20 @@ pub async fn run_graph(
                         nr.start();
                     }
                     nr.succeed(&output);
-                    outputs.lock().await.insert(node_id.clone(), output);
+                    let mut out = outputs.lock().await;
+                    out.insert(node_id.clone(), output);
+                    
+                    // Save checkpoint
+                    let cp = crate::schema::Checkpoint {
+                        checkpoint_id: uuid::Uuid::new_v4().to_string(),
+                        run_id: run_id.clone(),
+                        graph_hash: "TODO".to_string(),
+                        created_at: chrono::Utc::now().to_rfc3339(),
+                        node_id: node_id.clone(),
+                        state: out.clone(),
+                    };
+                    let _ = state_store.save_checkpoint(&cp).await;
+
                     if let Some(ref s) = event_sender {
                         let _ = s.send(nr.clone());
                     }
@@ -297,6 +377,7 @@ fn llm_timeout_if_needed(data: &NodeType, config: &ExecutorConfig) -> u64 {
 fn node_type_name(data: &NodeType) -> &'static str {
     match data {
         NodeType::FileWatcherNode(_) => "FileWatcherNode",
+        NodeType::ScheduleNode(_) => "ScheduleNode",
         NodeType::TextInputNode(_) => "TextInputNode",
         NodeType::ImageInputNode(_) => "ImageInputNode",
         NodeType::OllamaSelectorNode(_) => "OllamaSelectorNode",
@@ -308,6 +389,20 @@ fn node_type_name(data: &NodeType) -> &'static str {
         NodeType::WebScraperNode(_) => "WebScraperNode",
         NodeType::ShellCommandNode(_) => "ShellCommandNode",
         NodeType::RegexExtractorNode(_) => "RegexExtractorNode",
+        NodeType::SourceFileNode(_) => "SourceFileNode",
+        NodeType::DatasetProfileNode(_) => "DatasetProfileNode",
+        NodeType::TransformAggregateNode(_) => "TransformAggregateNode",
+        NodeType::AnalysisStatsHypothesisTestNode(_) => "AnalysisStatsHypothesisTestNode",
+        NodeType::AiInterpretNode(_) => "AiInterpretNode",
+        NodeType::AiPlanNode(_) => "AiPlanNode",
+        NodeType::NotifyDesktopNode(_) => "NotifyDesktopNode",
+        NodeType::NotifyWebhookNode(_) => "NotifyWebhookNode",
+        NodeType::ClipboardTriggerNode(_) => "ClipboardTriggerNode",
+        NodeType::CsvReaderNode(_) => "CsvReaderNode",
+        NodeType::DelayNode(_) => "DelayNode",
+        NodeType::TemplateFormatterNode(_) => "TemplateFormatterNode",
+        NodeType::MergeNode(_) => "MergeNode",
+
     }
 }
 
@@ -317,9 +412,12 @@ async fn execute_node(
     node_data: NodeType,
     outputs: Arc<Mutex<HashMap<String, String>>>,
     chroma: ChromaClient,
-    ollama: OllamaClient,
+    ollama: std::sync::Arc<ProviderManager>,
     predecessors: Vec<String>,
     skipped: Arc<Mutex<HashSet<String>>>,
+    trigger_source: String,
+    run_id: String,
+    state_store: crate::state_store::StateStore,
 ) -> Result<String> {
     match node_data {
         // ── TextInputNode ──────────────────────────────────────────────────────────
@@ -345,10 +443,107 @@ async fn execute_node(
         }
 
         // ── FileWatcherNode ──────────────────────────────────────────────────
-        NodeType::FileWatcherNode(_cfg) => {
-            // In `run` (one-shot) mode, a FileWatcherNode yields a static placeholder;
-            // in `--watch` mode, the watcher module feeds events from outside.
-            Ok("[FileWatcherNode: event-driven — use --watch mode]".to_string())
+        NodeType::FileWatcherNode(cfg) => {
+            let mut target_path = None;
+            if trigger_source.starts_with("watch:") {
+                let p = trigger_source.trim_start_matches("watch:");
+                target_path = Some(std::path::PathBuf::from(p));
+            } else {
+                let path = std::path::Path::new(&cfg.watch_path);
+                if !path.exists() {
+                    let _ = std::fs::create_dir_all(path);
+                }
+                if path.is_dir() {
+                    let mut most_recent_time = std::time::UNIX_EPOCH;
+                    if let Ok(entries) = std::fs::read_dir(path) {
+                        for entry in entries.flatten() {
+                            let p = entry.path();
+                            if p.is_file() {
+                                let mut matches_pattern = true;
+                                if let Some(pat) = &cfg.pattern {
+                                    if !pat.is_empty() {
+                                        let pat_ext = pat.trim_start_matches('*');
+                                        if !p.to_string_lossy().ends_with(pat_ext) {
+                                            matches_pattern = false;
+                                        }
+                                    }
+                                }
+                                if matches_pattern {
+                                    if let Ok(meta) = p.metadata() {
+                                        if let Ok(mod_time) = meta.modified() {
+                                            if mod_time > most_recent_time {
+                                                most_recent_time = mod_time;
+                                                target_path = Some(p);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if let Some(p) = target_path {
+                Ok(format!("FILE_EVENT:{}", p.to_string_lossy()))
+            } else {
+                Err(anyhow::anyhow!("FileWatcherNode: No matching files found in '{}' to simulate trigger.", cfg.watch_path))
+            }
+        }
+
+        // ── ScheduleNode ─────────────────────────────────────────────────────
+        NodeType::ScheduleNode(_cfg) => {
+            // Similar to FileWatcher, yields a placeholder when run sequentially.
+            Ok("[ScheduleNode: time-driven — use --watch mode]".to_string())
+        }
+
+        // ── Phase 2 Deterministic Analytics Nodes ────────────────────────────
+        NodeType::SourceFileNode(_) => {
+            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for SourceFileNode."))
+        }
+        NodeType::DatasetProfileNode(_) => {
+            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for DatasetProfileNode."))
+        }
+        NodeType::TransformAggregateNode(_) => {
+            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for TransformAggregateNode."))
+        }
+        NodeType::AnalysisStatsHypothesisTestNode(_) => {
+            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for AnalysisStatsHypothesisTestNode."))
+        }
+        NodeType::AiInterpretNode(cfg) => {
+            let locked = outputs.lock().await;
+            let mut facts = String::new();
+            for req in &cfg.requires_facts {
+                let ref_node_id = req.split('.').next().unwrap_or("");
+                if let Some(val) = locked.get(ref_node_id) {
+                    facts.push_str(&format!("Fact from {}:\n{}\n\n", ref_node_id, val));
+                }
+            }
+            drop(locked);
+
+            let prompt = format!(
+                "You are an AI Interpreter (Role 5). Synthesize the following deterministic facts into a maximum of {} claims.\n\nFacts:\n{}",
+                cfg.max_claims, facts
+            );
+            
+            let model = cfg.model.clone().unwrap_or_else(|| "llama3.2".to_string());
+            ollama.generate(&model, &prompt, vec![], false).await
+                .map_err(|e| anyhow!("AiInterpretNode '{}': {e}", node_id))
+        }
+        NodeType::AiPlanNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let input_data = single.unwrap_or_default();
+            drop(locked);
+
+            let prompt = format!(
+                "You are an AI Planner agent (Role 2). Your role is: {}.\nYour objective is: {}\n\nBased on the following input data, generate a step-by-step execution plan.\n\nInput Data:\n{}",
+                cfg.model_role, cfg.objective, input_data
+            );
+
+            let model = cfg.model.clone().unwrap_or_else(|| "llama3.2".to_string());
+            ollama.generate(&model, &prompt, vec![], false).await
+                .map_err(|e| anyhow!("AiPlanNode '{}': {e}", node_id))
         }
 
         // ── ImageInputNode ───────────────────────────────────────────────────
@@ -368,8 +563,11 @@ async fn execute_node(
             let single = single_input_value(&predecessors, &locked);
             drop(locked);
 
-            let pdf_path = single
+            let mut pdf_path = single
                 .ok_or_else(|| anyhow!("PDFExtractorNode '{}' has no incoming input", node_id))?;
+            if pdf_path.starts_with("FILE_EVENT:") {
+                pdf_path = pdf_path.trim_start_matches("FILE_EVENT:").to_string();
+            }
             extract_pdf_text(&node_id, &pdf_path, cfg.page_range)
         }
 
@@ -402,14 +600,9 @@ async fn execute_node(
 
         // ── LocalEmbedderNode ────────────────────────────────────────────────
         NodeType::LocalEmbedderNode(cfg) => {
-            let locked = outputs.lock().await;
-            let text = single_input_value(&predecessors, &locked)
-                .ok_or_else(|| anyhow!("LocalEmbedderNode '{}' has no incoming input", node_id))?;
-            drop(locked);
-
-            let embedding = ollama.embeddings(&cfg.model, &text).await?;
-            // Serialize embedding as JSON array string for downstream use.
-            Ok(serde_json::to_string(&embedding)?)
+            let prompt = single_input_value(&predecessors, &*outputs.lock().await).unwrap_or_default();
+            let embedding = ollama.embed(&cfg.model, &prompt).await?;
+            Ok(serde_json::to_string(&embedding).unwrap_or_default())
         }
 
         // ── ChromaDbStoreNode ────────────────────────────────────────────────
@@ -474,6 +667,19 @@ async fn execute_node(
 
         // ── LocalFileWriterNode ──────────────────────────────────────────────
         NodeType::LocalFileWriterNode(cfg) => {
+            let effect = crate::schema::SideEffectRecord {
+                effect_id: uuid::Uuid::new_v4().to_string(),
+                run_id: run_id.clone(),
+                node_id: node_id.clone(),
+                type_: "fs.write".to_string(),
+                idempotency_key: format!("blake3:fs.write:{}", cfg.output_path),
+                intent_at: chrono::Utc::now().to_rfc3339(),
+                completed_at: None,
+                reversible: false,
+                verified: false,
+            };
+            let _ = state_store.log_side_effect(&effect).await;
+
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
             let content = single
@@ -504,6 +710,10 @@ async fn execute_node(
 
         // ── WebScraperNode ───────────────────────────────────────────────────
         NodeType::WebScraperNode(cfg) => {
+            if ollama.is_offline() {
+                return Err(anyhow!("WebScraperNode '{}': Cannot be used in Strict Offline Mode. Turn off Offline Mode to execute this node.", node_id));
+            }
+
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
             let url = interpolation::resolve(&cfg.url, &locked, single.as_deref())?;
@@ -581,9 +791,15 @@ async fn execute_node(
         // ── RegexExtractorNode ───────────────────────────────────────────────
         NodeType::RegexExtractorNode(cfg) => {
             let locked = outputs.lock().await;
-            let content = single_input_value(&predecessors, &locked)
+            let content_raw = single_input_value(&predecessors, &locked)
                 .ok_or_else(|| anyhow!("RegexExtractorNode '{}': no incoming input", node_id))?;
             drop(locked);
+            let content = if content_raw.starts_with("FILE_EVENT:") {
+                let p = content_raw.trim_start_matches("FILE_EVENT:");
+                std::fs::read_to_string(p).unwrap_or_else(|_| content_raw)
+            } else {
+                content_raw
+            };
 
             let re = regex::Regex::new(&cfg.pattern)
                 .map_err(|e| anyhow!("RegexExtractorNode '{}': Invalid regex: {e}", node_id))?;
@@ -596,6 +812,88 @@ async fn execute_node(
                 }
             }
             Err(anyhow!("RegexExtractorNode '{}': Pattern did not match", node_id))
+        }
+        NodeType::ClipboardTriggerNode(_) => {
+            let mut board = arboard::Clipboard::new()
+                .map_err(|e| anyhow::anyhow!("Clipboard error: {}", e))?;
+            let text = board.get_text()
+                .map_err(|e| anyhow::anyhow!("Failed to read clipboard text: {}", e))?;
+            Ok(text)
+        }
+        NodeType::CsvReaderNode(cfg) => {
+            let locked = outputs.lock().await;
+            let path = interpolation::resolve(&cfg.file_path, &locked, None)?;
+            drop(locked);
+            let mut rdr = csv::ReaderBuilder::new()
+                .has_headers(cfg.has_header_row)
+                .from_path(path)?;
+            let mut rows = Vec::new();
+            for result in rdr.deserialize::<serde_json::Value>() {
+                rows.push(result?);
+            }
+            Ok(serde_json::to_string(&rows)?)
+        }
+        NodeType::DelayNode(cfg) => {
+            tokio::time::sleep(tokio::time::Duration::from_secs(cfg.duration_seconds)).await;
+            Ok(format!("Delayed for {}s", cfg.duration_seconds))
+        }
+        NodeType::TemplateFormatterNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let resolved = interpolation::resolve(&cfg.template, &locked, single.as_deref())?;
+            Ok(resolved)
+        }
+        NodeType::MergeNode(_) => {
+            let locked = outputs.lock().await;
+            let mut merged = std::collections::HashMap::new();
+            for pred in &predecessors {
+                if let Some(val) = locked.get(pred) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(val) {
+                        merged.insert(pred.clone(), json);
+                    } else {
+                        merged.insert(pred.clone(), serde_json::Value::String(val.clone()));
+                    }
+                }
+            }
+            Ok(serde_json::to_string(&merged)?)
+        }
+        NodeType::NotifyDesktopNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let title = interpolation::resolve(&cfg.title, &locked, single.as_deref())?;
+            let body = interpolation::resolve(&cfg.body, &locked, single.as_deref())?;
+            drop(locked);
+            
+            tauri_winrt_notification::Toast::new(tauri_winrt_notification::Toast::POWERSHELL_APP_ID)
+                .title(&title)
+                .text1(&body)
+                .show()
+                .map_err(|e| anyhow::anyhow!("Failed to send desktop notification: {e}"))?;
+                
+            Ok(format!("Notification sent: {}", title))
+        }
+        NodeType::NotifyWebhookNode(cfg) => {
+            if ollama.is_offline() {
+                return Err(anyhow::anyhow!("NotifyWebhookNode '{}': Cannot be used in Strict Offline Mode. Turn off Offline Mode to execute this node.", node_id));
+            }
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let url = interpolation::resolve(&cfg.url, &locked, single.as_deref())?;
+            let payload = interpolation::resolve(&cfg.payload, &locked, single.as_deref())?;
+            drop(locked);
+            
+            let client = reqwest::Client::new();
+            let res = client.post(&url)
+                .header("Content-Type", "application/json")
+                .body(payload)
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to send webhook: {e}"))?;
+                
+            if !res.status().is_success() {
+                return Err(anyhow::anyhow!("Webhook failed with status: {}", res.status()));
+            }
+            Ok(format!("Webhook sent successfully"))
         }
     }
 }

@@ -27,12 +27,19 @@ pub fn run() {
             commands::list_agents,
             commands::save_agent,
             commands::rename_agent,
+            commands::delete_agent,
             commands::load_agent,
             commands::save_agent_output,
             commands::get_agent_output,
             commands::get_agent_path,
             commands::launch_agent_terminal,
             commands::help_agent_ask,
+            commands::save_chat_history,
+            commands::list_chat_history,
+            commands::delete_chat_history,
+            commands::get_providers,
+            commands::save_provider,
+            commands::delete_provider,
         ])
         .run(tauri::generate_context!());
 

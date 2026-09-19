@@ -1,3 +1,4 @@
+import { useSettingsStore } from '../store/settingsStore';
 import React, { useState } from 'react';
 import { useWorkflowStore, canvasToGraph } from '../store/workflowStore';
 import { invoke } from '@tauri-apps/api/core';
@@ -26,7 +27,7 @@ export const SavePromptModal: React.FC = () => {
     setError(null);
     try {
       const graph = canvasToGraph(tab.nodes, tab.edges);
-      await invoke('save_agent', { name: nameToSave, graph });
+      await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode,  name: nameToSave, graph });
       markTabClean(tab.id);
       confirmCloseTab();
     } catch (err: any) {

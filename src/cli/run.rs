@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use clap::Args;
 use std::path::PathBuf;
 
@@ -65,31 +65,55 @@ pub async fn run(args: RunArgs) -> Result<()> {
     };
 
     if args.watch {
-        // In watch mode, run once immediately, then re-run on FileWatcher events.
+        // Pre-validate triggers before initial execution
+        let mut watcher_opt = None;
+        let mut schedule_opt = None;
+        let mut watch_path_display = String::new();
+        
+        if let Some(watcher_node) = graph.nodes.iter().find(|n| matches!(n.data, NodeType::FileWatcherNode(_))) {
+            if let NodeType::FileWatcherNode(ref cfg) = watcher_node.data {
+                watcher_opt = Some(FileWatcher::new(&cfg.watch_path, cfg.recursive)?);
+                watch_path_display = cfg.watch_path.clone();
+            }
+        } else if let Some(schedule_node) = graph.nodes.iter().find(|n| matches!(n.data, NodeType::ScheduleNode(_))) {
+            if let NodeType::ScheduleNode(ref cfg) = schedule_node.data {
+                use std::str::FromStr;
+                let schedule = cron::Schedule::from_str(&cfg.cron_expression)?;
+                schedule_opt = Some((schedule, cfg.cron_expression.clone()));
+            }
+        }
+
+        // In watch mode, run once immediately, then re-run on events.
         let trigger_source = format!("file:{}", args.path.display());
         execute_and_print(&graph, config.clone(), &trigger_source, args.json).await?;
 
-        // Find the first FileWatcherNode and start watching.
-        if let Some(watcher_node) = graph.nodes.iter().find(|n| {
-            matches!(n.data, NodeType::FileWatcherNode(_))
-        }) {
-            if let NodeType::FileWatcherNode(ref cfg) = watcher_node.data {
-                println!("\nWatching '{}' for changes (Ctrl+C to stop)...", cfg.watch_path);
-                let mut watcher = FileWatcher::new(&cfg.watch_path, cfg.recursive)?;
-                loop {
-                    match watcher.rx.recv().await {
-                        Some(Ok(path)) => {
-                            let trigger = format!("watch:{}", path.display());
-                            println!("\nâ–¶  File event: {}", path.display());
-                            execute_and_print(&graph, config.clone(), &trigger, args.json).await?;
-                        }
-                        Some(Err(e)) => eprintln!("Watch error: {e}"),
-                        None => break,
+        if let Some(mut watcher) = watcher_opt {
+            println!("\nWatching '{}' for changes (Ctrl+C to stop)...", watch_path_display);
+            loop {
+                match watcher.rx.recv().await {
+                    Some(Ok(path)) => {
+                        let trigger = format!("watch:{}", path.display());
+                        println!("\n▶  File event: {}", path.display());
+                        execute_and_print(&graph, config.clone(), &trigger, args.json).await?;
                     }
+                    Some(Err(e)) => eprintln!("Watch error: {e}"),
+                    None => break,
+                }
+            }
+        } else if let Some((schedule, cron_expr)) = schedule_opt {
+            println!("\nScheduled to run on cron: '{}' (Ctrl+C to stop)...", cron_expr);
+            for datetime in schedule.upcoming(chrono::Utc) {
+                let now = chrono::Utc::now();
+                if let Ok(duration) = (datetime - now).to_std() {
+                    println!("\n⏳ Next run scheduled at: {} (in {:?})", datetime, duration);
+                    tokio::time::sleep(duration).await;
+                    let trigger = format!("cron:{}", datetime);
+                    println!("\n▶  Cron event triggered");
+                    execute_and_print(&graph, config.clone(), &trigger, args.json).await?;
                 }
             }
         } else {
-            eprintln!("Warning: --watch specified but graph has no FileWatcherNode");
+            println!("\nWarning: --watch flag provided but no FileWatcherNode or ScheduleNode found in graph.");
         }
     } else {
         let trigger_source = format!("cli:{}", args.path.display());
@@ -105,7 +129,7 @@ async fn execute_and_print(
     trigger_source: &str,
     json_output: bool,
 ) -> Result<()> {
-    let record = run_graph(graph, config, trigger_source, None).await?;
+    let record = run_graph(graph, None, config, trigger_source, None).await?;
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&record)?);

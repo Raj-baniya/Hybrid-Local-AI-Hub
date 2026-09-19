@@ -15,6 +15,7 @@ import {
   Globe,
   Terminal,
   Braces,
+  Clock,
 } from 'lucide-react';
 
 interface PaletteItem {
@@ -34,6 +35,14 @@ const PALETTE_ITEMS: PaletteItem[] = [
     icon: <FolderSearch size={16} />,
     color: '#06b6d4',
     desc: 'Watch local folder for file events',
+  },
+  {
+    type: 'ScheduleNode',
+    label: 'Schedule Timer',
+    category: 'Triggers & Inputs',
+    icon: <Clock size={16} />,
+    color: '#f59e0b',
+    desc: 'Run on a cron schedule',
   },
   {
     type: 'TextInputNode',
@@ -122,6 +131,55 @@ const PALETTE_ITEMS: PaletteItem[] = [
     icon: <Braces size={16} />,
     color: '#10b981',
     desc: 'Extract text using Regex',
+  },
+  // ─── Phase 2 Nodes ─────────────────────────────────────────────────────────
+  {
+    type: 'SourceFileNode',
+    label: 'Dataset Source',
+    category: 'Triggers & Inputs',
+    icon: <FileSpreadsheet size={16} />,
+    color: '#0284c7',
+    desc: 'Load dataset files (CSV/Parquet)',
+  },
+  {
+    type: 'DatasetProfileNode',
+    label: 'Data Profiler',
+    category: 'AI & Processing',
+    icon: <Database size={16} />,
+    color: '#0f766e',
+    desc: 'Generate data profiles',
+  },
+  {
+    type: 'TransformAggregateNode',
+    label: 'Aggregate Data',
+    category: 'Routing & Storage',
+    icon: <GitFork size={16} />,
+    color: '#b45309',
+    desc: 'Group and aggregate datasets',
+  },
+  {
+    type: 'AnalysisStatsHypothesisTestNode',
+    label: 'Hypothesis Test',
+    category: 'AI & Processing',
+    icon: <Binary size={16} />,
+    color: '#4338ca',
+    desc: 'Run deterministic statistics',
+  },
+  {
+    type: 'AiInterpretNode',
+    label: 'AI Interpreter',
+    category: 'AI & Processing',
+    icon: <Sparkles size={16} />,
+    color: '#a21caf',
+    desc: 'Generate claims from facts',
+  },
+  {
+    type: 'AiPlanNode',
+    label: 'AI Planner',
+    category: 'AI & Processing',
+    icon: <Sparkles size={16} />,
+    color: '#e11d48',
+    desc: 'LLM orchestrator node',
   },
 ];
 
@@ -212,7 +270,12 @@ export const NodePalette: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ color: item.color }}>{item.icon}</div>
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{item.label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {item.label}
+                          {item.type === 'WebScraperNode' && (
+                            <span style={{ fontSize: 8, padding: '2px 4px', background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>ONLINE</span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.desc}</div>
                       </div>
                     </div>

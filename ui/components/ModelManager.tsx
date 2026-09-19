@@ -135,20 +135,12 @@ export const ModelManager: React.FC = () => {
         flexDirection: 'column',
         height: '100%',
       }}
-    >  {/* Header */}
-      <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Cpu size={18} style={{ color: 'var(--accent-emerald)' }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Local Model Manager</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={fetchModels} title="Refresh" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}>
-            <RefreshCw size={14} className={loading ? 'spinning' : ''} />
-          </button>
-          <button onClick={() => setActivePanel('none')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}>
-            <X size={16} />
-          </button>
-        </div>
+    >
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 18px', marginTop: 16 }}>
+        <button className="btn btn-secondary" onClick={fetchModels} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          <RefreshCw size={14} className={loading ? 'spinning' : ''} />
+          Refresh Models
+        </button>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 18 }}>

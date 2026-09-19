@@ -83,7 +83,39 @@ pub async fn run_graph(
     app: tauri::AppHandle,
     graph: Graph,
     config: Option<ExecutorConfigPayload>,
+    offline_mode: Option<bool>,
 ) -> Result<ExecutionRecord, String> {
+    let mut is_offline = offline_mode.unwrap_or(true);
+    
+    if !is_offline {
+        let is_connected = hybrid_local_ai_hub::network::check_internet_connection().await;
+        if !is_connected {
+            is_offline = true;
+        }
+    }
+
+    let online_keys = if !is_offline {
+        if let Ok(providers) = get_providers(app.clone()) {
+            providers.into_iter().map(|p| hybrid_local_ai_hub::providers::ApiKeyConfig {
+                key: p.key,
+                name: p.name,
+                model: p.model,
+            }).collect()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
+    if is_offline {
+        for node in &graph.nodes {
+            if matches!(node.data, hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_)) {
+                return Err("WebScraper cannot be used in Strict Offline Mode. Please turn off Offline Mode to run this workflow.".to_string());
+            }
+        }
+    }
+
     // Validate first before executing.
     validate::validate_graph(&graph).map_err(|errs| errs.join("\n"))?;
 
@@ -99,9 +131,15 @@ pub async fn run_graph(
             },
             default_timeout_secs: c.default_timeout_secs.unwrap_or(default_cfg.default_timeout_secs),
             llm_timeout_secs: c.llm_timeout_secs.unwrap_or(default_cfg.llm_timeout_secs),
+            is_offline,
+            online_keys,
         }
     } else {
-        default_cfg
+        ExecutorConfig {
+            is_offline,
+            online_keys,
+            ..default_cfg
+        }
     };
 
     let _ = app.emit("execution-status", "running");
@@ -115,7 +153,7 @@ pub async fn run_graph(
         }
     });
 
-    match executor::run_graph(&graph, executor_cfg, "gui", Some(tx)).await {
+    match executor::run_graph(&graph, None, executor_cfg, "gui", Some(tx)).await {
         Ok(record) => {
             let _ = app.emit("execution-completed", &record);
             Ok(record)
@@ -219,11 +257,13 @@ pub async fn cancel_llm_task(
 /// 5. Generate a workflow graph from natural language instruction.
 #[tauri::command]
 pub async fn chat_generate(
+    app: tauri::AppHandle,
     state: tauri::State<'_, ChatState>,
     messages: Vec<hybrid_local_ai_hub::schema::ChatMessage>,
     model: Option<String>,
     ollama_url: Option<String>,
     task_id: Option<String>,
+    offline_mode: Option<bool>,
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
     let u = ollama_url.unwrap_or_else(|| compiler::DEFAULT_OLLAMA_URL.to_string());
@@ -243,10 +283,64 @@ pub async fn chat_generate(
         state.active_tasks.lock().await.insert(id.clone(), tx);
     }
 
-    let result = tokio::select! {
-        res = compiler::generate_workflow(&messages, &m, &u) => res,
+    let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    
+    let task_id_clone = task_id.clone().unwrap_or_default();
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        use tauri::Emitter;
+        while let Some(msg) = progress_rx.recv().await {
+            let _ = app_clone.emit("generation-progress", serde_json::json!({
+                "taskId": task_id_clone,
+                "message": msg
+            }));
+        }
+    });
+
+    let mut is_offline = offline_mode.unwrap_or(true);
+    if !is_offline {
+        let is_connected = hybrid_local_ai_hub::network::check_internet_connection().await;
+        if !is_connected {
+            is_offline = true;
+        }
+    }
+
+    let online_keys = if !is_offline {
+        if let Ok(providers) = get_providers(app.clone()) {
+            providers.into_iter().map(|p| hybrid_local_ai_hub::providers::ApiKeyConfig {
+                key: p.key,
+                name: p.name,
+                model: p.model,
+            }).collect()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
+    let mut result = tokio::select! {
+        res = compiler::generate_workflow(&messages, &m, &u, is_offline, online_keys, Some(progress_tx.clone())) => res,
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
+
+    if let Ok(ref mut graph) = result {
+        if is_offline {
+            for node in &graph.nodes {
+                if matches!(node.data, hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_)) {
+                    if let Some(ref id) = task_id {
+                        let _ = state.active_tasks.lock().await.remove(id);
+                    }
+                    return Err("WebScraper cannot be used in Strict Offline Mode. Please turn off Offline Mode to use this workflow.".to_string());
+                }
+            }
+        }
+        
+        let _ = progress_tx.send("Generating intelligent title...".to_string());
+        if let Ok(title) = compiler::auto_name_graph(graph, &m, &u).await {
+            graph.name = Some(title);
+        }
+    }
 
     if let Some(id) = task_id {
         state.active_tasks.lock().await.remove(&id);
@@ -257,12 +351,14 @@ pub async fn chat_generate(
 /// 6. Iteratively refine an existing workflow graph via natural language.
 #[tauri::command]
 pub async fn chat_edit(
+    app: tauri::AppHandle,
     state: tauri::State<'_, ChatState>,
     messages: Vec<hybrid_local_ai_hub::schema::ChatMessage>,
     existing_graph: Graph,
     model: Option<String>,
     ollama_url: Option<String>,
     task_id: Option<String>,
+    offline_mode: Option<bool>,
 ) -> Result<Graph, String> {
     let m = model.unwrap_or_else(|| compiler::DEFAULT_MODEL.to_string());
     let u = ollama_url.unwrap_or_else(|| compiler::DEFAULT_OLLAMA_URL.to_string());
@@ -282,10 +378,59 @@ pub async fn chat_edit(
         state.active_tasks.lock().await.insert(id.clone(), tx);
     }
 
+    let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    
+    let task_id_clone = task_id.clone().unwrap_or_default();
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        use tauri::Emitter;
+        while let Some(msg) = progress_rx.recv().await {
+            let _ = app_clone.emit("generation-progress", serde_json::json!({
+                "taskId": task_id_clone,
+                "message": msg
+            }));
+        }
+    });
+
+    let mut is_offline = offline_mode.unwrap_or(true);
+    if !is_offline {
+        let is_connected = hybrid_local_ai_hub::network::check_internet_connection().await;
+        if !is_connected {
+            is_offline = true;
+        }
+    }
+
+    let online_keys = if !is_offline {
+        if let Ok(providers) = get_providers(app.clone()) {
+            providers.into_iter().map(|p| hybrid_local_ai_hub::providers::ApiKeyConfig {
+                key: p.key,
+                name: p.name,
+                model: p.model,
+            }).collect()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
     let result = tokio::select! {
-        res = compiler::edit_workflow(&messages, &existing_graph, &m, &u) => res,
+        res = compiler::edit_workflow(&messages, &existing_graph, &m, &u, is_offline, online_keys, Some(progress_tx.clone())) => res,
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
+
+    if let Ok(ref graph) = result {
+        if is_offline {
+            for node in &graph.nodes {
+                if matches!(node.data, hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_)) {
+                    if let Some(ref id) = task_id {
+                        let _ = state.active_tasks.lock().await.remove(id);
+                    }
+                    return Err("WebScraper cannot be used in Strict Offline Mode. Please turn off Offline Mode to use this workflow.".to_string());
+                }
+            }
+        }
+    }
 
     if let Some(id) = task_id {
         state.active_tasks.lock().await.remove(&id);
@@ -373,12 +518,23 @@ pub fn cmd_system_info() -> SystemInfo {
     }
 }
 
+fn get_env_dir(base: &std::path::Path, folder: &str, offline_mode: bool) -> std::path::PathBuf {
+    if offline_mode {
+        base.join(folder)
+    } else {
+        base.join(format!("online_{}", folder))
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn detect_gpu() -> (Option<String>, Option<f64>) {
     use std::process::Command;
     let output = Command::new("wmic")
         .args(["path", "win32_VideoController", "get", "Name,AdapterRAM", "/format:csv"])
         .output();
+
+
+
 
     if let Ok(out) = output {
         let text = String::from_utf8_lossy(&out.stdout);
@@ -411,10 +567,9 @@ fn detect_gpu() -> (Option<String>, Option<f64>) {
 // ———————————————————————————————————————————————————————————————————
 
 #[tauri::command]
-pub fn list_agents(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let agents_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("agents");
+pub fn list_agents(app: tauri::AppHandle, offline_mode: bool) -> Result<Vec<String>, String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let agents_dir = get_env_dir(&base_dir, "agents", offline_mode);
     
     if !agents_dir.exists() {
         return Ok(Vec::new());
@@ -440,10 +595,9 @@ pub fn list_agents(app: tauri::AppHandle) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn save_agent(app: tauri::AppHandle, name: String, graph: Graph) -> Result<(), String> {
-    let agents_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("agents");
+pub fn save_agent(app: tauri::AppHandle, name: String, graph: Graph, offline_mode: bool) -> Result<(), String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let agents_dir = get_env_dir(&base_dir, "agents", offline_mode);
         
     std::fs::create_dir_all(&agents_dir).map_err(|e| format!("Failed to create agents dir: {e}"))?;
     
@@ -461,10 +615,9 @@ pub fn save_agent(app: tauri::AppHandle, name: String, graph: Graph) -> Result<(
 }
 
 #[tauri::command]
-pub fn load_agent(app: tauri::AppHandle, name: String) -> Result<Graph, String> {
-    let agents_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("agents");
+pub fn load_agent(app: tauri::AppHandle, name: String, offline_mode: bool) -> Result<Graph, String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let agents_dir = get_env_dir(&base_dir, "agents", offline_mode);
         
     if !is_valid_filename(&name) {
         return Err("Invalid agent name.".to_string());
@@ -489,10 +642,9 @@ pub fn load_agent(app: tauri::AppHandle, name: String) -> Result<Graph, String> 
 // ———————————————————————————————————————————————————————————————————
 
 #[tauri::command]
-pub fn save_execution_log(app: tauri::AppHandle, record: ExecutionRecord) -> Result<(), String> {
-    let logs_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("logs");
+pub fn save_execution_log(app: tauri::AppHandle, record: ExecutionRecord, offline_mode: bool) -> Result<(), String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let logs_dir = get_env_dir(&base_dir, "logs", offline_mode);
         
     std::fs::create_dir_all(&logs_dir).map_err(|e| format!("Failed to create logs dir: {e}"))?;
     
@@ -510,10 +662,9 @@ pub fn save_execution_log(app: tauri::AppHandle, record: ExecutionRecord) -> Res
 }
 
 #[tauri::command]
-pub fn list_execution_logs(app: tauri::AppHandle) -> Result<Vec<ExecutionRecord>, String> {
-    let logs_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("logs");
+pub fn list_execution_logs(app: tauri::AppHandle, offline_mode: bool) -> Result<Vec<ExecutionRecord>, String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let logs_dir = get_env_dir(&base_dir, "logs", offline_mode);
         
     let mut records = Vec::new();
     if logs_dir.exists() {
@@ -539,14 +690,13 @@ pub fn list_execution_logs(app: tauri::AppHandle) -> Result<Vec<ExecutionRecord>
 }
 
 #[tauri::command]
-pub fn rename_agent(app: tauri::AppHandle, old_name: String, new_name: String) -> Result<(), String> {
+pub fn rename_agent(app: tauri::AppHandle, old_name: String, new_name: String, offline_mode: bool) -> Result<(), String> {
     if !is_valid_filename(&old_name) || !is_valid_filename(&new_name) {
         return Err("Agent name contains invalid characters. Please avoid < > : \" / \\ | ? *".to_string());
     }
 
-    let agents_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("agents");
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let agents_dir = get_env_dir(&base_dir, "agents", offline_mode);
         
     let old_path = agents_dir.join(format!("{}.json", old_name));
     let new_path = agents_dir.join(format!("{}.json", new_name));
@@ -560,9 +710,8 @@ pub fn rename_agent(app: tauri::AppHandle, old_name: String, new_name: String) -
     
     std::fs::rename(&old_path, &new_path).map_err(|e| format!("Failed to rename agent file: {e}"))?;
 
-    let outputs_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("outputs");
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let outputs_dir = get_env_dir(&base_dir, "outputs", offline_mode);
     let old_output = outputs_dir.join(format!("{}_output.txt", old_name));
     let new_output = outputs_dir.join(format!("{}_output.txt", new_name));
     if old_output.exists() {
@@ -573,10 +722,25 @@ pub fn rename_agent(app: tauri::AppHandle, old_name: String, new_name: String) -
 }
 
 #[tauri::command]
-pub fn save_agent_output(app: tauri::AppHandle, name: String, output: String) -> Result<(), String> {
-    let outputs_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("outputs");
+pub fn delete_agent(app: tauri::AppHandle, name: String, offline_mode: bool) -> Result<(), String> {
+    if !is_valid_filename(&name) {
+        return Err("Invalid agent name.".to_string());
+    }
+    
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let agents_dir = get_env_dir(&base_dir, "agents", offline_mode);
+        
+    let path = agents_dir.join(format!("{}.json", name));
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| format!("Failed to delete agent file: {e}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn save_agent_output(app: tauri::AppHandle, name: String, output: String, offline_mode: bool) -> Result<(), String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let outputs_dir = get_env_dir(&base_dir, "outputs", offline_mode);
         
     std::fs::create_dir_all(&outputs_dir).map_err(|e| format!("Failed to create outputs dir: {e}"))?;
     
@@ -589,10 +753,9 @@ pub fn save_agent_output(app: tauri::AppHandle, name: String, output: String) ->
 }
 
 #[tauri::command]
-pub fn get_agent_output(app: tauri::AppHandle, name: String) -> Result<String, String> {
-    let outputs_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("outputs");
+pub fn get_agent_output(app: tauri::AppHandle, name: String, offline_mode: bool) -> Result<String, String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let outputs_dir = get_env_dir(&base_dir, "outputs", offline_mode);
         
     if !is_valid_filename(&name) {
         return Err("Invalid agent name.".to_string());
@@ -607,10 +770,9 @@ pub fn get_agent_output(app: tauri::AppHandle, name: String) -> Result<String, S
 }
 
 #[tauri::command]
-pub fn get_agent_path(app: tauri::AppHandle, name: String) -> Result<String, String> {
-    let agents_dir = app.path().app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-        .join("agents");
+pub fn get_agent_path(app: tauri::AppHandle, name: String, offline_mode: bool) -> Result<String, String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let agents_dir = get_env_dir(&base_dir, "agents", offline_mode);
     
     if !is_valid_filename(&name) {
         return Err("Invalid agent name.".to_string());
@@ -622,7 +784,7 @@ pub fn get_agent_path(app: tauri::AppHandle, name: String) -> Result<String, Str
 
 #[tauri::command]
 #[allow(unused_variables)]
-pub fn launch_agent_terminal(app: tauri::AppHandle, name: String) -> Result<(), String> {
+pub fn launch_agent_terminal(app: tauri::AppHandle, name: String, offline_mode: bool) -> Result<(), String> {
     #[cfg(not(debug_assertions))]
     {
         return Err("Agent Terminal Launcher is only available in development mode (requires Cargo).".to_string());
@@ -630,9 +792,8 @@ pub fn launch_agent_terminal(app: tauri::AppHandle, name: String) -> Result<(), 
 
     #[cfg(debug_assertions)]
     {
-        let agents_dir = app.path().app_local_data_dir()
-            .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-            .join("agents");
+        let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let agents_dir = get_env_dir(&base_dir, "agents", offline_mode);
             
         let path = agents_dir.join(format!("{}.json", name));
         if !path.exists() {
@@ -697,4 +858,173 @@ pub async fn help_agent_ask(
         state.active_tasks.lock().await.remove(&id);
     }
     result
+}
+
+// ———————————————————————————————————————————————————————————————————
+// Chat History
+// ———————————————————————————————————————————————————————————————————
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct ChatHistoryEntry {
+    pub id: String,
+    pub timestamp: String,
+    pub instruction: String,
+    pub model: String,
+    pub graph: Graph,
+}
+
+#[tauri::command]
+pub fn save_chat_history(app: tauri::AppHandle, entry: ChatHistoryEntry, offline_mode: bool) -> Result<(), String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let history_dir = get_env_dir(&base_dir, "chat_history", offline_mode);
+        
+    std::fs::create_dir_all(&history_dir).map_err(|e| format!("Failed to create history dir: {e}"))?;
+    
+    let path = history_dir.join(format!("{}.json", entry.id));
+    
+    let json_str = serde_json::to_string_pretty(&entry)
+        .map_err(|e| format!("Serialization failed: {e}"))?;
+        
+    std::fs::write(&path, json_str)
+        .map_err(|e| format!("Failed to write history file: {e}"))
+}
+
+#[tauri::command]
+pub fn list_chat_history(app: tauri::AppHandle, offline_mode: bool) -> Result<Vec<ChatHistoryEntry>, String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let history_dir = get_env_dir(&base_dir, "chat_history", offline_mode);
+        
+    let mut entries = Vec::new();
+    if history_dir.exists() {
+        if let Ok(dir_entries) = std::fs::read_dir(history_dir) {
+            for dir_entry in dir_entries.flatten() {
+                if let Some(ext) = dir_entry.path().extension() {
+                    if ext == "json" {
+                        if let Ok(content) = std::fs::read_to_string(dir_entry.path()) {
+                            match serde_json::from_str::<ChatHistoryEntry>(&content) {
+                                Ok(record) => entries.push(record),
+                                Err(e) => println!("Failed to parse chat history file {:?}: {}", dir_entry.path(), e),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    Ok(entries)
+}
+
+#[tauri::command]
+pub fn delete_chat_history(app: tauri::AppHandle, id: String, offline_mode: bool) -> Result<(), String> {
+    let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let history_dir = get_env_dir(&base_dir, "chat_history", offline_mode);
+        
+    let path = history_dir.join(format!("{}.json", id));
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| format!("Failed to delete history file: {e}"))?;
+    }
+    Ok(())
+}
+
+// ———————————————————————————————————————————————————————————————————
+// Providers (API Keys)
+// ———————————————————————————————————————————————————————————————————
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct ProviderConfig {
+    pub key: String,
+    pub name: String,
+    pub model: String,
+}
+
+#[tauri::command]
+pub fn save_provider(app: tauri::AppHandle, provider: ProviderConfig) -> Result<(), String> {
+    let providers_file = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("providers.json");
+        
+    let mut providers: std::collections::HashMap<String, ProviderConfig> = std::collections::HashMap::new();
+    if providers_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&providers_file) {
+            if let Ok(existing) = serde_json::from_str(&content) {
+                providers = existing;
+            }
+        }
+    }
+    
+    providers.insert(provider.name.clone(), provider);
+    
+    let json_str = serde_json::to_string_pretty(&providers)
+        .map_err(|e| format!("Serialization failed: {e}"))?;
+        
+    std::fs::write(&providers_file, json_str)
+        .map_err(|e| format!("Failed to write providers file: {e}"))
+}
+
+#[tauri::command]
+pub fn get_providers(app: tauri::AppHandle) -> Result<Vec<ProviderConfig>, String> {
+    let providers_file = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("providers.json");
+        
+    let mut providers: std::collections::HashMap<String, ProviderConfig> = std::collections::HashMap::new();
+    
+    // Auto-populate from .env.local if running in development mode
+    #[cfg(debug_assertions)]
+    {
+        if !providers_file.exists() {
+            if let Ok(content) = std::fs::read_to_string(".env.local") {
+                let mut map = std::collections::HashMap::new();
+                for line in content.lines() {
+                    if let Some((k, v)) = line.split_once('=') {
+                        map.insert(k.trim().to_string(), v.trim().to_string());
+                    }
+                }
+                let mut i = 1;
+                while let Some(key) = map.get(&format!("NVIDIA_API_KEY_{}", i)) {
+                    let name = map.get(&format!("NVIDIA_API_KEY_{}_NAME", i)).cloned().unwrap_or_default();
+                    let model = map.get(&format!("NVIDIA_API_KEY_{}_MODEL", i)).cloned().unwrap_or_default();
+                    if !name.is_empty() {
+                        providers.insert(name.clone(), ProviderConfig { key: key.clone(), name, model });
+                    }
+                    i += 1;
+                }
+                // Save it for future
+                if let Ok(json_str) = serde_json::to_string_pretty(&providers) {
+                    let _ = std::fs::create_dir_all(providers_file.parent().unwrap());
+                    let _ = std::fs::write(&providers_file, json_str);
+                }
+            }
+        }
+    }
+
+    if providers_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&providers_file) {
+            if let Ok(existing) = serde_json::from_str(&content) {
+                providers = existing;
+            }
+        }
+    }
+    
+    Ok(providers.into_values().collect())
+}
+
+#[tauri::command]
+pub fn delete_provider(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    let providers_file = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("providers.json");
+        
+    if providers_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&providers_file) {
+            if let Ok(mut existing) = serde_json::from_str::<std::collections::HashMap<String, ProviderConfig>>(&content) {
+                existing.remove(&name);
+                if let Ok(json_str) = serde_json::to_string_pretty(&existing) {
+                    let _ = std::fs::write(&providers_file, json_str);
+                }
+            }
+        }
+    }
+    Ok(())
 }

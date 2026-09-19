@@ -88,6 +88,42 @@ impl OllamaClient {
         }
     }
 
+    async fn try_post<T: serde::Serialize>(&self, endpoint: &str, req: &T) -> Result<reqwest::Response, reqwest::Error> {
+        let mut url = format!("{}{}", self.base_url, endpoint);
+        let mut resp = self.http.post(&url).json(req).send().await;
+        
+        if resp.is_err() && url.contains("127.0.0.1") {
+            url = url.replace("127.0.0.1", "localhost");
+            resp = self.http.post(&url).json(req).send().await;
+        }
+        
+        resp
+    }
+
+    async fn try_get(&self, endpoint: &str) -> Result<reqwest::Response, reqwest::Error> {
+        let mut url = format!("{}{}", self.base_url, endpoint);
+        let mut resp = self.http.get(&url).send().await;
+        
+        if resp.is_err() && url.contains("127.0.0.1") {
+            url = url.replace("127.0.0.1", "localhost");
+            resp = self.http.get(&url).send().await;
+        }
+        
+        resp
+    }
+
+    async fn try_delete<T: serde::Serialize>(&self, endpoint: &str, req: &T) -> Result<reqwest::Response, reqwest::Error> {
+        let mut url = format!("{}{}", self.base_url, endpoint);
+        let mut resp = self.http.delete(&url).json(req).send().await;
+        
+        if resp.is_err() && url.contains("127.0.0.1") {
+            url = url.replace("127.0.0.1", "localhost");
+            resp = self.http.delete(&url).json(req).send().await;
+        }
+        
+        resp
+    }
+
     /// Generate text from a prompt. Streams internally but returns the full
     /// concatenated response. Use `generate_streaming` if you need to surface
     /// partial tokens to a UI.
@@ -104,13 +140,10 @@ impl OllamaClient {
             stream: false,
             format: if json_mode { Some("json") } else { None },
             images: images.iter().map(|s| s.as_str()).collect(),
-            options: GenerateOptions { temperature: 0.2 },
+            options: GenerateOptions { temperature: 0.1 },
         };
         let resp = self
-            .http
-            .post(format!("{}/api/generate", self.base_url))
-            .json(&req)
-            .send()
+            .try_post("/api/generate", &req)
             .await
             .map_err(|e| anyhow!("Ollama request failed: {e}"))?;
 
@@ -132,10 +165,7 @@ impl OllamaClient {
     pub async fn embeddings(&self, model: &str, text: &str) -> Result<Vec<f32>> {
         let req = EmbedRequest { model, prompt: text };
         let resp = self
-            .http
-            .post(format!("{}/api/embeddings", self.base_url))
-            .json(&req)
-            .send()
+            .try_post("/api/embeddings", &req)
             .await
             .map_err(|e| anyhow!("Ollama embeddings request failed: {e}"))?;
 
@@ -155,11 +185,9 @@ impl OllamaClient {
     /// List models currently available on the local Ollama instance.
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>> {
         let resp = self
-            .http
-            .get(format!("{}/api/tags", self.base_url))
-            .send()
+            .try_get("/api/tags")
             .await
-            .map_err(|e| anyhow!("Ollama list_models failed: {e}"))?;
+            .map_err(|e| anyhow!("Ollama list models failed: {e}"))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -188,10 +216,7 @@ impl OllamaClient {
 
         let body = json!({ "name": model_name, "stream": true });
         let resp = self
-            .http
-            .post(format!("{}/api/pull", self.base_url))
-            .json(&body)
-            .send()
+            .try_post("/api/pull", &body)
             .await
             .map_err(|e| anyhow!("Ollama pull request failed: {e}"))?;
 
@@ -241,10 +266,7 @@ impl OllamaClient {
     pub async fn delete_model(&self, model: &str) -> Result<()> {
         let req_body = json!({ "name": model });
         let resp = self
-            .http
-            .delete(format!("{}/api/delete", self.base_url))
-            .json(&req_body)
-            .send()
+            .try_delete("/api/delete", &req_body)
             .await
             .map_err(|e| anyhow!("Failed to send delete request: {e}"))?;
 
