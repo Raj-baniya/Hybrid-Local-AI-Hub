@@ -481,7 +481,7 @@ export const ChatPanel: React.FC = () => {
           {/* Text Area Row */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
             <textarea
-              rows={Math.min(5, prompt.split('\n').length || 1)}
+              rows={Math.max(3, Math.min(8, prompt.split('\n').length || 1))}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe the workflow you want to build..."
@@ -503,7 +503,7 @@ export const ChatPanel: React.FC = () => {
                 outline: 'none',
                 resize: 'none',
                 lineHeight: 1.5,
-                maxHeight: 150
+                maxHeight: 250
               }}
               disabled={loading}
             />
