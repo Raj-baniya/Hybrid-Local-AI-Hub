@@ -46,7 +46,10 @@ impl StateStore {
     pub async fn save_checkpoint(&self, checkpoint: &Checkpoint) -> Result<()> {
         let path = self.checkpoint_path(&checkpoint.run_id);
         let data = serde_json::to_string_pretty(checkpoint)?;
-        fs::write(path, data)?;
+        // Write to a temp file in the same directory then rename for atomicity.
+        let tmp_path = path.with_extension("tmp");
+        fs::write(&tmp_path, &data)?;
+        fs::rename(&tmp_path, &path)?;
         Ok(())
     }
 

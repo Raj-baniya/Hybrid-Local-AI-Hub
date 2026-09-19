@@ -83,6 +83,7 @@ pub async fn run_graph(
     config: ExecutorConfig,
     trigger_source: &str,
     event_sender: Option<tokio::sync::mpsc::UnboundedSender<crate::execution_record::NodeRecord>>,
+    resume_run_id: Option<String>,
 ) -> Result<ExecutionRecord> {
     // Pre-validate templates before any node runs.
     interpolation::validate_templates(graph)?;
@@ -91,14 +92,17 @@ pub async fn run_graph(
     let chroma = ChromaClient::new(&config.chroma_url);
     
     let base_dir = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join(".hybrid-hub");
-    let state_store = crate::state_store::StateStore::new(&base_dir).unwrap();
+    let state_store = crate::state_store::StateStore::new(&base_dir)
+        .map_err(|e| anyhow!("Failed to initialise state store at {}: {e}", base_dir.display()))?;
 
     let mut record = ExecutionRecord::new(trigger_source, None);
+    if let Some(res_id) = resume_run_id {
+        record.execution_id = res_id;
+    }
     let run_id = record.execution_id.clone();
     
     let outputs: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
-    // Attempt crash recovery: load checkpoints for this run_id (or if we passed a specific run_id to resume)
-    // For now we'll just prepopulate from any existing checkpoint
+    // Attempt crash recovery: load checkpoints for this run_id
     if let Ok(Some(cp)) = state_store.load_checkpoint(&run_id).await {
         let mut out = outputs.lock().await;
         for (k, v) in cp.state {
@@ -267,14 +271,15 @@ pub async fn run_graph(
                     let mut out = outputs.lock().await;
                     out.insert(node_id.clone(), output);
                     
-                    // Save checkpoint
+                    // Save checkpoint with only this node's output to avoid
+                    // serialising the full accumulated map on every node completion.
                     let cp = crate::schema::Checkpoint {
                         checkpoint_id: uuid::Uuid::new_v4().to_string(),
                         run_id: run_id.clone(),
                         graph_hash: "TODO".to_string(),
                         created_at: chrono::Utc::now().to_rfc3339(),
                         node_id: node_id.clone(),
-                        state: out.clone(),
+                        state: std::collections::HashMap::from([(node_id.clone(), out.get(&node_id).cloned().unwrap_or_default())]),
                     };
                     let _ = state_store.save_checkpoint(&cp).await;
 
@@ -370,6 +375,7 @@ fn build_adj_and_indegree(
 fn llm_timeout_if_needed(data: &NodeType, config: &ExecutorConfig) -> u64 {
     match data {
         NodeType::OllamaSelectorNode(_) | NodeType::LocalEmbedderNode(_) => config.llm_timeout_secs,
+        NodeType::DelayNode(cfg) => cfg.duration_seconds.saturating_add(config.default_timeout_secs),
         _ => config.default_timeout_secs,
     }
 }
@@ -667,26 +673,26 @@ async fn execute_node(
 
         // ── LocalFileWriterNode ──────────────────────────────────────────────
         NodeType::LocalFileWriterNode(cfg) => {
-            let effect = crate::schema::SideEffectRecord {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let content = single
+                .ok_or_else(|| anyhow!("LocalFileWriterNode '{}' has no incoming input", node_id))?;
+            let actual_path = interpolation::resolve(&cfg.output_path, &locked, None)?;
+            drop(locked);
+
+            // Log intent before the write using the resolved path as the idempotency key.
+            let mut effect = crate::schema::SideEffectRecord {
                 effect_id: uuid::Uuid::new_v4().to_string(),
                 run_id: run_id.clone(),
                 node_id: node_id.clone(),
                 type_: "fs.write".to_string(),
-                idempotency_key: format!("blake3:fs.write:{}", cfg.output_path),
+                idempotency_key: format!("blake3:fs.write:{}", actual_path),
                 intent_at: chrono::Utc::now().to_rfc3339(),
                 completed_at: None,
                 reversible: false,
                 verified: false,
             };
             let _ = state_store.log_side_effect(&effect).await;
-
-            let locked = outputs.lock().await;
-            let single = single_input_value(&predecessors, &locked);
-            let content = single
-                .ok_or_else(|| anyhow!("LocalFileWriterNode '{}' has no incoming input", node_id))?;
-            let path = interpolation::resolve(&cfg.output_path, &locked, None)?;
-            let actual_path = path;
-            drop(locked);
 
             // Ensure parent directory exists.
             let out_path = std::path::Path::new(&actual_path);
@@ -705,6 +711,11 @@ async fn execute_node(
             } else {
                 tokio::fs::write(&actual_path, &content).await?;
             }
+            // Log the completed side-effect record.
+            effect.completed_at = Some(chrono::Utc::now().to_rfc3339());
+            effect.verified = true;
+            let _ = state_store.log_side_effect(&effect).await;
+
             Ok(format!("Wrote {} bytes to {}", content.len(), actual_path))
         }
 

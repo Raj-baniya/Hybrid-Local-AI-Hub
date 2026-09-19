@@ -318,6 +318,120 @@ export const NodeInspector: React.FC = () => {
             />
           </>
         );
+
+      case 'NotifyDesktopNode':
+        return (
+          <>
+            <label style={labelStyle}>Title</label>
+            <input type="text" value={data.title || ''} onChange={(e) => updateNodeData(selectedNode.id, { title: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>Body</label>
+            <input type="text" value={data.body || ''} onChange={(e) => updateNodeData(selectedNode.id, { body: e.target.value })} style={inputStyle} />
+          </>
+        );
+
+      case 'NotifyWebhookNode':
+        return (
+          <>
+            <label style={labelStyle}>Webhook URL</label>
+            <input type="text" value={data.url || ''} onChange={(e) => updateNodeData(selectedNode.id, { url: e.target.value })} style={inputStyle} placeholder="https://hooks.example.com/..." />
+            <label style={labelStyle}>Payload Template</label>
+            <textarea rows={3} value={data.payload || ''} onChange={(e) => updateNodeData(selectedNode.id, { payload: e.target.value })} style={textareaStyle} placeholder='{"text": "{{input}}"}' />
+          </>
+        );
+
+      case 'ClipboardTriggerNode':
+        return <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Reads text from the system clipboard. No configuration required.</p>;
+
+      case 'CsvReaderNode':
+        return (
+          <>
+            <label style={labelStyle}>CSV File Path</label>
+            <input type="text" value={data.filePath || ''} onChange={(e) => updateNodeData(selectedNode.id, { filePath: e.target.value })} style={inputStyle} placeholder="./data.csv" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <input type="checkbox" checked={data.hasHeaderRow ?? true} onChange={(e) => updateNodeData(selectedNode.id, { hasHeaderRow: e.target.checked })} />
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>First row is header</span>
+            </div>
+          </>
+        );
+
+      case 'DelayNode':
+        return (
+          <>
+            <label style={labelStyle}>Duration (seconds)</label>
+            <input type="number" min={0} value={data.durationSeconds ?? 5} onChange={(e) => updateNodeData(selectedNode.id, { durationSeconds: parseInt(e.target.value, 10) || 0 })} style={inputStyle} />
+          </>
+        );
+
+      case 'TemplateFormatterNode':
+        return (
+          <>
+            <label style={labelStyle}>Template</label>
+            <textarea rows={4} value={data.template || ''} onChange={(e) => updateNodeData(selectedNode.id, { template: e.target.value })} style={textareaStyle} placeholder="Result: {{node_id.output}}" />
+          </>
+        );
+
+      case 'MergeNode':
+        return <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Merges all incoming node outputs into a JSON object. No configuration required.</p>;
+
+      case 'SourceFileNode':
+        return (
+          <>
+            <label style={labelStyle}>File Path</label>
+            <input type="text" value={data.path || ''} onChange={(e) => updateNodeData(selectedNode.id, { path: e.target.value })} style={inputStyle} placeholder="./dataset.csv" />
+            <label style={labelStyle}>Connector</label>
+            <input type="text" value={data.connector || 'auto'} onChange={(e) => updateNodeData(selectedNode.id, { connector: e.target.value })} style={inputStyle} placeholder="auto" />
+          </>
+        );
+
+      case 'DatasetProfileNode':
+        return (
+          <>
+            <label style={labelStyle}>Profile Mode</label>
+            <input type="text" value={data.mode || 'auto'} onChange={(e) => updateNodeData(selectedNode.id, { mode: e.target.value })} style={inputStyle} placeholder="auto" />
+          </>
+        );
+
+      case 'TransformAggregateNode':
+        return (
+          <>
+            <label style={labelStyle}>Group By (comma-separated columns)</label>
+            <input type="text" value={(data.groupBy || []).join(',')} onChange={(e) => updateNodeData(selectedNode.id, { groupBy: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })} style={inputStyle} />
+            <label style={labelStyle}>Aggregations (comma-separated)</label>
+            <input type="text" value={(data.aggregations || []).join(',')} onChange={(e) => updateNodeData(selectedNode.id, { aggregations: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })} style={inputStyle} />
+          </>
+        );
+
+      case 'AnalysisStatsHypothesisTestNode':
+        return (
+          <>
+            <label style={labelStyle}>Statistical Test</label>
+            <input type="text" value={data.test || 't-test'} onChange={(e) => updateNodeData(selectedNode.id, { test: e.target.value })} style={inputStyle} placeholder="t-test" />
+            <label style={labelStyle}>Group Column</label>
+            <input type="text" value={data.groupColumn || ''} onChange={(e) => updateNodeData(selectedNode.id, { groupColumn: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>Value Column</label>
+            <input type="text" value={data.valueColumn || ''} onChange={(e) => updateNodeData(selectedNode.id, { valueColumn: e.target.value })} style={inputStyle} />
+          </>
+        );
+
+      case 'AiInterpretNode':
+        return (
+          <>
+            <label style={labelStyle}>Required Facts (one per line)</label>
+            <textarea rows={3} value={(data.requiresFacts || []).join('\n')} onChange={(e) => updateNodeData(selectedNode.id, { requiresFacts: e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean) })} style={textareaStyle} />
+            <label style={labelStyle}>Max Claims</label>
+            <input type="number" min={0} value={data.maxClaims ?? 5} onChange={(e) => updateNodeData(selectedNode.id, { maxClaims: parseInt(e.target.value, 10) || 5 })} style={inputStyle} />
+          </>
+        );
+
+      case 'AiPlanNode':
+        return (
+          <>
+            <label style={labelStyle}>Objective</label>
+            <textarea rows={3} value={data.objective || ''} onChange={(e) => updateNodeData(selectedNode.id, { objective: e.target.value })} style={textareaStyle} />
+            <label style={labelStyle}>Model Role</label>
+            <input type="text" value={data.modelRole || 'planner'} onChange={(e) => updateNodeData(selectedNode.id, { modelRole: e.target.value })} style={inputStyle} />
+          </>
+        );
     }
   };
 

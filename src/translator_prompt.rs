@@ -14,9 +14,9 @@ pub fn build_system_prompt(is_offline: bool) -> String {
     let mut instructions = INSTRUCTIONS_SECTION.to_string();
 
     if is_offline {
-        schema = schema.replace("32 Node Types Available", "31 Node Types Available"); // Assuming there's a count in schema
-        instructions = instructions.replace("32 available node types", "31 available node types");
-        instructions = instructions.replace("outside the 32 available nodes", "outside the 31 available nodes");
+        schema = schema.replace("26 Node Types Available", "31 Node Types Available"); // Assuming there's a count in schema
+        instructions = instructions.replace("26 available node types", "31 available node types");
+        instructions = instructions.replace("26 available node types", "outside the 31 available nodes");
         instructions = instructions.replace(
             "NOTE: The following analytics nodes are currently UNAVAILABLE and MUST NOT be used:",
             "NOTE: The following nodes are currently UNAVAILABLE and MUST NOT be used:\n- WebScraperNode (Offline Mode Active)"
@@ -203,7 +203,7 @@ const SCHEMA_SECTION_PART_2: &str = r#"
 
 **DelayNode** - delays execution
 ```json
-{ "type": "DelayNode", "delayMs": 5000 }
+{ "type": "DelayNode", "durationSeconds": 5 }
 ```
 
 **TemplateFormatterNode** - formats text with templates
@@ -213,12 +213,12 @@ const SCHEMA_SECTION_PART_2: &str = r#"
 
 **MergeNode** - merges multiple inputs
 ```json
-{ "type": "MergeNode", "strategy": "concat" }
+{ "type": "MergeNode" }
 ```
 
 **AiInterpretNode** - interprets text or data using local AI
 ```json
-{ "type": "AiInterpretNode", "prompt": "Interpret this: {{input}}", "jsonMode": false }
+{ "type": "AiInterpretNode", "requiresFacts": [], "maxClaims": 5 }
 ```
 
 ### Rules
@@ -227,7 +227,7 @@ const SCHEMA_SECTION_PART_2: &str = r#"
 - ConditionalRouterNode `trueTarget` and `falseTarget` must be existing node ids.
 - `{{input}}` is only valid on nodes with exactly one incoming edge. Otherwise use `{{node_id.output}}`.
 - A TextInputNode with zero incoming edges MUST contain real hardcoded text (e.g. "My customer complaint is about billing"). NEVER use `{{input}}` on a source TextInputNode.
-- The closed vocabulary is exactly the 32 available node types defined above. The analytics and notification nodes are available. Do not invent new types.
+- The closed vocabulary is exactly the 26 available node types defined above. The analytics and notification nodes are available. Do not invent new types.
 - ALWAYS use a highly specific filename for LocalFileWriterNode `outputPath` based on the task (e.g. `./Agent JSON files/Agent Output/fitness_plan.txt` instead of generic `result.txt`) so multiple agents don't overwrite each other's outputs.
 - YOU ARE AN EXPERT PROMPT ENGINEER. When generating `promptTemplate` for `OllamaSelectorNode`, NEVER use a basic one-liner like "Summarize this: {{input}}". You MUST generate a highly detailed, professional prompt containing: 1) A clear persona/role, 2) Step-by-step thinking instructions, and 3) Strict output formatting constraints. For example: "You are an expert financial analyst. Read the following text and extract key metrics. Think step-by-step. Output your final answer as a markdown list. Text to analyze:\n\n{{input}}"
 "#;
@@ -325,7 +325,7 @@ const EXAMPLES_SECTION: &str = r#"
 const INSTRUCTIONS_SECTION: &str = r#"
 ## Your Task
 
-You are an Autonomous Agent Architect. The user will describe a workflow automation, bot, or agent. Generate a valid JSON graph for it using ONLY the 32 available node types. 
+You are an Autonomous Agent Architect. The user will describe a workflow automation, bot, or agent. Generate a valid JSON graph for it using ONLY the 26 available node types. 
 
 NOTE: The following analytics nodes are currently UNAVAILABLE and MUST NOT be used:
 - SourceFileNode

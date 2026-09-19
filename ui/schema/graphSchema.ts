@@ -73,7 +73,8 @@ export const RegexExtractorConfigSchema = z.object({
 
 export const ScheduleConfigSchema = z.object({
   type: z.literal('ScheduleNode'),
-  cronExpression: z.string().min(1, 'Cron expression is required'),
+  cronExpression: z.string().min(1, 'Cron expression is required')
+    .regex(/^(\S+\s){4}\S+$/, 'Cron expression must have exactly 5 fields'),
 });
 
 export const SourceFileConfigSchema = z.object({
@@ -103,7 +104,7 @@ export const AnalysisStatsHypothesisTestConfigSchema = z.object({
 export const AiInterpretConfigSchema = z.object({
   type: z.literal('AiInterpretNode'),
   requiresFacts: z.array(z.string()).default([]),
-  maxClaims: z.number().int().default(5),
+  maxClaims: z.number().int().nonnegative().default(5),
 });
 
 export const AiPlanConfigSchema = z.object({

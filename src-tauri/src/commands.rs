@@ -879,7 +879,10 @@ pub fn save_chat_history(app: tauri::AppHandle, entry: ChatHistoryEntry, offline
     let history_dir = get_env_dir(&base_dir, "chat_history", offline_mode);
         
     std::fs::create_dir_all(&history_dir).map_err(|e| format!("Failed to create history dir: {e}"))?;
-    
+
+    if entry.id == ".." || !is_valid_filename(&entry.id) {
+        return Err("Invalid history entry ID".to_string());
+    }
     let path = history_dir.join(format!("{}.json", entry.id));
     
     let json_str = serde_json::to_string_pretty(&entry)
@@ -920,6 +923,9 @@ pub fn delete_chat_history(app: tauri::AppHandle, id: String, offline_mode: bool
     let base_dir = app.path().app_local_data_dir().map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
     let history_dir = get_env_dir(&base_dir, "chat_history", offline_mode);
         
+    if id == ".." || !is_valid_filename(&id) {
+        return Err("Invalid history ID".to_string());
+    }
     let path = history_dir.join(format!("{}.json", id));
     if path.exists() {
         std::fs::remove_file(path).map_err(|e| format!("Failed to delete history file: {e}"))?;
@@ -930,10 +936,11 @@ pub fn delete_chat_history(app: tauri::AppHandle, id: String, offline_mode: bool
 // ———————————————————————————————————————————————————————————————————
 // Providers (API Keys)
 // ———————————————————————————————————————————————————————————————————
+use keyring::Entry;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ProviderConfig {
-    pub key: String,
+    pub key: String, // Will be redacted or omitted when sent to frontend
     pub name: String,
     pub model: String,
 }
@@ -944,6 +951,13 @@ pub fn save_provider(app: tauri::AppHandle, provider: ProviderConfig) -> Result<
         .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
         .join("providers.json");
         
+    // 1. Save key to OS credential store
+    let entry = Entry::new("hybrid-local-ai-hub", &provider.name)
+        .map_err(|e| format!("Failed to create keyring entry: {e}"))?;
+    entry.set_password(&provider.key)
+        .map_err(|e| format!("Failed to save API key to OS credential store: {e}"))?;
+
+    // 2. Save non-secret config to providers.json
     let mut providers: std::collections::HashMap<String, ProviderConfig> = std::collections::HashMap::new();
     if providers_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&providers_file) {
@@ -953,7 +967,10 @@ pub fn save_provider(app: tauri::AppHandle, provider: ProviderConfig) -> Result<
         }
     }
     
-    providers.insert(provider.name.clone(), provider);
+    // Store with redacted key in the file
+    let mut public_provider = provider.clone();
+    public_provider.key = "***".to_string();
+    providers.insert(public_provider.name.clone(), public_provider);
     
     let json_str = serde_json::to_string_pretty(&providers)
         .map_err(|e| format!("Serialization failed: {e}"))?;
@@ -1007,11 +1024,15 @@ pub fn get_providers(app: tauri::AppHandle) -> Result<Vec<ProviderConfig>, Strin
         }
     }
     
-    Ok(providers.into_values().collect())
+    // Return redacted keys to the frontend; the real key stays backend-only.
+    Ok(providers.into_values().map(|mut p| { p.key = "***".to_string(); p }).collect())
 }
 
 #[tauri::command]
 pub fn delete_provider(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    if let Ok(entry) = Entry::new("hybrid-local-ai-hub", &name) {
+        let _ = entry.delete_password();
+    }
     let providers_file = app.path().app_local_data_dir()
         .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
         .join("providers.json");

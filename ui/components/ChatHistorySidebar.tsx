@@ -6,16 +6,11 @@ import { MessageSquare, Trash2, PlusCircle, Clock } from 'lucide-react';
 export const ChatHistorySidebar: React.FC = () => {
   const isOfflineMode = useSettingsStore(s => s.isOfflineMode);
 
-  useEffect(() => {
-    fetchHistory();
-    clearHistory();
-  }, [isOfflineMode]);
-
   const { history, fetchHistory, deleteHistoryItem, loadHistoryItem, clearHistory } = useChatStore();
 
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+  }, [fetchHistory, isOfflineMode]);
 
   const handleNewChat = () => {
     clearHistory();

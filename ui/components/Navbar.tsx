@@ -117,7 +117,7 @@ export const Navbar: React.FC = () => {
       
       // Persist the log
       try {
-        await invoke('save_execution_log', { offlineMode: isOfflineMode,  record });
+        await invoke('save_execution_log', { offlineMode: useSettingsStore.getState().isOfflineMode, record });
       } catch (err) {
         console.error("Failed to save execution log:", err);
       }

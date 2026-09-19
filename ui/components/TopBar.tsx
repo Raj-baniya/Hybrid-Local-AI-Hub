@@ -256,7 +256,8 @@ export const TopBar: React.FC = () => {
               <div style={{ fontSize: 16 }}>{preflightStatus}</div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {executionModalOutput !== null && (

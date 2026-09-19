@@ -66,7 +66,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   
   fetchHistory: async () => {
     try {
-      const history = await invoke('list_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode });
+      const history = await invoke<ChatHistoryEntry[]>('list_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode });
       set({ history });
     } catch (e) {
       console.error("Failed to load chat history", e);

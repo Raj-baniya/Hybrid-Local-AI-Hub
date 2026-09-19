@@ -6,7 +6,7 @@ pub async fn check_internet_connection() -> bool {
     let addrs = ["1.1.1.1:53", "8.8.8.8:53"];
     
     for addr in addrs {
-        if let Ok(_) = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(addr)).await {
+        if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(addr)).await {
             return true;
         }
     }
