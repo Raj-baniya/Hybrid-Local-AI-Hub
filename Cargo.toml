@@ -42,6 +42,7 @@ notify-rust = "4.11"
 arboard = "3.4.0"
 csv = "1.3.0"
 tauri-winrt-notification = "0.8.1"
+keyring = "3.6.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

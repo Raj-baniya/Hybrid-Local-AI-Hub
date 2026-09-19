@@ -2015,6 +2015,7 @@ dependencies = [
  "dirs 5.0.1",
  "futures",
  "indicatif",
+ "keyring",
  "lopdf",
  "notify",
  "notify-rust",
