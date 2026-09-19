@@ -419,7 +419,10 @@ export const NodeInspector: React.FC = () => {
             <label style={labelStyle}>Required Facts (one per line)</label>
             <textarea rows={3} value={(data.requiresFacts || []).join('\n')} onChange={(e) => updateNodeData(selectedNode.id, { requiresFacts: e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean) })} style={textareaStyle} />
             <label style={labelStyle}>Max Claims</label>
-            <input type="number" min={0} value={data.maxClaims ?? 5} onChange={(e) => updateNodeData(selectedNode.id, { maxClaims: parseInt(e.target.value, 10) || 5 })} style={inputStyle} />
+            <input type="number" min={0} value={data.maxClaims ?? 5} onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              updateNodeData(selectedNode.id, { maxClaims: isNaN(val) ? 5 : val });
+            }} style={inputStyle} />
           </>
         );
 

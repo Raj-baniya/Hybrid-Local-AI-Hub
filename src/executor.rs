@@ -270,18 +270,16 @@ pub async fn run_graph(
                     nr.succeed(&output);
                     let mut out = outputs.lock().await;
                     out.insert(node_id.clone(), output);
-                    
-                    // Save checkpoint with only this node's output to avoid
-                    // serialising the full accumulated map on every node completion.
+                    // Save checkpoint
                     let cp = crate::schema::Checkpoint {
                         checkpoint_id: uuid::Uuid::new_v4().to_string(),
                         run_id: run_id.clone(),
                         graph_hash: "TODO".to_string(),
                         created_at: chrono::Utc::now().to_rfc3339(),
                         node_id: node_id.clone(),
-                        state: std::collections::HashMap::from([(node_id.clone(), out.get(&node_id).cloned().unwrap_or_default())]),
+                        state: out.clone(),
                     };
-                    let _ = state_store.save_checkpoint(&cp).await;
+                    state_store.save_checkpoint(&cp).await?;
 
                     if let Some(ref s) = event_sender {
                         let _ = s.send(nr.clone());

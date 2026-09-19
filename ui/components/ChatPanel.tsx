@@ -66,11 +66,17 @@ export const ChatPanel: React.FC = () => {
     const currentModel = useChatStore.getState().model;
     if (isOfflineMode) {
       const valid = installedModels.some(m => m.name === currentModel);
-      if (!valid && installedModels.length > 0) setModel(installedModels[0].name);
+      if (!valid) {
+        if (installedModels.length > 0) setModel(installedModels[0].name);
+        else setModel('');
+      }
     } else {
       const validApiValues = providers.map(p => `API|${p.name}|${p.model}`);
       const valid = validApiValues.includes(currentModel);
-      if (!valid && providers.length > 0) setModel(`API|${providers[0].name}|${providers[0].model}`);
+      if (!valid) {
+        if (providers.length > 0) setModel(`API|${providers[0].name}|${providers[0].model}`);
+        else setModel('');
+      }
     }
   }, [isOfflineMode, installedModels, providers, setModel]);
 

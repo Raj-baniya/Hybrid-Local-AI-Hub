@@ -1030,8 +1030,12 @@ pub fn get_providers(app: tauri::AppHandle) -> Result<Vec<ProviderConfig>, Strin
 
 #[tauri::command]
 pub fn delete_provider(app: tauri::AppHandle, name: String) -> Result<(), String> {
-    if let Ok(entry) = Entry::new("hybrid-local-ai-hub", &name) {
-        let _ = entry.delete_password();
+    let entry = Entry::new("hybrid-local-ai-hub", &name)
+        .map_err(|e| format!("Failed to access keyring: {e}"))?;
+    match entry.delete_password() {
+        Ok(_) => {}
+        Err(keyring::Error::NoEntry) => {} // Ignore if already not there
+        Err(e) => return Err(format!("Failed to delete credential: {e}")),
     }
     let providers_file = app.path().app_local_data_dir()
         .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
