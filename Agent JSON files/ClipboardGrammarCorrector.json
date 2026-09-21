@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "Clipboard Grammar Corrector",
+  "nodes": [
+    {
+      "id": "node_clipboard",
+      "position": [100.0, 200.0],
+      "data": {
+        "type": "ClipboardTriggerNode",
+        "onlyText": true
+      }
+    },
+    {
+      "id": "node_ai",
+      "position": [400.0, 200.0],
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.1",
+        "promptTemplate": "Correct any spelling or grammar mistakes in the following text, and improve its clarity. Only output the corrected text:\n\n{{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "node_notify",
+      "position": [700.0, 200.0],
+      "data": {
+        "type": "NotifyDesktopNode",
+        "title": "Grammar Corrected",
+        "body": "{{node_ai.output}}"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_clipboard",
+      "sourceHandle": null,
+      "target": "node_ai",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2",
+      "source": "node_ai",
+      "sourceHandle": null,
+      "target": "node_notify",
+      "targetHandle": null
+    }
+  ]
+}

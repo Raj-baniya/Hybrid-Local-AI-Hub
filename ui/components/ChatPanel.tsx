@@ -38,7 +38,7 @@ export const ChatPanel: React.FC = () => {
   const [providers, setProviders] = useState<{ name: string, model: string }[]>([]);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<string>('');
-  
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export const ChatPanel: React.FC = () => {
       }
     });
 
-    invoke<{name: string, model: string}[]>('get_providers')
+    invoke<{ name: string, model: string }[]>('get_providers')
       .then(res => setProviders(res))
       .catch(console.error);
   }, [setModel]);
@@ -88,7 +88,7 @@ export const ChatPanel: React.FC = () => {
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
-    
+
     listen<{ taskId: string, message: string }>('generation-progress', (event) => {
       if (event.payload.taskId !== taskIdRef.current) return;
       // Append streaming text smoothly instead of flashing
@@ -126,7 +126,7 @@ export const ChatPanel: React.FC = () => {
 
     addMessage({ role: 'user', content: prompt });
     const userPrompt = prompt;
-    setPrompt(""); 
+    setPrompt("");
 
     startGeneration(isEditMode, userPrompt);
     const newTaskId = crypto.randomUUID();
@@ -135,7 +135,7 @@ export const ChatPanel: React.FC = () => {
 
     const isEdit = isEditMode;
     const currentGraph = isEditMode ? getActiveGraph() : null;
-    
+
     const payloadMessages = [...messages, { role: 'user', content: userPrompt }];
 
     invoke<Graph>(isEdit ? 'chat_edit' : 'chat_generate', isEdit ? {
@@ -153,15 +153,28 @@ export const ChatPanel: React.FC = () => {
       .then((result) => {
         addMessage({ role: 'assistant', content: `Generated graph: ${result.name || 'Untitled'} (${result.nodes.length} nodes)` });
         setSuccess(result);
-        
+
+        // Reuse the active chat ID if we're continuing an existing conversation,
+        // otherwise create a new entry with the task ID.
+        const existingChatId = useChatStore.getState().activeChatId;
+        const chatId = existingChatId || newTaskId;
+
+        // Build the full messages array including the assistant reply we just added
+        const allMessages = [
+          ...useChatStore.getState().messages
+        ];
+
         const entry = {
-          id: newTaskId,
+          id: chatId,
           timestamp: new Date().toISOString(),
           instruction: userPrompt,
           model,
-          graph: result
+          graph: result,
+          messages: allMessages,
         };
-        invoke('save_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode,  entry }).then(() => {
+        invoke('save_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode, entry }).then(() => {
+          // Set the active chat ID so subsequent messages update this same entry
+          useChatStore.getState().setActiveChatId(chatId);
           useChatStore.getState().fetchHistory();
         }).catch(err => console.error("Failed to save history", err));
       })
@@ -180,9 +193,9 @@ export const ChatPanel: React.FC = () => {
     const fallbackSource = resultPrompt || (messages.length > 0 ? messages[messages.length - 1].content : "");
     const safePrompt = fallbackSource.slice(0, 20).replace(/[<>:"/\\|?*]/g, '').trim();
     const uniqueId = Math.random().toString(36).substring(2, 6);
-    
+
     let agentName = generatedGraph.name || `AI - ${safePrompt} - ${uniqueId}`;
-    
+
     if (resultMode) {
       const activeTab = useWorkflowStore.getState().tabs.find(t => t.id === useWorkflowStore.getState().activeTabId);
       if (activeTab) {
@@ -191,7 +204,7 @@ export const ChatPanel: React.FC = () => {
     }
 
     try {
-      await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode,  name: agentName, graph: generatedGraph });
+      await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode, name: agentName, graph: generatedGraph });
     } catch (err) {
       console.error("Failed to auto-save generated agent:", err);
     }
@@ -277,7 +290,7 @@ export const ChatPanel: React.FC = () => {
                     )
                   )}
                 </select>
-                
+
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}>
                   <input
                     type="checkbox"
@@ -292,7 +305,7 @@ export const ChatPanel: React.FC = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {messages.length > 0 && (
-              <button 
+              <button
                 className="btn btn-secondary"
                 onClick={() => {
                   if (loading) return;
@@ -319,15 +332,15 @@ export const ChatPanel: React.FC = () => {
         </div>
 
         {/* Chat Area */}
-        <div 
+        <div
           ref={scrollRef}
-          style={{ 
-            flex: 1, 
-            overflowY: 'auto', 
-            padding: '24px', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: 20 
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 20
           }}
         >
           {messages.length === 0 && !loading && !error && !generatedGraph ? (
@@ -340,9 +353,9 @@ export const ChatPanel: React.FC = () => {
             </div>
           ) : (
             messages.map((msg, idx) => (
-              <div 
-                key={idx} 
-                style={{ 
+              <div
+                key={idx}
+                style={{
                   display: 'flex',
                   gap: 12,
                   alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
@@ -358,12 +371,12 @@ export const ChatPanel: React.FC = () => {
                 }}>
                   {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
                 </div>
-                <div style={{ 
-                  padding: '12px 16px', 
+                <div style={{
+                  padding: '12px 16px',
                   borderRadius: 16,
                   borderTopRightRadius: msg.role === 'user' ? 4 : 16,
                   borderTopLeftRadius: msg.role === 'user' ? 16 : 4,
-                  fontSize: 14, 
+                  fontSize: 14,
                   background: msg.role === 'user' ? 'rgba(6, 182, 212, 0.1)' : 'var(--bg-card)',
                   border: msg.role === 'user' ? '1px solid rgba(6, 182, 212, 0.2)' : '1px solid var(--border-subtle)',
                   color: 'var(--text-primary)',
@@ -386,11 +399,11 @@ export const ChatPanel: React.FC = () => {
               }}>
                 <Bot size={18} />
               </div>
-              <div style={{ 
-                padding: '12px 16px', 
+              <div style={{
+                padding: '12px 16px',
                 borderRadius: 16,
                 borderTopLeftRadius: 4,
-                fontSize: 14, 
+                fontSize: 14,
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-subtle)',
                 color: 'var(--text-primary)',
@@ -412,15 +425,15 @@ export const ChatPanel: React.FC = () => {
 
           {error && (
             <div style={{
-                padding: 16,
-                background: 'rgba(244, 63, 94, 0.1)',
-                border: '1px solid rgba(244, 63, 94, 0.2)',
-                borderRadius: 12,
-                color: 'var(--accent-rose)',
-                alignSelf: 'center',
-                width: '100%',
-                maxWidth: 600
-              }}>
+              padding: 16,
+              background: 'rgba(244, 63, 94, 0.1)',
+              border: '1px solid rgba(244, 63, 94, 0.2)',
+              borderRadius: 12,
+              color: 'var(--accent-rose)',
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 600
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 8 }}>
                 <AlertCircle size={16} /> Error
               </div>
@@ -430,19 +443,19 @@ export const ChatPanel: React.FC = () => {
 
           {generatedGraph && (
             <div style={{
-                padding: 20,
-                background: loading ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)',
-                border: `1px solid ${loading ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.2)'}`,
-                borderRadius: 16,
-                alignSelf: 'center',
-                width: '100%',
-                maxWidth: 600,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 16,
-                opacity: loading ? 0.7 : 1,
-                transition: 'all 0.3s ease',
-              }}>
+              padding: 20,
+              background: loading ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)',
+              border: `1px solid ${loading ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.2)'}`,
+              borderRadius: 16,
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 600,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              opacity: loading ? 0.7 : 1,
+              transition: 'all 0.3s ease',
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-emerald)', fontWeight: 600, fontSize: 15 }}>
                 <CheckCircle size={18} />
                 {loading ? 'Previous Workflow (new one generating…)' : 'Workflow Generated Successfully'}
@@ -477,7 +490,7 @@ export const ChatPanel: React.FC = () => {
 
         {/* Input Area */}
         <div style={{ padding: '20px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)', zIndex: 10 }}>
-          
+
           {/* Text Area Row */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
             <textarea

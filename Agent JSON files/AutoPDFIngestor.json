@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "name": "Auto PDF Knowledge Ingestor",
+  "nodes": [
+    {
+      "id": "node_watcher",
+      "position": [100.0, 100.0],
+      "data": {
+        "type": "FileWatcherNode",
+        "watchPath": "./ingest_pdfs",
+        "pattern": "*.pdf",
+        "recursive": false
+      }
+    },
+    {
+      "id": "node_pdf",
+      "position": [400.0, 100.0],
+      "data": {
+        "type": "PDFExtractorNode",
+        "pageRange": null
+      }
+    },
+    {
+      "id": "node_embed",
+      "position": [700.0, 100.0],
+      "data": {
+        "type": "LocalEmbedderNode",
+        "model": "nomic-embed-text"
+      }
+    },
+    {
+      "id": "node_db",
+      "position": [1000.0, 100.0],
+      "data": {
+        "type": "ChromaDbStoreNode",
+        "collectionName": "my_library",
+        "chromaUrl": "http://localhost:8000",
+        "inputMap": null
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_watcher",
+      "sourceHandle": null,
+      "target": "node_pdf",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2",
+      "source": "node_pdf",
+      "sourceHandle": null,
+      "target": "node_embed",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_3",
+      "source": "node_embed",
+      "sourceHandle": null,
+      "target": "node_db",
+      "targetHandle": null
+    }
+  ]
+}

@@ -95,7 +95,17 @@ async fn run_compiler_loop(
         let raw_output = client
             .generate(model, &prompt, vec![], false)
             .await
-            .map_err(|e| format!("LLM generation request failed: {e}"))?;
+            .map_err(|e| {
+                let e_str = e.to_string();
+                if e_str.contains("error sending request") || e_str.contains("connection refused") || e_str.contains("os error") {
+                    format!(
+                        "Cannot connect to Ollama at {}.\n\nMake sure Ollama is running:\n  1. Open a terminal and run: ollama serve\n  2. Or start Ollama from the system tray\n  3. Then try again.\n\nOriginal error: {}",
+                        ollama_url, e_str
+                    )
+                } else {
+                    format!("LLM generation request failed: {e_str}")
+                }
+            })?;
 
         let json_str = extract_json(&raw_output);
         last_json = json_str.to_string();
@@ -148,7 +158,16 @@ pub async fn auto_name_graph(
 ) -> Result<String, String> {
     let client = OllamaClient::new(ollama_url);
     if !client.is_reachable().await {
-        return Err("Ollama not reachable".to_string());
+        // Non-fatal: return graph name based on nodes if Ollama is slow/unavailable
+        let node_types: Vec<&str> = graph.nodes.iter().take(3).map(|n| match &n.data {
+            crate::schema::NodeType::OllamaSelectorNode(_) => "AI",
+            crate::schema::NodeType::LocalFileWriterNode(_) => "Writer",
+            crate::schema::NodeType::FileWatcherNode(_) => "Watcher",
+            crate::schema::NodeType::ScheduleNode(_) => "Scheduler",
+            crate::schema::NodeType::ShellCommandNode(_) => "Shell",
+            _ => "Task"
+        }).collect();
+        return Ok(format!("Workflow - {}", node_types.join(" + ")));
     }
 
     let summary: Vec<String> = graph.nodes.iter().map(|n| format!("{:?}", n.data)).collect();

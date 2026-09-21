@@ -340,7 +340,7 @@ fn graph_json_round_trips() {
 
 #[test]
 fn schema_prompt_not_stale() {
-    let prompt = hybrid_local_ai_hub::translator_prompt::build_system_prompt();
+    let prompt = hybrid_local_ai_hub::translator_prompt::build_system_prompt(false);
     let expected_node_types = [
         "FileWatcherNode",
         "TextInputNode",
@@ -360,3 +360,4 @@ fn schema_prompt_not_stale() {
         );
     }
 }
+

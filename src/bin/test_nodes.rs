@@ -50,6 +50,7 @@ async fn main() {
         default_timeout_secs: 15,
         failure_policy: hybrid_local_ai_hub::executor::FailurePolicy::HaltOnFailure,
         online_keys: vec![],
+        suppress_actions: false,
     };
 
     println!("Running graph...");

@@ -6,7 +6,7 @@ import { MessageSquare, Trash2, PlusCircle, Clock } from 'lucide-react';
 export const ChatHistorySidebar: React.FC = () => {
   const isOfflineMode = useSettingsStore(s => s.isOfflineMode);
 
-  const { history, fetchHistory, deleteHistoryItem, loadHistoryItem, clearHistory } = useChatStore();
+  const { history, fetchHistory, deleteHistoryItem, loadHistoryItem, clearHistory, activeChatId } = useChatStore();
 
   useEffect(() => {
     fetchHistory();
@@ -57,64 +57,67 @@ export const ChatHistorySidebar: React.FC = () => {
             No past chats found.
           </div>
         ) : (
-          history.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                padding: '12px',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onClick={() => loadHistoryItem(item.id)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border-medium)';
-                e.currentTarget.style.background = 'var(--bg-card-hover)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                e.currentTarget.style.background = 'var(--bg-card)';
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)' }}>
-                  <MessageSquare size={12} style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.instruction}
-                  </span>
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                  {new Date(item.timestamp).toLocaleDateString()} • {item.model}
-                </div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteHistoryItem(item.id);
-                }}
+          history.map((item) => {
+            const isActive = activeChatId === item.id;
+            return (
+              <div
+                key={item.id}
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  borderRadius: '4px',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  padding: '12px',
+                  background: isActive ? 'rgba(6, 182, 212, 0.1)' : 'var(--bg-card)',
+                  border: isActive ? '1px solid rgba(6, 182, 212, 0.3)' : '1px solid var(--border-subtle)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+                onClick={() => loadHistoryItem(item.id)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = isActive ? 'rgba(6, 182, 212, 0.5)' : 'var(--border-medium)';
+                  e.currentTarget.style.background = isActive ? 'rgba(6, 182, 212, 0.15)' : 'var(--bg-card-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = isActive ? 'rgba(6, 182, 212, 0.3)' : 'var(--border-subtle)';
+                  e.currentTarget.style.background = isActive ? 'rgba(6, 182, 212, 0.1)' : 'var(--bg-card)';
+                }}
               >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)' }}>
+                    <MessageSquare size={12} style={{ flexShrink: 0 }} />
+                    <span style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.instruction}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    {new Date(item.timestamp).toLocaleDateString()} • {item.model}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteHistoryItem(item.id);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })
         )}
       </div>
     </div>

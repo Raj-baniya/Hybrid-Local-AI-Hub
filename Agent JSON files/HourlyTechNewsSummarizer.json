@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "name": "Hourly Tech News Summarizer",
+  "nodes": [
+    {
+      "id": "node_schedule",
+      "position": [100.0, 150.0],
+      "data": {
+        "type": "ScheduleNode",
+        "cronExpression": "0 * * * *"
+      }
+    },
+    {
+      "id": "node_scraper",
+      "position": [400.0, 150.0],
+      "data": {
+        "type": "WebScraperNode",
+        "url": "https://news.ycombinator.com"
+      }
+    },
+    {
+      "id": "node_ai",
+      "position": [700.0, 150.0],
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.1",
+        "promptTemplate": "Please summarize the top headlines from the following webpage content: {{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "node_writer",
+      "position": [1000.0, 150.0],
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./news_summaries.txt",
+        "append": true
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_schedule",
+      "sourceHandle": null,
+      "target": "node_scraper",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2",
+      "source": "node_scraper",
+      "sourceHandle": null,
+      "target": "node_ai",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_3",
+      "source": "node_ai",
+      "sourceHandle": null,
+      "target": "node_writer",
+      "targetHandle": null
+    }
+  ]
+}

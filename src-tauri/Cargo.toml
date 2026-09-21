@@ -24,3 +24,5 @@ dirs = "5.0.1"
 hybrid-local-ai-hub = { path = ".." }
 uuid = "1.26.1"
 keyring = "3.6.1"
+cron = "0.17.0"
+chrono = "0.4.45"

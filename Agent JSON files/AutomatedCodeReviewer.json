@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "name": "Automated Code Reviewer",
+  "nodes": [
+    {
+      "id": "node_watcher",
+      "position": [100.0, 150.0],
+      "data": {
+        "type": "FileWatcherNode",
+        "watchPath": "./src",
+        "pattern": "*.rs",
+        "recursive": true
+      }
+    },
+    {
+      "id": "node_ai",
+      "position": [400.0, 150.0],
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.1",
+        "promptTemplate": "You are a senior Rust developer. Review the following code file that was just changed. Point out any potential bugs or performance issues. Output a clean markdown summary.\n\nFile Content:\n{{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "node_notify",
+      "position": [700.0, 150.0],
+      "data": {
+        "type": "NotifyDesktopNode",
+        "title": "Code Review Ready",
+        "body": "A new code review has been completed for a recently changed file."
+      }
+    },
+    {
+      "id": "node_writer",
+      "position": [700.0, 300.0],
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./code_reviews/latest_review.md",
+        "append": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_watcher",
+      "sourceHandle": null,
+      "target": "node_ai",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2",
+      "source": "node_ai",
+      "sourceHandle": null,
+      "target": "node_notify",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_3",
+      "source": "node_ai",
+      "sourceHandle": null,
+      "target": "node_writer",
+      "targetHandle": null
+    }
+  ]
+}

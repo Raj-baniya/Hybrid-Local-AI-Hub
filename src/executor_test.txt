@@ -1,0 +1,7 @@
+//! Execution engine: topological sort -> concurrent node execution via Kahn's algorithm.
+//!
+//! Failure policy:
+//!   - Default (`FailurePolicy::HaltOnFailure`): any node failure immediately skips
+//!     all downstream-dependent nodes and halts the run.
+//!   - `FailurePolicy::ContinueIndependentBranches`: a failing node skips only its
+//!     direct dependents; independent branches continue executing.

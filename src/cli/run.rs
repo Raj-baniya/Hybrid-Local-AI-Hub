@@ -129,7 +129,7 @@ async fn execute_and_print(
     trigger_source: &str,
     json_output: bool,
 ) -> Result<()> {
-    let record = run_graph(graph, None, config, trigger_source, None).await?;
+    let record = run_graph(graph, None, config, trigger_source, None, None).await?;
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&record)?);
@@ -188,3 +188,4 @@ async fn execute_and_print(
 
     Ok(())
 }
+

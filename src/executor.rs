@@ -1,4 +1,4 @@
-//! Execution engine: topological sort â†’ concurrent node execution via Kahn's algorithm.
+﻿//! Execution engine: topological sort Ã¢â€ â€™ concurrent node execution via Kahn's algorithm.
 //!
 //! Failure policy:
 //!   - Default (`FailurePolicy::HaltOnFailure`): any node failure immediately skips
@@ -20,7 +20,7 @@ use crate::interpolation;
 use crate::providers::ProviderManager;
 use crate::schema::{AgentDefinition, Graph, NodeType};
 
-// ─── Permission Broker Stub ──────────────────────────────────────────────────
+// â”€â”€â”€ Permission Broker Stub â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub struct PermissionBroker;
 
@@ -38,7 +38,7 @@ impl PermissionBroker {
 }
 
 
-// â”€â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Public API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FailurePolicy {
@@ -58,6 +58,8 @@ pub struct ExecutorConfig {
     pub llm_timeout_secs: u64,
     pub is_offline: bool,
     pub online_keys: Vec<crate::providers::ApiKeyConfig>,
+    /// When true, side-effecting nodes log intent but do not actually perform actions.
+    pub suppress_actions: bool,
 }
 
 impl Default for ExecutorConfig {
@@ -70,6 +72,7 @@ impl Default for ExecutorConfig {
             llm_timeout_secs: 600,
             is_offline: true,
             online_keys: vec![],
+            suppress_actions: false,
         }
     }
 }
@@ -102,11 +105,21 @@ pub async fn run_graph(
     let run_id = record.execution_id.clone();
     
     let outputs: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    let mut already_completed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut resumed_from: Option<String> = None;
+    
     // Attempt crash recovery: load checkpoints for this run_id
     if let Ok(Some(cp)) = state_store.load_checkpoint(&run_id).await {
+        resumed_from = Some(cp.checkpoint_id.clone());
+        
         let mut out = outputs.lock().await;
-        for (k, v) in cp.state {
-            out.insert(k, v);
+        for (k, v) in &cp.state {
+            out.insert(k.clone(), v.clone());
+        }
+        
+        // Mark all nodes present in checkpoint.state as already_completed
+        for (node_id, _) in &cp.state {
+            already_completed.insert(node_id.clone());
         }
     }
 
@@ -115,6 +128,19 @@ pub async fn run_graph(
     for node in &graph.nodes {
         let type_name = node_type_name(&node.data);
         record.nodes.push(NodeRecord::new(&node.id, type_name));
+    }
+
+    // Mark recovered nodes as Success in the record immediately (fix #5)
+    for node_id in &already_completed {
+        record.nodes_skipped_on_recovery.push(node_id.clone());
+        if let Some(nr) = record.nodes.iter_mut().find(|r| &r.node_id == node_id) {
+            let cached_output = {
+                let out = outputs.lock().await;
+                out.get(node_id).cloned().unwrap_or_default()
+            };
+            nr.start();
+            nr.succeed(&cached_output);
+        }
     }
 
     // Validate that all edges reference existing nodes
@@ -129,6 +155,8 @@ pub async fn run_graph(
 
     // Build adjacency and in-degree maps.
     let (adj, mut in_degree) = build_adj_and_indegree(graph);
+
+    let suppress_actions = config.suppress_actions;
 
     // Hoist failure policy before the loop so it's in scope everywhere.
     let failure_policy = config.failure_policy;
@@ -178,17 +206,22 @@ pub async fn run_graph(
 
             let tx = event_sender.clone();
             
-            // Mark the actual record as running
+            // Only mark running if not already marked as Success (from checkpoint recovery)
+            let is_already_recovered = already_completed.contains(&node_id);
             let initial_record = {
-                if let Some(nr) = record.nodes.iter_mut().find(|r| r.node_id == *node_id) {
-                    nr.start();
-                    Some(nr.clone())
+                if !is_already_recovered {
+                    if let Some(nr) = record.nodes.iter_mut().find(|r| r.node_id == *node_id) {
+                        nr.start();
+                        Some(nr.clone())
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
             };
 
-            if let (Some(ref s), Some(ir)) = (tx, initial_record) {
+            if let (Some(ref s), Some(ir)) = (&tx, initial_record) {
                 let _ = s.send(ir);
             }
 
@@ -196,12 +229,21 @@ pub async fn run_graph(
             let trigger_source_cloned = trigger_source.to_string();
             let state_store = state_store.clone();
             let run_id_clone = run_id.clone();
+            let already_completed_clone = already_completed.clone();
             let handle = tokio::spawn(async move {
                 // If this node was skipped (because an upstream failed), skip it too.
                 if skipped.lock().await.contains(&node_id) {
                     return (node_id.clone(), Err::<String, anyhow::Error>(anyhow!("SKIP")));
                 }
-                
+
+                // If output already exists from checkpoint recovery, return cached result immediately
+                if already_completed_clone.contains(&node_id) {
+                    let out = outputs.lock().await;
+                    if let Some(res) = out.get(&node_id) {
+                        return (node_id.clone(), Ok(res.clone()));
+                    }
+                }
+
                 // Authorize node capabilities
                 let capability = match &node_data {
                     NodeType::LocalFileWriterNode(_) => Some("fs.write"),
@@ -220,15 +262,19 @@ pub async fn run_graph(
                 }
 
                 
-                // If output already exists from checkpoint, skip execution and return it
-                {
-                    let out = outputs.lock().await;
-                    if let Some(res) = out.get(&node_id) {
-                        return (node_id.clone(), Ok(res.clone()));
-                    }
-                }
-                
-                let fut = execute_node(node_id.clone(), node_data.clone(), outputs.clone(), chroma.clone(), ollama.clone(), predecessors.clone(), skipped.clone(), trigger_source_cloned, run_id_clone, state_store.clone());
+                let fut = execute_node(
+                    node_id.clone(),
+                    node_data.clone(),
+                    outputs.clone(),
+                    chroma.clone(),
+                    ollama.clone(),
+                    predecessors.clone(),
+                    skipped.clone(),
+                    trigger_source_cloned,
+                    run_id_clone,
+                    state_store.clone(),
+                    suppress_actions,
+                );
                 let result = timeout(Duration::from_secs(timeout_secs), fut).await;
 
                 match result {
@@ -264,19 +310,23 @@ pub async fn run_graph(
 
             match result {
                 Ok(output) => {
-                    if nr.status == NodeStatus::Pending {
-                        nr.start();
+                    // Don't re-mark nodes that were already recovered from checkpoint
+                    if nr.status != NodeStatus::Success {
+                        if nr.status == NodeStatus::Pending {
+                            nr.start();
+                        }
+                        nr.succeed(&output);
                     }
-                    nr.succeed(&output);
                     let mut out = outputs.lock().await;
                     out.insert(node_id.clone(), output);
                     // Save checkpoint
                     let cp = crate::schema::Checkpoint {
                         checkpoint_id: uuid::Uuid::new_v4().to_string(),
                         run_id: run_id.clone(),
-                        graph_hash: "TODO".to_string(),
+                        graph_hash: crate::state_store::graph_hash(&serde_json::to_string(graph).unwrap_or_default()),
                         created_at: chrono::Utc::now().to_rfc3339(),
                         node_id: node_id.clone(),
+                        input_hashes: out.clone(),
                         state: out.clone(),
                     };
                     state_store.save_checkpoint(&cp).await?;
@@ -339,12 +389,25 @@ pub async fn run_graph(
         }
     }
 
+    // Fix #10: save resumed_from before finishing
+    record.resumed_from = resumed_from;
+
+    // Fix #9: if all non-recovered nodes ended up Skipped, mark as Failed
+    let all_effectively_skipped = record.nodes.iter().all(|n| {
+        n.status == NodeStatus::Skipped || record.nodes_skipped_on_recovery.contains(&n.node_id)
+    });
+
     record.finish();
+
+    if all_effectively_skipped && !record.nodes.is_empty() {
+        record.overall_status = crate::execution_record::ExecutionStatus::Failed;
+    }
+
     record.save().await?;
     Ok(record)
 }
 
-// â”€â”€â”€ Internals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Internals Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 fn build_adj_and_indegree(
     graph: &Graph,
@@ -422,9 +485,10 @@ async fn execute_node(
     trigger_source: String,
     run_id: String,
     state_store: crate::state_store::StateStore,
+    suppress_actions: bool,
 ) -> Result<String> {
     match node_data {
-        // ── TextInputNode ──────────────────────────────────────────────────────────
+        // â”€â”€ TextInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::TextInputNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -446,7 +510,7 @@ async fn execute_node(
             Ok(resolved)
         }
 
-        // ── FileWatcherNode ──────────────────────────────────────────────────
+        // â”€â”€ FileWatcherNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::FileWatcherNode(cfg) => {
             let mut target_path = None;
             if trigger_source.starts_with("watch:") {
@@ -495,18 +559,88 @@ async fn execute_node(
             }
         }
 
-        // ── ScheduleNode ─────────────────────────────────────────────────────
+        // â”€â”€ ScheduleNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::ScheduleNode(_cfg) => {
             // Similar to FileWatcher, yields a placeholder when run sequentially.
-            Ok("[ScheduleNode: time-driven — use --watch mode]".to_string())
+            Ok("[ScheduleNode: time-driven â€” use --watch mode]".to_string())
         }
 
-        // ── Phase 2 Deterministic Analytics Nodes ────────────────────────────
-        NodeType::SourceFileNode(_) => {
-            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for SourceFileNode."))
+        // â”€â”€ Phase 2 Deterministic Analytics Nodes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        NodeType::SourceFileNode(cfg) => {
+            let path = std::path::Path::new(&cfg.path);
+            if !path.exists() {
+                return Err(anyhow::anyhow!("SourceFileNode '{}': File not found: '{}'", node_id, cfg.path));
+            }
+
+            let connector = cfg.connector.to_lowercase();
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+            // CSV connector or auto-detect
+            if connector == "csv" || (connector == "auto" || connector.is_empty()) && ext == "csv" {
+                let mut rdr = csv::ReaderBuilder::new()
+                    .has_headers(true)
+                    .from_path(path)?;
+                let mut rows: Vec<serde_json::Value> = Vec::new();
+                for result in rdr.deserialize::<serde_json::Value>() {
+                    match result {
+                        Ok(row) => rows.push(row),
+                        Err(e) => return Err(anyhow::anyhow!("SourceFileNode '{}': CSV parse error: {}", node_id, e)),
+                    }
+                }
+                return Ok(serde_json::to_string(&rows)?);
+            }
+
+            // Parquet not supported offline without a large dep, return a clear message
+            if connector == "parquet" || ext == "parquet" {
+                return Err(anyhow::anyhow!("SourceFileNode '{}': Parquet format requires an online connector. Use CSV for offline operation.", node_id));
+            }
+
+            // Default: read as raw text
+            let content = tokio::fs::read_to_string(&cfg.path).await
+                .map_err(|e| anyhow::anyhow!("SourceFileNode '{}': Failed to read file '{}': {}", node_id, cfg.path, e))?;
+            Ok(content)
         }
-        NodeType::DatasetProfileNode(_) => {
-            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for DatasetProfileNode."))
+        NodeType::DatasetProfileNode(_cfg) => {
+            let locked = outputs.lock().await;
+            let input = single_input_value(&predecessors, &locked)
+                .ok_or_else(|| anyhow::anyhow!("DatasetProfileNode '{}': No incoming input", node_id))?;
+            drop(locked);
+
+            // Parse input as JSON array of objects
+            match serde_json::from_str::<Vec<serde_json::Value>>(&input) {
+                Ok(rows) => {
+                    let row_count = rows.len();
+                    let column_names: Vec<String> = if let Some(first) = rows.first() {
+                        if let serde_json::Value::Object(map) = first {
+                            map.keys().cloned().collect()
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        vec![]
+                    };
+
+                    let profile = serde_json::json!({
+                        "row_count": row_count,
+                        "columns": column_names,
+                        "sample_size": std::cmp::min(row_count, 5),
+                        "mode": "basic_profile"
+                    });
+                    Ok(serde_json::to_string_pretty(&profile)?)
+                }
+                Err(_) => {
+                    // If not JSON array, return text stats
+                    let char_count = input.len();
+                    let line_count = input.lines().count();
+                    let profile = serde_json::json!({
+                        "type": "text",
+                        "char_count": char_count,
+                        "line_count": line_count,
+                        "mode": "text_profile"
+                    });
+                    Ok(serde_json::to_string_pretty(&profile)?)
+                }
+            }
         }
         NodeType::TransformAggregateNode(_) => {
             Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for TransformAggregateNode."))
@@ -550,7 +684,7 @@ async fn execute_node(
                 .map_err(|e| anyhow!("AiPlanNode '{}': {e}", node_id))
         }
 
-        // ── ImageInputNode ───────────────────────────────────────────────────
+        // â”€â”€ ImageInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::ImageInputNode(cfg) => {
             // Read image bytes and base64-encode them for downstream LLM nodes.
             let bytes = tokio::fs::read(&cfg.image_path).await.map_err(|e| {
@@ -561,7 +695,7 @@ async fn execute_node(
             Ok(format!("<image>{}</image>", b64))
         }
 
-        // ── PDFExtractorNode ─────────────────────────────────────────────────
+        // â”€â”€ PDFExtractorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::PDFExtractorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -575,7 +709,7 @@ async fn execute_node(
             extract_pdf_text(&node_id, &pdf_path, cfg.page_range)
         }
 
-        // ── OllamaSelectorNode ───────────────────────────────────────────────
+        // â”€â”€ OllamaSelectorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::OllamaSelectorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -602,14 +736,14 @@ async fn execute_node(
                 .map_err(|e| anyhow!("OllamaSelectorNode '{}': {e}", node_id))
         }
 
-        // ── LocalEmbedderNode ────────────────────────────────────────────────
+        // â”€â”€ LocalEmbedderNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::LocalEmbedderNode(cfg) => {
             let prompt = single_input_value(&predecessors, &*outputs.lock().await).unwrap_or_default();
             let embedding = ollama.embed(&cfg.model, &prompt).await?;
             Ok(serde_json::to_string(&embedding).unwrap_or_default())
         }
 
-        // ── ChromaDbStoreNode ────────────────────────────────────────────────
+        // â”€â”€ ChromaDbStoreNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::ChromaDbStoreNode(cfg) => {
             let locked = outputs.lock().await;
 
@@ -646,8 +780,17 @@ async fn execute_node(
             Ok(format!("Stored document '{}' in collection '{}'", id, cfg.collection_name))
         }
 
-        // ── ConditionalRouterNode ────────────────────────────────────────────
+        // â”€â”€ ConditionalRouterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Fix #8: handle empty condition and empty target edge cases
         NodeType::ConditionalRouterNode(cfg) => {
+            // Validate targets first
+            if cfg.true_target.is_empty() {
+                return Err(anyhow!("ConditionalRouterNode '{}': true_target cannot be empty", node_id));
+            }
+            if cfg.false_target.is_empty() {
+                return Err(anyhow!("ConditionalRouterNode '{}': false_target cannot be empty", node_id));
+            }
+
             let locked = outputs.lock().await;
             let input = single_input_value(&predecessors, &locked)
                 .ok_or_else(|| {
@@ -655,21 +798,28 @@ async fn execute_node(
                 })?;
             drop(locked);
 
-            // Simple substring condition: if the condition string appears in the input.
-            let matched = input.to_lowercase().contains(&cfg.condition.to_lowercase());
-            let (routed_to, skipped_target) = if matched { 
-                (&cfg.true_target, &cfg.false_target) 
-            } else { 
-                (&cfg.false_target, &cfg.true_target) 
+            // Fix #8: empty condition always routes to true_target
+            let matched = if cfg.condition.is_empty() {
+                true
+            } else {
+                !input.is_empty() && input.to_lowercase().contains(&cfg.condition.to_lowercase())
             };
-            
+
+            let (routed_to, skipped_target) = if matched {
+                (&cfg.true_target, &cfg.false_target)
+            } else {
+                (&cfg.false_target, &cfg.true_target)
+            };
+
             // Mark the un-routed target as skipped so it and its children don't run
             skipped.lock().await.insert(skipped_target.clone());
 
             Ok(format!("routed:{}", routed_to))
         }
 
-        // ── LocalFileWriterNode ──────────────────────────────────────────────
+                // â”€â”€ LocalFileWriterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Fix #3: idempotency check before writing
+        // Fix #4: dry-run support
         NodeType::LocalFileWriterNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -678,13 +828,28 @@ async fn execute_node(
             let actual_path = interpolation::resolve(&cfg.output_path, &locked, None)?;
             drop(locked);
 
+            // Fix #4: dry-run mode -- no actual write
+            if suppress_actions {
+                return Ok(format!("[DRY-RUN] Would write {} bytes to {}", content.len(), actual_path));
+            }
+
+            // Fix #3: idempotency check -- if this effect was already completed, skip re-write
+            let effect_key = format!("blake3:fs.write:{}", actual_path);
+            if let Some(_completed) = state_store.get_side_effect_by_key(&run_id, &effect_key).await {
+                // Effect already completed in a previous run - verify file exists
+                if std::path::Path::new(&actual_path).exists() {
+                    return Ok(format!("Idempotent: file already written to {}", actual_path));
+                }
+                // File doesn't exist despite completed record - fall through to re-write
+            }
+
             // Log intent before the write using the resolved path as the idempotency key.
             let mut effect = crate::schema::SideEffectRecord {
                 effect_id: uuid::Uuid::new_v4().to_string(),
                 run_id: run_id.clone(),
                 node_id: node_id.clone(),
                 type_: "fs.write".to_string(),
-                idempotency_key: format!("blake3:fs.write:{}", actual_path),
+                idempotency_key: effect_key,
                 intent_at: chrono::Utc::now().to_rfc3339(),
                 completed_at: None,
                 reversible: false,
@@ -709,6 +874,24 @@ async fn execute_node(
             } else {
                 tokio::fs::write(&actual_path, &content).await?;
             }
+            // Verify the write actually succeeded (post-condition check, not just OS OK signal)
+            let verification_result = crate::verification::verify_assertion(
+                &crate::verification::VerificationAssertion::FileExists { path: actual_path.clone() },
+                &std::collections::HashMap::new(),
+            );
+            match verification_result {
+                Ok(result) if !result.passed => {
+                    return Err(anyhow::anyhow!(
+                        "LocalFileWriterNode '{}': Write verification failed - file does not exist at '{}' after write. Reason: {}",
+                        node_id, actual_path, result.reason
+                    ));
+                }
+                Err(e) => {
+                    // Verification infrastructure error, log but don't fail the node
+                    eprintln!("LocalFileWriterNode '{}': Verification check error: {}", node_id, e);
+                }
+                _ => {} // Passed
+            }
             // Log the completed side-effect record.
             effect.completed_at = Some(chrono::Utc::now().to_rfc3339());
             effect.verified = true;
@@ -717,7 +900,7 @@ async fn execute_node(
             Ok(format!("Wrote {} bytes to {}", content.len(), actual_path))
         }
 
-        // ── WebScraperNode ───────────────────────────────────────────────────
+                // â”€â”€ WebScraperNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::WebScraperNode(cfg) => {
             if ollama.is_offline() {
                 return Err(anyhow!("WebScraperNode '{}': Cannot be used in Strict Offline Mode. Turn off Offline Mode to execute this node.", node_id));
@@ -728,76 +911,154 @@ async fn execute_node(
             let url = interpolation::resolve(&cfg.url, &locked, single.as_deref())?;
             drop(locked);
 
+            // Fix #4: dry-run mode
+            if suppress_actions {
+                return Ok(format!("[DRY-RUN] Would scrape URL: {}", url));
+            }
+
             let client = reqwest::Client::new();
             let response = client.get(&url).send().await
                 .map_err(|e| anyhow!("WebScraperNode '{}': Failed to fetch URL: {e}", node_id))?
                 .error_for_status()
                 .map_err(|e| anyhow!("WebScraperNode '{}': HTTP error: {e}", node_id))?;
-            
+
             let text = response.text().await
                 .map_err(|e| anyhow!("WebScraperNode '{}': Failed to read body: {e}", node_id))?;
-            
+
             Ok(text)
         }
 
-        // ── ShellCommandNode ─────────────────────────────────────────────────
+                // â”€â”€ ShellCommandNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Fix #3: idempotency check before executing
+        // Fix #4: dry-run support
         NodeType::ShellCommandNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
-            
+
             if cfg.unsafe_raw_shell.unwrap_or(false) {
                 let command_str = interpolation::resolve(&cfg.command, &locked, single.as_deref())?;
                 drop(locked);
-                
+
+                // Fix #4: dry-run mode
+                if suppress_actions {
+                    return Ok(format!("[DRY-RUN] Would execute: {}", command_str));
+                }
+
+                // Fix #3: idempotency check via command hash
+                let cmd_hash = {
+                    let mut hasher = blake3::Hasher::new();
+                    hasher.update(command_str.as_bytes());
+                    format!("blake3:{}", hasher.finalize().to_hex())
+                };
+                let effect_key = format!("blake3:shell:{}", cmd_hash);
+                if let Some(_completed) = state_store.get_side_effect_by_key(&run_id, &effect_key).await {
+                    return Ok(format!("Idempotent: shell command already executed (hash: {})", cmd_hash));
+                }
+
+                let mut effect = crate::schema::SideEffectRecord {
+                    effect_id: uuid::Uuid::new_v4().to_string(),
+                    run_id: run_id.clone(),
+                    node_id: node_id.clone(),
+                    type_: "shell.execute".to_string(),
+                    idempotency_key: effect_key,
+                    intent_at: chrono::Utc::now().to_rfc3339(),
+                    completed_at: None,
+                    reversible: false,
+                    verified: false,
+                };
+                let _ = state_store.log_side_effect(&effect).await;
+
                 let output = tokio::process::Command::new("powershell")
                     .args(["-Command", &command_str])
                     .kill_on_drop(true)
                     .output()
                     .await
                     .map_err(|e| anyhow!("ShellCommandNode '{}': Execution failed: {e}", node_id))?;
-                    
+
                 let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                
+
                 if !output.status.success() {
                     return Err(anyhow!("ShellCommandNode '{}': Command failed with status {}. Stderr: {}", node_id, output.status, stderr));
                 }
+
+                effect.completed_at = Some(chrono::Utc::now().to_rfc3339());
+                effect.verified = true;
+                let _ = state_store.log_side_effect(&effect).await;
+
                 Ok(stdout)
             } else {
                 if cfg.command.contains("{{") {
                     return Err(anyhow!("ShellCommandNode '{}': Input interpolation is rejected by default to prevent shell injection. Enable unsafeRawShell in config if raw shell execution is intended.", node_id));
                 }
+
+                // Fix #4: dry-run mode
+                if suppress_actions {
+                    drop(locked);
+                    return Ok(format!("[DRY-RUN] Would execute: {}", cfg.command));
+                }
+
+                // Fix #3: idempotency check via command hash (safe path)
+                let cmd_hash = {
+                    let mut hasher = blake3::Hasher::new();
+                    hasher.update(cfg.command.as_bytes());
+                    format!("blake3:{}", hasher.finalize().to_hex())
+                };
+                let effect_key = format!("blake3:shell:{}", cmd_hash);
+                if let Some(_completed) = state_store.get_side_effect_by_key(&run_id, &effect_key).await {
+                    drop(locked);
+                    return Ok(format!("Idempotent: shell command already executed (hash: {})", cmd_hash));
+                }
+
+                let mut effect = crate::schema::SideEffectRecord {
+                    effect_id: uuid::Uuid::new_v4().to_string(),
+                    run_id: run_id.clone(),
+                    node_id: node_id.clone(),
+                    type_: "shell.execute".to_string(),
+                    idempotency_key: effect_key,
+                    intent_at: chrono::Utc::now().to_rfc3339(),
+                    completed_at: None,
+                    reversible: false,
+                    verified: false,
+                };
+                let _ = state_store.log_side_effect(&effect).await;
+
                 drop(locked);
-                
+
                 let mut parts = shlex::split(&cfg.command)
                     .ok_or_else(|| anyhow!("ShellCommandNode '{}': Malformed command string (check quotes)", node_id))?
                     .into_iter();
                 let prog = parts.next().ok_or_else(|| anyhow!("ShellCommandNode '{}': Empty command provided", node_id))?;
-                
+
                 let mut cmd = tokio::process::Command::new(&prog);
                 cmd.args(parts);
-                
+
                 if let Some(input_val) = single.as_deref() {
                     cmd.arg(input_val);
                 }
-                
+
                 let output = cmd
                     .kill_on_drop(true)
                     .output()
                     .await
                     .map_err(|e| anyhow!("ShellCommandNode '{}': Execution failed: {e}", node_id))?;
-                    
+
                 let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                
+
                 if !output.status.success() {
                     return Err(anyhow!("ShellCommandNode '{}': Command failed with status {}. Stderr: {}", node_id, output.status, stderr));
                 }
+
+                effect.completed_at = Some(chrono::Utc::now().to_rfc3339());
+                effect.verified = true;
+                let _ = state_store.log_side_effect(&effect).await;
+
                 Ok(stdout)
             }
         }
 
-        // ── RegexExtractorNode ───────────────────────────────────────────────
+                // â”€â”€ RegexExtractorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::RegexExtractorNode(cfg) => {
             let locked = outputs.lock().await;
             let content_raw = single_input_value(&predecessors, &locked)
@@ -872,25 +1133,36 @@ async fn execute_node(
             let title = interpolation::resolve(&cfg.title, &locked, single.as_deref())?;
             let body = interpolation::resolve(&cfg.body, &locked, single.as_deref())?;
             drop(locked);
-            
+
+            // Fix #4: dry-run mode
+            if suppress_actions {
+                return Ok(format!("[DRY-RUN] Would send notification: {}", title));
+            }
+
             tauri_winrt_notification::Toast::new(tauri_winrt_notification::Toast::POWERSHELL_APP_ID)
                 .title(&title)
                 .text1(&body)
                 .show()
                 .map_err(|e| anyhow::anyhow!("Failed to send desktop notification: {e}"))?;
-                
+
             Ok(format!("Notification sent: {}", title))
         }
-        NodeType::NotifyWebhookNode(cfg) => {
+                NodeType::NotifyWebhookNode(cfg) => {
             if ollama.is_offline() {
                 return Err(anyhow::anyhow!("NotifyWebhookNode '{}': Cannot be used in Strict Offline Mode. Turn off Offline Mode to execute this node.", node_id));
             }
+
+            // Fix #4: dry-run mode
+            if suppress_actions {
+                return Ok(format!("[DRY-RUN] Would send webhook to: {}", cfg.url));
+            }
+
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
             let url = interpolation::resolve(&cfg.url, &locked, single.as_deref())?;
             let payload = interpolation::resolve(&cfg.payload, &locked, single.as_deref())?;
             drop(locked);
-            
+
             let client = reqwest::Client::new();
             let res = client.post(&url)
                 .header("Content-Type", "application/json")
@@ -898,7 +1170,7 @@ async fn execute_node(
                 .send()
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to send webhook: {e}"))?;
-                
+
             if !res.status().is_success() {
                 return Err(anyhow::anyhow!("Webhook failed with status: {}", res.status()));
             }

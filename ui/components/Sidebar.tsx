@@ -1,5 +1,5 @@
 import React from 'react';
-import { Network, Bot, Sparkles, Terminal, Box, LifeBuoy, Settings } from 'lucide-react';
+import { Network, Sparkles, Terminal, LifeBuoy, Settings } from 'lucide-react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useSettingsStore } from '../store/settingsStore';
 
@@ -83,3 +83,4 @@ export const Sidebar: React.FC = () => {
     </div>
   );
 };
+

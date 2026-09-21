@@ -2,7 +2,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useWorkflowStore } from '../store/workflowStore';
-import { Graph } from '../schema/graphSchema';
+import type { Graph } from '../schema/graphSchema';
 import { Bot, X, Download, Play, RefreshCw, Loader2, Edit3, Terminal, Copy, Trash2 } from 'lucide-react';
 
 export const SavedAgentsPanel: React.FC = () => {
@@ -42,7 +42,7 @@ export const SavedAgentsPanel: React.FC = () => {
 
   const handleOpenInCanvas = async (name: string) => {
     try {
-      const graph = await invoke('load_agent', { offlineMode: useSettingsStore.getState().isOfflineMode,  name });
+      const graph = await invoke<Graph>('load_agent', { offlineMode: useSettingsStore.getState().isOfflineMode,  name });
       createTab(name, graph);
       setActivePanel('none');
     } catch (err: any) {
@@ -63,7 +63,7 @@ export const SavedAgentsPanel: React.FC = () => {
   const handleViewOutput = async (name: string) => {
     try {
       setLoading(true);
-      const output = await invoke('get_agent_output', { offlineMode: useSettingsStore.getState().isOfflineMode,  name });
+      const output = await invoke<string>('get_agent_output', { offlineMode: useSettingsStore.getState().isOfflineMode,  name });
       setViewingOutput({ name, text: output });
     } catch (err: any) {
       const errStr = typeof err === 'string' ? err : err.message || '';

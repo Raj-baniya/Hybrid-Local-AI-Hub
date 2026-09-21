@@ -3430,7 +3430,7 @@ Triggers are workflow entry points. They are owned by the core scheduler; the no
 > **Config:** channel target, `title_template`, `body_template` (fact references resolved by the central formatter), `severity`, `attachments` (report paths), `idempotency_key` (required), `max_body_length`, `include_deep_link` (to the run in the app), `redact_pii: true`.
 > **Behaviour:** render from **approved claims only** → attach the deep link → commit an outbox intent alongside the ledger commit → an asynchronous worker delivers the notification via the configured channel and records delivery status to ensure idempotency.
 > **Perms:** `notify:<channel>`, `net.egress:<host>` for remote channels, `secrets.read` for SMTP/API credentials
-> **Fails:** `DELIVERY_FAILED` (retry with backoff, max 3, then record a failed delivery and surface it in-app — a silently lost alert is a serious failure), `CHANNEL_NOT_GRANTED`, `QUIET_HOURS` (deferred), `PAYLOAD_TOO_LARGE`, `UNVERIFIED_CONTENT` (hard: any fact reference that failed verification blocks the send).
+> **Fails:** `DELIVERY_FAILED` (retry with backoff, max 3, then record a failed delivery and surface it in-app — a silently lost alerun rt is a serious failure), `CHANNEL_NOT_GRANTED`, `QUIET_HOURS` (deferred), `PAYLOAD_TOO_LARGE`, `UNVERIFIED_CONTENT` (hard: any fact reference that failed verification blocks the send).
 > **Connects:** `notify.dedupe` → here → `state.write`.
 
 > **`action.write_file`** — write a data or report file.

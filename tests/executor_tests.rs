@@ -44,14 +44,7 @@ fn make_graph(nodes: Vec<GraphNode>, edges: Vec<GraphEdge>) -> Graph {
     Graph { version: 1, name: Some("Test Graph".to_string()), nodes, edges }
 }
 
-fn test_config() -> ExecutorConfig {
-    ExecutorConfig {
-        ollama_url: "http://localhost:11434".to_string(),
-        chroma_url: "http://localhost:8000".to_string(),
-        failure_policy: FailurePolicy::HaltOnFailure,
-        default_timeout_secs: 5,
-        llm_timeout_secs: 10,
-    }
+fn test_config() -> ExecutorConfig { ExecutorConfig { ollama_url: "http://localhost:11434".to_string(), chroma_url: "http://localhost:8000".to_string(), failure_policy: FailurePolicy::HaltOnFailure, default_timeout_secs: 5, llm_timeout_secs: 10, is_offline: false, online_keys: vec![], suppress_actions: false, }
 }
 
 fn temp_dir_path(filename: &str) -> String {
@@ -66,7 +59,7 @@ async fn single_text_node_succeeds() {
     let nodes = vec![text_node("t1", "Hello, world!")];
     let graph = make_graph(nodes, vec![]);
 
-    let record = run_graph(&graph, test_config(), "test", None).await
+    let record = run_graph(&graph, None, test_config(), "test", None, None).await
         .expect("run_graph should succeed");
 
     assert_eq!(record.nodes.len(), 1);
@@ -85,7 +78,7 @@ async fn text_to_file_writer_pipeline_succeeds() {
     let edges = vec![edge("e1", "input", "writer")];
     let graph = make_graph(nodes, edges);
 
-    let record = run_graph(&graph, test_config(), "test", None).await
+    let record = run_graph(&graph, None, test_config(), "test", None, None).await
         .expect("run_graph should succeed");
 
     assert_eq!(record.nodes.len(), 2);
@@ -125,7 +118,7 @@ async fn cycle_graph_rejected_before_execution() {
     let edges = vec![edge("e1", "input", "writer")];
     let graph = make_graph(nodes, edges);
 
-    let record = run_graph(&graph, test_config(), "test", None).await
+    let record = run_graph(&graph, None, test_config(), "test", None, None).await
         .expect("valid graph should succeed");
 
     let writer_rec = record.nodes.iter().find(|n| n.node_id == "writer").unwrap();
@@ -145,7 +138,7 @@ async fn parallel_nodes_run_concurrently() {
     ];
     let graph = make_graph(nodes, vec![]);
 
-    let record = run_graph(&graph, test_config(), "test", None).await
+    let record = run_graph(&graph, None, test_config(), "test", None, None).await
         .expect("should succeed");
 
     assert!(record.nodes.iter().all(|n| n.status == NodeStatus::Success));
@@ -168,7 +161,7 @@ async fn fan_out_both_branches_succeed() {
     ];
     let graph = make_graph(nodes, edges);
 
-    let record = run_graph(&graph, test_config(), "test", None).await.expect("succeed");
+    let record = run_graph(&graph, None, test_config(), "test", None, None).await.expect("succeed");
 
     assert!(record.nodes.iter().all(|n| n.status == NodeStatus::Success),
         "All branches should succeed in fan-out. Records: {:?}",
@@ -184,7 +177,7 @@ async fn execution_record_saved_to_disk() {
     let nodes = vec![text_node("t1", "record persistence test")];
     let graph = make_graph(nodes, vec![]);
 
-    let record = run_graph(&graph, test_config(), "test", None).await.expect("succeed");
+    let record = run_graph(&graph, None, test_config(), "test", None, None).await.expect("succeed");
 
     // The record should have been saved to ~/.hybrid-hub/logs/<id>.json
     let log_path = dirs::home_dir()
@@ -201,3 +194,6 @@ async fn execution_record_saved_to_disk() {
         .expect("should load");
     assert_eq!(loaded.execution_id, record.execution_id);
 }
+
+
+

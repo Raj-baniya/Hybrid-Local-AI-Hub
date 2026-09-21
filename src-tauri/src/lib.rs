@@ -6,8 +6,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::PullState::default())
         .manage(commands::ChatState::default())
+        .manage(commands::ScheduledTaskState::default())
         .invoke_handler(tauri::generate_handler![
             commands::run_graph,
+            commands::run_graph_scheduled,
+            commands::stop_scheduled_graph,
+            commands::list_scheduled_tasks,
             commands::validate_graph,
             commands::list_models,
             commands::cmd_check_ollama,

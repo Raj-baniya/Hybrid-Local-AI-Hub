@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "Story Generator 2-Min",
+  "nodes": [
+    {
+      "id": "node_schedule",
+      "position": [100.0, 150.0],
+      "data": {
+        "type": "ScheduleNode",
+        "cronExpression": "*/2 * * * *"
+      }
+    },
+    {
+      "id": "node_ai",
+      "position": [400.0, 150.0],
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.1",
+        "promptTemplate": "Write a very short, creative sci-fi story. Limit it to one paragraph.",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "node_write",
+      "position": [700.0, 150.0],
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "./stories/latest_story.txt",
+        "append": true
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_schedule",
+      "sourceHandle": null,
+      "target": "node_ai",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2",
+      "source": "node_ai",
+      "sourceHandle": null,
+      "target": "node_write",
+      "targetHandle": null
+    }
+  ]
+}

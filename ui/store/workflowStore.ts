@@ -4,6 +4,9 @@ import { Graph, NodeType } from '../schema/graphSchema';
 import { getLayoutedElements } from '../utils/autoLayout';
 import { wouldCreateCycle } from '../utils/cycleCheck';
 
+// Re-export Graph for consumers
+export type { Graph, NodeType } from '../schema/graphSchema';
+
 export interface TabData {
   id: string;
   title: string;

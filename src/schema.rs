@@ -401,6 +401,7 @@ pub struct Checkpoint {
     pub graph_hash: String,
     pub created_at: String,
     pub node_id: String,
+    pub input_hashes: std::collections::HashMap<String, String>,
     pub state: std::collections::HashMap<String, String>,
 }
 

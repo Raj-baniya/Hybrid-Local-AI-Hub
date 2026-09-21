@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "name": "System Resource Monitor",
+  "nodes": [
+    {
+      "id": "node_schedule",
+      "position": [100.0, 150.0],
+      "data": {
+        "type": "ScheduleNode",
+        "cronExpression": "0 9 * * *"
+      }
+    },
+    {
+      "id": "node_shell",
+      "position": [400.0, 150.0],
+      "data": {
+        "type": "ShellCommandNode",
+        "command": "systeminfo",
+        "unsafeRawShell": false
+      }
+    },
+    {
+      "id": "node_ai",
+      "position": [700.0, 150.0],
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.1",
+        "promptTemplate": "Here is the output of systeminfo. Briefly summarize the OS version, memory, and uptime in a few bullet points:\n{{input}}",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "node_notify",
+      "position": [1000.0, 150.0],
+      "data": {
+        "type": "NotifyDesktopNode",
+        "title": "Daily System Report",
+        "body": "{{node_ai.output}}"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_schedule",
+      "sourceHandle": null,
+      "target": "node_shell",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2",
+      "source": "node_shell",
+      "sourceHandle": null,
+      "target": "node_ai",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_3",
+      "source": "node_ai",
+      "sourceHandle": null,
+      "target": "node_notify",
+      "targetHandle": null
+    }
+  ]
+}

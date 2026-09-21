@@ -1,4 +1,4 @@
-﻿use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::path::PathBuf;
@@ -99,6 +99,8 @@ pub struct ExecutionRecord {
     pub finished_at: Option<DateTime<Utc>>,
     pub overall_status: ExecutionStatus,
     pub nodes: Vec<NodeRecord>,
+    pub resumed_from: Option<String>,
+    pub nodes_skipped_on_recovery: Vec<String>,
 }
 
 impl ExecutionRecord {
@@ -111,6 +113,8 @@ impl ExecutionRecord {
             finished_at: None,
             overall_status: ExecutionStatus::Running,
             nodes: Vec::new(),
+            resumed_from: None,
+            nodes_skipped_on_recovery: Vec::new(),
         }
     }
 

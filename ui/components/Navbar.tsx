@@ -1,10 +1,10 @@
 import { useSettingsStore } from '../store/settingsStore';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { useWorkflowStore, ExecutionRecord } from '../store/workflowStore';
-import { Graph } from '../schema/graphSchema';
+import type { Graph } from '../store/workflowStore';
 import {
   Play,
   CheckCircle,
@@ -13,14 +13,12 @@ import {
   FolderOpen,
   Sparkles,
   ScrollText,
-  Cpu,
   Plus,
   X,
   Loader2,
-  Moon,
-  Sun,
-  Bot,
   LifeBuoy,
+  Square,
+  RotateCcw,
 } from 'lucide-react';
 import { PreRunDialog } from './PreRunDialog';
 
@@ -44,11 +42,13 @@ export const Navbar: React.FC = () => {
   const setNodeStatus = useWorkflowStore((s) => s.setNodeStatus);
   const clearNodeStatuses = useWorkflowStore((s) => s.clearNodeStatuses);
   const setExecutionRecord = useWorkflowStore((s) => s.setExecutionRecord);
-  const theme = useWorkflowStore((s) => s.theme);
-  const setTheme = useWorkflowStore((s) => s.setTheme);
 
   const isPreRunDialogOpen = useWorkflowStore((s) => s.isPreRunDialogOpen);
   const setPreRunDialogOpen = useWorkflowStore((s) => s.setPreRunDialogOpen);
+
+  // Scheduled execution state
+  const [scheduledTaskId, setScheduledTaskId] = useState<string | null>(null);
+  const [isScheduledRunning, setIsScheduledRunning] = useState(false);
 
   // Real-time per-node progress listener
   useEffect(() => {
@@ -81,6 +81,42 @@ export const Navbar: React.FC = () => {
     });
     return () => { unlisten.then((fn) => fn()); };
   }, [setNodeStatus]);
+
+  // Scheduled task event listeners
+  useEffect(() => {
+    const unlistenStarted = listen('scheduled-task-started', (event) => {
+      setIsScheduledRunning(true);
+      setScheduledTaskId(event.payload as string);
+    });
+
+    const unlistenExecution = listen<any>('scheduled-task-execution', (event) => {
+      const payload = event.payload;
+      setExecutionRecord(payload.record);
+    });
+
+    const unlistenError = listen<any>('scheduled-task-error', (event) => {
+      console.error('Scheduled task error:', event.payload.error);
+    });
+
+    const unlistenStopped = listen('scheduled-task-stopped', (event) => {
+      if (event.payload === scheduledTaskId) {
+        setIsScheduledRunning(false);
+        setScheduledTaskId(null);
+      }
+    });
+
+    return () => {
+      unlistenStarted.then((fn) => fn());
+      unlistenExecution.then((fn) => fn());
+      unlistenError.then((fn) => fn());
+      unlistenStopped.then((fn) => fn());
+    };
+  }, [scheduledTaskId, setExecutionRecord]);
+
+  // Check if graph has ScheduleNode
+  const hasScheduleNode = (graph: Graph): boolean => {
+    return graph.nodes.some(n => n.data.type === 'ScheduleNode');
+  };
 
   const handleRunRequest = () => {
     const graph = getActiveGraph();
@@ -167,6 +203,50 @@ export const Navbar: React.FC = () => {
       setActivePanel('logs');
     } finally {
       setIsExecuting(false);
+    }
+  };
+
+  // Scheduled execution handlers
+  const handleStartScheduled = async () => {
+    const graph = getActiveGraph();
+    if (!hasScheduleNode(graph)) {
+      alert('Graph must contain a ScheduleNode for automated execution.');
+      return;
+    }
+
+    const taskId = `scheduled-${Date.now()}`;
+    setIsScheduledRunning(true);
+    setScheduledTaskId(taskId);
+
+    try {
+      await invoke('run_graph_scheduled', {
+        taskId,
+        graph,
+        config: {
+          continueOnFailure: false,
+          defaultTimeoutSecs: 15,
+          llmTimeoutSecs: 600,
+        },
+        offlineMode: useSettingsStore.getState().isOfflineMode,
+      });
+    } catch (err: any) {
+      const errorMsg = typeof err === 'string' ? err : err.message;
+      alert(`Failed to start scheduled execution:\n${errorMsg}`);
+      setIsScheduledRunning(false);
+      setScheduledTaskId(null);
+    }
+  };
+
+  const handleStopScheduled = async () => {
+    if (!scheduledTaskId) return;
+
+    try {
+      await invoke('stop_scheduled_graph', { taskId: scheduledTaskId });
+      setIsScheduledRunning(false);
+      setScheduledTaskId(null);
+    } catch (err: any) {
+      const errorMsg = typeof err === 'string' ? err : err.message;
+      alert(`Failed to stop scheduled execution:\n${errorMsg}`);
     }
   };
 
@@ -338,24 +418,60 @@ export const Navbar: React.FC = () => {
           Validate
         </button>
 
-        <button
-          className="btn btn-primary"
-          onClick={handleRunRequest}
-          disabled={isExecuting}
-          style={{ background: 'linear-gradient(135deg, var(--accent-emerald) 0%, #10b981 100%)' }}
-        >
-          {isExecuting ? (
-            <>
-              <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-              Executing...
-            </>
-          ) : (
-            <>
-              <Play size={14} />
-              Run Pipeline
-            </>
-          )}
-        </button>
+        {(() => {
+          const graph = getActiveGraph();
+          const hasSchedule = hasScheduleNode(graph);
+
+          if (hasSchedule && isScheduledRunning) {
+            return (
+              <button
+                className="btn"
+                onClick={handleStopScheduled}
+                style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
+                title="Stop automated scheduled execution"
+              >
+                <Square size={14} />
+                Stop Auto-Run
+              </button>
+            );
+          }
+
+          if (hasSchedule && !isScheduledRunning) {
+            return (
+              <button
+                className="btn"
+                onClick={handleStartScheduled}
+                disabled={isExecuting}
+                style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}
+                title="Start automated scheduled execution (runs continuously on cron schedule)"
+              >
+                <RotateCcw size={14} />
+                Start Auto-Run
+              </button>
+            );
+          }
+
+          return (
+            <button
+              className="btn btn-primary"
+              onClick={handleRunRequest}
+              disabled={isExecuting}
+              style={{ background: 'linear-gradient(135deg, var(--accent-emerald) 0%, #10b981 100%)' }}
+            >
+              {isExecuting ? (
+                <>
+                  <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                  Executing...
+                </>
+              ) : (
+                <>
+                  <Play size={14} />
+                  Run Pipeline
+                </>
+              )}
+            </button>
+          );
+        })()}
       </div>
 
       {/* Right: File Ops & Panel Toggles */}
