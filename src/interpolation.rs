@@ -97,6 +97,21 @@ pub fn validate_templates(graph: &Graph) -> Result<()> {
             }
             NodeType::TextInputNode(cfg) => vec![("text", &cfg.text)],
             NodeType::LocalFileWriterNode(cfg) => vec![("outputPath", &cfg.output_path)],
+            NodeType::WebScraperNode(cfg) => vec![("url", &cfg.url)],
+            NodeType::ShellCommandNode(cfg) => vec![("command", &cfg.command)],
+            NodeType::NotifyDesktopNode(cfg) => vec![("title", &cfg.title), ("body", &cfg.body)],
+            NodeType::NotifyWebhookNode(cfg) => vec![("url", &cfg.url), ("payload", &cfg.payload)],
+            NodeType::CsvReaderNode(cfg) => vec![("filePath", &cfg.file_path)],
+            NodeType::TemplateFormatterNode(cfg) => vec![("template", &cfg.template)],
+            NodeType::ChromaDbStoreNode(cfg) => {
+                let mut fields = Vec::new();
+                if let Some(map) = &cfg.input_map {
+                    for value in map.values() {
+                        fields.push(("inputMap", value.as_str()));
+                    }
+                }
+                fields
+            }
             _ => vec![],
         };
 

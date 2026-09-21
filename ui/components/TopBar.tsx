@@ -15,7 +15,8 @@ import {
   X,
   Loader2,
   Square,
-  RotateCcw,
+  Pause,
+  PlayCircle,
 } from 'lucide-react';
 import { PreRunDialog } from './PreRunDialog';
 
@@ -47,16 +48,32 @@ export const TopBar: React.FC = () => {
   const [preflightStatus, setPreflightStatus] = React.useState<string | null>(null);
   const [executionModalOutput, setExecutionModalOutput] = React.useState<string | null>(null);
 
-  // Scheduled execution state
   const [scheduledTaskId, setScheduledTaskId] = useState<string | null>(null);
   const [isScheduledRunning, setIsScheduledRunning] = useState(false);
+  const [isScheduledPaused, setIsScheduledPaused] = useState(false);
+  const [nextRunLabel, setNextRunLabel] = useState<string | null>(null);
 
-  // Check if graph has ScheduleNode
   const hasScheduleNode = (graph: Graph): boolean => {
     return graph.nodes.some(n => n.data.type === 'ScheduleNode');
   };
 
-  // Scheduled execution handlers
+  const applyRecordToCanvas = (record: ExecutionRecord) => {
+    setExecutionRecord(record);
+    record.nodes?.forEach((nr) => {
+      const rawStatus = (nr.status ?? '').toLowerCase();
+      setNodeStatus(nr.node_id, {
+        status: rawStatus === 'success' ? 'success'
+          : rawStatus === 'failed' ? 'failed'
+          : rawStatus === 'skipped' ? 'skipped'
+          : rawStatus === 'running' ? 'running'
+          : 'idle',
+        durationMs: nr.duration_ms,
+        outputPreview: nr.output_preview,
+        error: nr.error,
+      });
+    });
+  };
+
   const handleStartScheduled = async () => {
     const graph = getActiveGraph();
     if (!hasScheduleNode(graph)) {
@@ -64,14 +81,22 @@ export const TopBar: React.FC = () => {
       return;
     }
 
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    const namedGraph = {
+      ...graph,
+      name: graph.name || activeTab?.title || 'scheduled-agent',
+    };
+
     const taskId = `scheduled-${Date.now()}`;
     setIsScheduledRunning(true);
+    setIsScheduledPaused(false);
     setScheduledTaskId(taskId);
+    clearNodeStatuses();
 
     try {
       await invoke('run_graph_scheduled', {
         taskId,
-        graph,
+        graph: namedGraph,
         config: {
           continueOnFailure: false,
           defaultTimeoutSecs: 15,
@@ -81,22 +106,47 @@ export const TopBar: React.FC = () => {
       });
     } catch (err: any) {
       const errorMsg = typeof err === 'string' ? err : err.message;
-      alert(`Failed to start scheduled execution:\n${errorMsg}`);
+      alert(`Failed to start automation:\n${errorMsg}`);
       setIsScheduledRunning(false);
+      setIsScheduledPaused(false);
       setScheduledTaskId(null);
+      setNextRunLabel(null);
     }
   };
 
   const handleStopScheduled = async () => {
     if (!scheduledTaskId) return;
-
     try {
       await invoke('stop_scheduled_graph', { taskId: scheduledTaskId });
       setIsScheduledRunning(false);
+      setIsScheduledPaused(false);
       setScheduledTaskId(null);
+      setNextRunLabel(null);
     } catch (err: any) {
       const errorMsg = typeof err === 'string' ? err : err.message;
-      alert(`Failed to stop scheduled execution:\n${errorMsg}`);
+      alert(`Failed to stop automation:\n${errorMsg}`);
+    }
+  };
+
+  const handlePauseScheduled = async () => {
+    if (!scheduledTaskId) return;
+    try {
+      await invoke('pause_scheduled_graph', { taskId: scheduledTaskId });
+      setIsScheduledPaused(true);
+    } catch (err: any) {
+      const errorMsg = typeof err === 'string' ? err : err.message;
+      alert(`Failed to pause automation:\n${errorMsg}`);
+    }
+  };
+
+  const handleResumeScheduled = async () => {
+    if (!scheduledTaskId) return;
+    try {
+      await invoke('resume_scheduled_graph', { taskId: scheduledTaskId });
+      setIsScheduledPaused(false);
+    } catch (err: any) {
+      const errorMsg = typeof err === 'string' ? err : err.message;
+      alert(`Failed to resume automation:\n${errorMsg}`);
     }
   };
 
@@ -128,17 +178,31 @@ export const TopBar: React.FC = () => {
 
     const unlistenExecution = listen<any>('scheduled-task-execution', (event) => {
       const payload = event.payload;
-      setExecutionRecord(payload.record);
+      if (payload?.record) applyRecordToCanvas(payload.record);
+      if (payload?.output) setExecutionModalOutput(payload.output);
     });
 
     const unlistenError = listen<any>('scheduled-task-error', (event) => {
-      console.error('Scheduled task error:', event.payload.error);
+      const errorMsg = event.payload?.error || 'Scheduled task error';
+      console.error('Scheduled task error:', errorMsg);
+      alert(`Automation error:\n${errorMsg}`);
+    });
+
+    const unlistenNext = listen<any>('scheduled-task-next-run', (event) => {
+      const secs = Number(event.payload?.in ?? 0);
+      if (secs > 0) {
+        const mins = Math.floor(secs / 60);
+        const rem = Math.round(secs % 60);
+        setNextRunLabel(mins > 0 ? `Next run in ${mins}m ${rem}s` : `Next run in ${rem}s`);
+      }
     });
 
     const unlistenStopped = listen('scheduled-task-stopped', (event) => {
       if (event.payload === scheduledTaskId) {
         setIsScheduledRunning(false);
+        setIsScheduledPaused(false);
         setScheduledTaskId(null);
+        setNextRunLabel(null);
       }
     });
 
@@ -146,9 +210,10 @@ export const TopBar: React.FC = () => {
       unlistenStarted.then((fn) => fn());
       unlistenExecution.then((fn) => fn());
       unlistenError.then((fn) => fn());
+      unlistenNext.then((fn) => fn());
       unlistenStopped.then((fn) => fn());
     };
-  }, [scheduledTaskId, setExecutionRecord]);
+  }, [scheduledTaskId, setExecutionRecord, setNodeStatus]);
 
   const handleRunRequest = () => {
     const graph = getActiveGraph();
@@ -486,15 +551,43 @@ export const TopBar: React.FC = () => {
 
           if (hasSchedule && isScheduledRunning) {
             return (
-              <button
-                className="btn"
-                onClick={handleStopScheduled}
-                style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
-                title="Stop automated scheduled execution"
-              >
-                <Square size={14} />
-                Stop Auto-Run
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {nextRunLabel && (
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {isScheduledPaused ? 'Paused' : nextRunLabel}
+                  </span>
+                )}
+                {isScheduledPaused ? (
+                  <button
+                    className="btn"
+                    onClick={handleResumeScheduled}
+                    style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                    title="Resume automation"
+                  >
+                    <PlayCircle size={14} />
+                    Resume
+                  </button>
+                ) : (
+                  <button
+                    className="btn"
+                    onClick={handlePauseScheduled}
+                    style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}
+                    title="Pause automation"
+                  >
+                    <Pause size={14} />
+                    Pause
+                  </button>
+                )}
+                <button
+                  className="btn"
+                  onClick={handleStopScheduled}
+                  style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
+                  title="Stop automation"
+                >
+                  <Square size={14} />
+                  Stop
+                </button>
+              </div>
             );
           }
 
@@ -505,10 +598,10 @@ export const TopBar: React.FC = () => {
                 onClick={handleStartScheduled}
                 disabled={isExecuting}
                 style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}
-                title="Start automated scheduled execution (runs continuously on cron schedule)"
+                title="Start continuous automation on the Schedule node's cron"
               >
-                <RotateCcw size={14} />
-                Start Auto-Run
+                <PlayCircle size={14} />
+                Start Automation
               </button>
             );
           }

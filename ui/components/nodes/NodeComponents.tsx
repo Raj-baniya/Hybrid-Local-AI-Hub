@@ -311,22 +311,10 @@ export const LocalFileWriterNodeComponent: React.FC<NodeProps> = ({ id, data, se
 export const WebScraperNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const cfg = data as unknown as WebScraperConfig;
   return (
-    <CustomNodeWrapper
-      id={id}
-      title="Web Scraper"
-      icon={<Globe size={16} />}
-      headerColor="#3b82f6"
-      selected={selected}
-      hasTargetHandle={true}
-      hasSourceHandle={true}
-    >
+    <CustomNodeWrapper id={id} title="Web Scraper (Online)" icon={<Globe size={16} />} headerColor="#3b82f6" selected={selected} hasTargetHandle={true} hasSourceHandle={true}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {cfg.url}
-        </div>
-        <div style={{ fontSize: 9, alignSelf: 'flex-start', padding: '2px 6px', background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>
-          REQUIRES INTERNET
-        </div>
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.url}</div>
+        <div style={{ fontSize: 9, color: '#f43f5e', fontWeight: 700 }}>ONLINE ONLY</div>
       </div>
     </CustomNodeWrapper>
   );
@@ -466,6 +454,20 @@ export const AiInterpretNodeComponent: React.FC<NodeProps> = ({ id, data, select
   );
 };
 
+export const GenericUtilityNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const cfg = data as any;
+  const labels: Record<string, string> = {
+    NotifyDesktopNode: 'Desktop Notification', NotifyWebhookNode: 'Webhook Notification',
+    ClipboardTriggerNode: 'Clipboard Input', CsvReaderNode: 'CSV Reader', DelayNode: 'Delay',
+    TemplateFormatterNode: 'Template Formatter', MergeNode: 'Merge Inputs',
+  };
+  return (
+    <CustomNodeWrapper id={id} title={labels[cfg.type] || cfg.type} icon={<Braces size={16} />} headerColor="#64748b" selected={selected} hasTargetHandle={true} hasSourceHandle={true}>
+      <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{cfg.type === 'DelayNode' ? `${cfg.durationSeconds ?? 0}s` : 'Configured'}</div>
+    </CustomNodeWrapper>
+  );
+};
+
 export const AiPlanNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const cfg = data as unknown as AiPlanConfig;
   return (
@@ -503,4 +505,11 @@ export const customNodeTypes = {
   AnalysisStatsHypothesisTestNode: AnalysisStatsHypothesisTestNodeComponent,
   AiInterpretNode: AiInterpretNodeComponent,
   AiPlanNode: AiPlanNodeComponent,
+  NotifyDesktopNode: GenericUtilityNodeComponent,
+  NotifyWebhookNode: GenericUtilityNodeComponent,
+  ClipboardTriggerNode: GenericUtilityNodeComponent,
+  CsvReaderNode: GenericUtilityNodeComponent,
+  DelayNode: GenericUtilityNodeComponent,
+  TemplateFormatterNode: GenericUtilityNodeComponent,
+  MergeNode: GenericUtilityNodeComponent,
 };

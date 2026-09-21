@@ -395,13 +395,55 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         defaultData = { type, collectionName: 'knowledge_base', chromaUrl: 'http://localhost:8000', inputMap: null };
         break;
       case 'ConditionalRouterNode':
-        defaultData = { type, condition: 'output.contains("urgent")', trueTarget: '', falseTarget: '' };
+        defaultData = { type, condition: 'urgent', trueTarget: '', falseTarget: '' };
         break;
       case 'LocalFileWriterNode':
         defaultData = { type, outputPath: './output/result.txt', append: false };
         break;
       case 'WebScraperNode':
         defaultData = { type, url: 'https://example.com' };
+        break;
+      case 'ScheduleNode':
+        defaultData = { type, cronExpression: '*/5 * * * *' };
+        break;
+      case 'SourceFileNode':
+        defaultData = { type, path: './data.csv', connector: 'auto' };
+        break;
+      case 'DatasetProfileNode':
+        defaultData = { type, mode: 'auto' };
+        break;
+      case 'TransformAggregateNode':
+        defaultData = { type, groupBy: [], aggregations: ['count(*)'] };
+        break;
+      case 'AnalysisStatsHypothesisTestNode':
+        defaultData = { type, test: 't-test', groupColumn: '', valueColumn: '' };
+        break;
+      case 'AiInterpretNode':
+        defaultData = { type, requiresFacts: [], maxClaims: 5 };
+        break;
+      case 'AiPlanNode':
+        defaultData = { type, objective: 'Plan the next actions from the input.', modelRole: 'planner' };
+        break;
+      case 'NotifyDesktopNode':
+        defaultData = { type, title: 'Hybrid Local AI Hub', body: '{{input}}' };
+        break;
+      case 'NotifyWebhookNode':
+        defaultData = { type, url: 'https://example.com/webhook', payload: '{"text":"{{input}}"}' };
+        break;
+      case 'ClipboardTriggerNode':
+        defaultData = { type, onlyText: true };
+        break;
+      case 'CsvReaderNode':
+        defaultData = { type, filePath: './data.csv', hasHeaderRow: true };
+        break;
+      case 'DelayNode':
+        defaultData = { type, durationSeconds: 5 };
+        break;
+      case 'TemplateFormatterNode':
+        defaultData = { type, template: '{{input}}' };
+        break;
+      case 'MergeNode':
+        defaultData = { type, _dummy: false };
         break;
       case 'ShellCommandNode':
         defaultData = { type, command: 'echo "Hello World"' };
@@ -410,9 +452,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         defaultData = { type, pattern: '.*', group: 0 };
         break;
       default:
-        // Fallback for typescript compiler
-        defaultData = { type: 'TextInputNode', text: '' } as unknown as NodeType;
-        break;
+        throw new Error(`Unsupported node type: ${String(type)}`);
     }
 
     const newNode: Node = {

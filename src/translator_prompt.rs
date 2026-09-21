@@ -14,12 +14,12 @@ pub fn build_system_prompt(is_offline: bool) -> String {
     let mut instructions = INSTRUCTIONS_SECTION.to_string();
 
     if is_offline {
-        schema = schema.replace("26 Node Types Available", "31 Node Types Available"); // Assuming there's a count in schema
-        instructions = instructions.replace("26 available node types", "31 available node types");
-        instructions = instructions.replace("26 available node types", "outside the 31 available nodes");
+        schema = schema.replace("26 Node Types Available", "25 Node Types Available");
+        instructions = instructions.replace("26 available node types", "25 available node types");
+        instructions = instructions.replace("outside the 31 available nodes", "outside the 25 available nodes");
         instructions = instructions.replace(
             "NOTE: The following analytics nodes are currently UNAVAILABLE and MUST NOT be used:",
-            "NOTE: The following nodes are currently UNAVAILABLE and MUST NOT be used:\n- WebScraperNode (Offline Mode Active)"
+            "NOTE: WebScraperNode and NotifyWebhookNode are online-only and MUST NOT be used in Strict Offline Mode."
         );
     }
 
@@ -327,12 +327,7 @@ const INSTRUCTIONS_SECTION: &str = r#"
 
 You are an Autonomous Agent Architect. The user will describe a workflow automation, bot, or agent. Generate a valid JSON graph for it using ONLY the 25 available node types. 
 
-NOTE: The following analytics nodes are currently UNAVAILABLE and MUST NOT be used:
-- SourceFileNode
-- DatasetProfileNode
-- TransformAggregateNode
-- AnalysisStatsHypothesisTestNode
-- AiInterpretNode
+NOTE: SourceFileNode, DatasetProfileNode, TransformAggregateNode, AnalysisStatsHypothesisTestNode, and AiInterpretNode are available and may be used when appropriate.
 
 Rules:
 1. Output ONLY the JSON object — no markdown, no explanation, no ```json fences.

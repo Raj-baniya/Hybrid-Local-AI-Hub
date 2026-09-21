@@ -88,7 +88,9 @@ pub async fn run_graph(
     event_sender: Option<tokio::sync::mpsc::UnboundedSender<crate::execution_record::NodeRecord>>,
     resume_run_id: Option<String>,
 ) -> Result<ExecutionRecord> {
-    // Pre-validate templates before any node runs.
+    // Validate graph structure and templates before any node runs.
+    crate::validate::validate_graph(graph)
+        .map_err(|errors| anyhow!("Workflow validation failed:\n{}", errors.join("\n")))?;
     interpolation::validate_templates(graph)?;
 
     let ollama = ProviderManager::new(&config.ollama_url, config.is_offline, config.online_keys.clone());
@@ -493,19 +495,11 @@ async fn execute_node(
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
             
-            let mut text_val = cfg.text.clone();
+            let text_val = cfg.text.clone();
             if text_val.trim().is_empty() && predecessors.is_empty() {
-                // Interactive prompt for standalone empty text nodes
-                use std::io::Write;
-                println!();
-                print!("> Agent input required for '{}': ", node_id);
-                let _ = std::io::stdout().flush();
-                let mut input = String::new();
-                if std::io::stdin().read_line(&mut input).is_ok() {
-                    text_val = input.trim().to_string();
-                }
+                return Err(anyhow!("TextInputNode '{}': text is empty", node_id));
             }
-            
+
             let resolved = interpolation::resolve(&text_val, &locked, single.as_deref())?;
             Ok(resolved)
         }
@@ -642,11 +636,124 @@ async fn execute_node(
                 }
             }
         }
-        NodeType::TransformAggregateNode(_) => {
-            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for TransformAggregateNode."))
+        NodeType::TransformAggregateNode(cfg) => {
+            let locked = outputs.lock().await;
+            let input = single_input_value(&predecessors, &locked)
+                .ok_or_else(|| anyhow::anyhow!("TransformAggregateNode '{}': No incoming input", node_id))?;
+            drop(locked);
+
+            let rows: Vec<serde_json::Value> = serde_json::from_str(&input)
+                .unwrap_or_else(|_| {
+                    // If input is not JSON array, treat single value as one-element array
+                    vec![serde_json::json!({"value": input})]
+                });
+
+            let mut result = serde_json::Map::new();
+            for col in &cfg.group_by {
+                if rows.is_empty() {
+                    result.insert(col.clone(), serde_json::Value::Null);
+                    continue;
+                }
+                let col_values: Vec<&serde_json::Value> = rows.iter()
+                    .filter_map(|r| r.get(col))
+                    .collect();
+                result.insert(col.clone(), serde_json::json!(col_values));
+            }
+
+            for agg in &cfg.aggregations {
+                let (func, arg_col) = if let Some(p) = agg.find('(') {
+                    (&agg[..p], agg[p+1..].trim_end_matches(')'))
+                } else {
+                    (agg.as_str(), "")
+                };
+                let func_upper = func.to_uppercase();
+                let values: Vec<&serde_json::Value> = if arg_col.is_empty() {
+                    rows.iter().collect()
+                } else {
+                    rows.iter().filter_map(|r| r.get(arg_col)).collect()
+                };
+                let agg_result = match func_upper.as_str() {
+                    "COUNT" => serde_json::json!(values.len()),
+                    "SUM" => {
+                        let sum: f64 = values.iter()
+                            .filter_map(|v| v.as_f64())
+                            .sum();
+                        serde_json::json!(sum)
+                    }
+                    "AVG" | "AVERAGE" => {
+                        let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
+                        if nums.is_empty() { serde_json::json!(0.0) } else { serde_json::json!(nums.iter().sum::<f64>() / nums.len() as f64) }
+                    }
+                    "MIN" => {
+                        let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
+                        if nums.is_empty() { serde_json::json!(null) } else { serde_json::json!(nums.iter().cloned().fold(f64::INFINITY, f64::min)) }
+                    }
+                    "MAX" => {
+                        let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
+                        if nums.is_empty() { serde_json::json!(null) } else { serde_json::json!(nums.iter().cloned().fold(f64::NEG_INFINITY, f64::max)) }
+                    }
+                    _ => serde_json::json!(format!("unknown:{}", agg)),
+                };
+                result.insert(agg.clone(), agg_result);
+            }
+
+            Ok(serde_json::Value::Object(result).to_string())
         }
-        NodeType::AnalysisStatsHypothesisTestNode(_) => {
-            Err(anyhow::anyhow!("Unsupported Operation: Real predecessor-aware analytics are not yet implemented for AnalysisStatsHypothesisTestNode."))
+        NodeType::AnalysisStatsHypothesisTestNode(cfg) => {
+            let locked = outputs.lock().await;
+            let input = single_input_value(&predecessors, &locked)
+                .ok_or_else(|| anyhow::anyhow!("AnalysisStatsHypothesisTestNode '{}': No incoming input", node_id))?;
+            drop(locked);
+
+            let rows: Vec<serde_json::Value> = serde_json::from_str(&input)
+                .unwrap_or_else(|_| vec![serde_json::json!({cfg.value_column.clone(): input})]);
+
+            let mut values: Vec<f64> = rows.iter()
+                .filter_map(|r| r.get(&cfg.value_column).and_then(|v| v.as_f64()))
+                .collect();
+
+            if values.is_empty() {
+                return Err(anyhow::anyhow!("AnalysisStatsHypothesisTestNode '{}': No numeric values found in column '{}'", node_id, cfg.value_column));
+            }
+
+            values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let n = values.len();
+            let mean = values.iter().sum::<f64>() / n as f64;
+            let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1) as f64;
+            let std_dev = variance.sqrt();
+            let median = if n % 2 == 0 {
+                (values[n/2 - 1] + values[n/2]) / 2.0
+            } else {
+                values[n/2]
+            };
+
+            let result = match cfg.test.to_lowercase().as_str() {
+                "t-test" => {
+                    // One-sample t-test against mean=0
+                    let se = std_dev / (n as f64).sqrt();
+                    let t_stat = if se > 0.0 { mean / se } else { 0.0 };
+                    serde_json::json!({
+                        "test": "t-test",
+                        "n": n,
+                        "mean": mean,
+                        "median": median,
+                        "std_dev": std_dev,
+                        "t_statistic": t_stat,
+                        "degrees_of_freedom": n - 1,
+                        "interpretation": if t_stat.abs() > 2.0 { "Statistically significant (|t| > 2)" } else { "Not statistically significant (|t| <= 2)" }
+                    })
+                }
+                _ => serde_json::json!({
+                    "test": cfg.test,
+                    "n": n,
+                    "mean": mean,
+                    "median": median,
+                    "std_dev": std_dev,
+                    "interpretation": "Unknown test type"
+                }),
+            };
+
+            Ok(result.to_string())
         }
         NodeType::AiInterpretNode(cfg) => {
             let locked = outputs.lock().await;
@@ -900,7 +1007,6 @@ async fn execute_node(
             Ok(format!("Wrote {} bytes to {}", content.len(), actual_path))
         }
 
-                // â”€â”€ WebScraperNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::WebScraperNode(cfg) => {
             if ollama.is_offline() {
                 return Err(anyhow!("WebScraperNode '{}': Cannot be used in Strict Offline Mode. Turn off Offline Mode to execute this node.", node_id));
@@ -911,7 +1017,6 @@ async fn execute_node(
             let url = interpolation::resolve(&cfg.url, &locked, single.as_deref())?;
             drop(locked);
 
-            // Fix #4: dry-run mode
             if suppress_actions {
                 return Ok(format!("[DRY-RUN] Would scrape URL: {}", url));
             }
@@ -928,9 +1033,6 @@ async fn execute_node(
             Ok(text)
         }
 
-                // â”€â”€ ShellCommandNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        // Fix #3: idempotency check before executing
-        // Fix #4: dry-run support
         NodeType::ShellCommandNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);

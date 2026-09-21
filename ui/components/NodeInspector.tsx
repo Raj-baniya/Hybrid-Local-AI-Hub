@@ -101,10 +101,11 @@ export const NodeInspector: React.FC = () => {
               value={data.cronExpression}
               onChange={(e) => updateNodeData(selectedNode.id, { cronExpression: e.target.value })}
               style={inputStyle}
-              placeholder="0 */2 * * *"
+              placeholder="*/2 * * * *"
             />
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Standard cron syntax. E.g., "0 */2 * * *" for every 2 hours.
+              5-field cron (min hour day month weekday) or 6-field with seconds.
+              Examples: "*/2 * * * *" every 2 minutes, "0 * * * *" every hour.
             </p>
           </>
         );
@@ -262,14 +263,8 @@ export const NodeInspector: React.FC = () => {
       case 'WebScraperNode':
         return (
           <>
-            <label style={labelStyle}>URL</label>
-            <input
-              type="text"
-              value={data.url}
-              onChange={(e) => updateNodeData(selectedNode.id, { url: e.target.value })}
-              style={inputStyle}
-              placeholder="https://example.com or {{input}}"
-            />
+            <label style={labelStyle}>URL (online mode only)</label>
+            <input type="url" value={data.url || ''} onChange={(e) => updateNodeData(selectedNode.id, { url: e.target.value })} style={inputStyle} placeholder="https://example.com" />
           </>
         );
 

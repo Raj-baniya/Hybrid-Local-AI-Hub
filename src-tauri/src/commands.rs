@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -47,10 +48,21 @@ pub struct ChatState {
         tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>>,
 }
 
+pub struct ScheduledTaskHandle {
+    pub stop_tx: oneshot::Sender<()>,
+    pub paused: Arc<AtomicBool>,
+}
+
 #[derive(Default)]
 pub struct ScheduledTaskState {
-    pub active_tasks:
-        tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>>,
+    pub active_tasks: Arc<tokio::sync::Mutex<HashMap<String, ScheduledTaskHandle>>>,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledTaskInfo {
+    pub task_id: String,
+    pub paused: bool,
 }
 
 // â”€â”€â”€ Executor config payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -147,8 +159,9 @@ pub async fn run_graph(
             if matches!(
                 node.data,
                 hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_)
+                    | hybrid_local_ai_hub::schema::NodeType::NotifyWebhookNode(_)
             ) {
-                return Err("WebScraper cannot be used in Strict Offline Mode. Please turn off Offline Mode to run this workflow.".to_string());
+                return Err("Online-only nodes (Web Scraper, Webhook) cannot be used in Strict Offline Mode. Turn off Offline Mode to run this workflow.".to_string());
             }
         }
     }
@@ -381,12 +394,12 @@ pub async fn chat_generate(
             for node in &graph.nodes {
                 if matches!(
                     node.data,
-                    hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_)
+                    hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_) | hybrid_local_ai_hub::schema::NodeType::NotifyWebhookNode(_)
                 ) {
                     if let Some(ref id) = task_id {
                         let _ = state.active_tasks.lock().await.remove(id);
                     }
-                    return Err("WebScraper cannot be used in Strict Offline Mode. Please turn off Offline Mode to use this workflow.".to_string());
+                    return Err("Online-only nodes (Web Scraper, Webhook) cannot be used in Strict Offline Mode. Turn off Offline Mode to use this workflow.".to_string());
                 }
             }
         }
@@ -487,12 +500,12 @@ pub async fn chat_edit(
             for node in &graph.nodes {
                 if matches!(
                     node.data,
-                    hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_)
+                    hybrid_local_ai_hub::schema::NodeType::WebScraperNode(_) | hybrid_local_ai_hub::schema::NodeType::NotifyWebhookNode(_)
                 ) {
                     if let Some(ref id) = task_id {
                         let _ = state.active_tasks.lock().await.remove(id);
                     }
-                    return Err("WebScraper cannot be used in Strict Offline Mode. Please turn off Offline Mode to use this workflow.".to_string());
+                    return Err("Online-only nodes (Web Scraper, Webhook) cannot be used in Strict Offline Mode. Turn off Offline Mode to use this workflow.".to_string());
                 }
             }
         }
@@ -981,45 +994,123 @@ pub fn launch_agent_terminal(
         {
             return Err("Terminal launching currently only implemented for Windows.".to_string());
         }
+    }
 
-Ok(())
+    Ok(())
 }
 
-/// Tracks scheduled graph executions so they can be stopped.
-#[derive(Default)]
-pub struct ScheduledTaskState {
-    pub active_tasks: Mutex<HashMap<String, oneshot::Sender<()>>>,
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════
 // Scheduled Graph Execution Commands
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Payload for scheduled execution config
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScheduledRunConfig {
-    pub task_id: String,
-    pub graph: Graph,
-    pub config: Option<ExecutorConfigPayload>,
-    pub offline_mode: Option<bool>,
+/// Normalize 5-field unix cron (min hour day month weekday) to 6-field
+/// (sec min hour day month weekday) expected by the `cron` crate.
+fn normalize_cron_expression(expr: &str) -> Result<String, String> {
+    let trimmed = expr.trim();
+    if trimmed.is_empty() {
+        return Err("Cron expression is empty".to_string());
+    }
+    let fields: Vec<&str> = trimmed.split_whitespace().collect();
+    match fields.len() {
+        5 => Ok(format!("0 {}", trimmed)),
+        6 => Ok(trimmed.to_string()),
+        7 => Ok(fields[..6].join(" ")),
+        n => Err(format!(
+            "Invalid cron expression '{}': expected 5 or 6 fields, got {}",
+            expr, n
+        )),
+    }
+}
+
+fn extract_agent_output(record: &ExecutionRecord) -> String {
+    let mut chunks: Vec<String> = Vec::new();
+    for node in &record.nodes {
+        if node.node_type == "LocalFileWriterNode" {
+            continue;
+        }
+        if let Some(preview) = &node.output_preview {
+            let trimmed = preview.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if trimmed.starts_with("FILE_EVENT:")
+                || trimmed.starts_with("[ScheduleNode")
+                || trimmed.starts_with("Wrote ")
+            {
+                continue;
+            }
+            chunks.push(format!("[{}] {}", node.node_id, trimmed));
+        }
+    }
+    if chunks.is_empty() {
+        record
+            .nodes
+            .iter()
+            .rev()
+            .find_map(|n| n.output_preview.clone())
+            .unwrap_or_else(|| "No output generated.".to_string())
+    } else {
+        chunks.join("\n\n")
+    }
+}
+
+fn persist_scheduled_output(app: &AppHandle, graph: &Graph, record: &ExecutionRecord, offline_mode: bool) {
+    let name = graph
+        .name
+        .clone()
+        .filter(|n| !n.trim().is_empty() && is_valid_filename(n))
+        .unwrap_or_else(|| "scheduled-agent".to_string());
+    let output = extract_agent_output(record);
+    let _ = save_agent_output(app.clone(), name, output, offline_mode);
+    let _ = save_execution_log(app.clone(), record.clone(), offline_mode);
+}
+
+fn build_executor_config(
+    config: Option<ExecutorConfigPayload>,
+    offline_mode: bool,
+) -> ExecutorConfig {
+    let default_cfg = ExecutorConfig::default();
+    if let Some(c) = config {
+        ExecutorConfig {
+            ollama_url: c.ollama_url.unwrap_or(default_cfg.ollama_url),
+            chroma_url: c.chroma_url.unwrap_or(default_cfg.chroma_url),
+            failure_policy: if c.continue_on_failure.unwrap_or(false) {
+                FailurePolicy::ContinueIndependentBranches
+            } else {
+                FailurePolicy::HaltOnFailure
+            },
+            default_timeout_secs: c
+                .default_timeout_secs
+                .unwrap_or(default_cfg.default_timeout_secs),
+            llm_timeout_secs: c.llm_timeout_secs.unwrap_or(default_cfg.llm_timeout_secs),
+            suppress_actions: c.suppress_actions.unwrap_or(false),
+            is_offline: offline_mode,
+            online_keys: vec![],
+        }
+    } else {
+        ExecutorConfig {
+            is_offline: offline_mode,
+            online_keys: vec![],
+            ..default_cfg
+        }
+    }
 }
 
 /// Start a graph running continuously on its ScheduleNode cron schedule.
-/// Returns immediately with the task_id; the graph runs in the background.
 #[tauri::command]
 pub async fn run_graph_scheduled(
     app: AppHandle,
     state: State<'_, ScheduledTaskState>,
-    payload: ScheduledRunConfig,
+    task_id: String,
+    graph: Graph,
+    config: Option<ExecutorConfigPayload>,
+    offline_mode: Option<bool>,
 ) -> Result<String, String> {
-    // Validate graph has a ScheduleNode
-    let schedule_node = payload
-        .graph
+    let schedule_node = graph
         .nodes
         .iter()
         .find(|n| matches!(n.data, NodeType::ScheduleNode(_)))
-        .ok_or("Graph must contain a ScheduleNode for scheduled execution")?;
+        .ok_or("Graph must contain a ScheduleNode for automated execution")?;
 
     let cron_expr = if let NodeType::ScheduleNode(cfg) = &schedule_node.data {
         cfg.cron_expression.clone()
@@ -1027,162 +1118,201 @@ pub async fn run_graph_scheduled(
         return Err("Invalid ScheduleNode configuration".to_string());
     };
 
-    // Parse cron expression to validate
-    let schedule = cron::Schedule::from_str(&cron_expr)
-        .map_err(|e| format!("Invalid cron expression '{}': {}", cron_expr, e))?;
+    let normalized = normalize_cron_expression(&cron_expr)?;
+    let schedule = cron::Schedule::from_str(&normalized).map_err(|e| {
+        format!(
+            "Invalid cron expression '{}': {}. Use 5 fields (min hour day month weekday) e.g. '*/2 * * * *' for every 2 minutes, or 6 fields including seconds.",
+            cron_expr, e
+        )
+    })?;
 
-    // Check if task_id already exists
     {
         let tasks = state.active_tasks.lock().await;
-        if tasks.contains_key(&payload.task_id) {
-            return Err(format!("Task '{}' already running", payload.task_id));
+        if tasks.contains_key(&task_id) {
+            return Err(format!("Task '{}' is already running", task_id));
         }
     }
 
-    // Create cancellation channel
     let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
+    let paused = Arc::new(AtomicBool::new(false));
 
-    // Store cancellation sender
     {
         let mut tasks = state.active_tasks.lock().await;
-        tasks.insert(payload.task_id.clone(), cancel_tx);
+        tasks.insert(
+            task_id.clone(),
+            ScheduledTaskHandle {
+                stop_tx: cancel_tx,
+                paused: paused.clone(),
+            },
+        );
     }
 
-    // Clone for the spawned task
+    let active_tasks = state.active_tasks.clone();
     let app_handle = app.clone();
-    let task_id = payload.task_id.clone();
-    let graph = payload.graph.clone();
-    let config_payload = payload.config;
-    let offline_mode = payload.offline_mode.unwrap_or(true);
+    let spawned_task_id = task_id.clone();
+    let graph_clone = graph.clone();
+    let is_offline = offline_mode.unwrap_or(true);
 
-    // Spawn background task
     tokio::spawn(async move {
-        let default_cfg = ExecutorConfig::default();
-        let executor_cfg = if let Some(c) = config_payload {
-            ExecutorConfig {
-                ollama_url: c.ollama_url.unwrap_or(default_cfg.ollama_url),
-                chroma_url: c.chroma_url.unwrap_or(default_cfg.chroma_url),
-                failure_policy: if c.continue_on_failure.unwrap_or(false) {
-                    FailurePolicy::ContinueIndependentBranches
-                } else {
-                    FailurePolicy::HaltOnFailure
-                },
-                default_timeout_secs: c
-                    .default_timeout_secs
-                    .unwrap_or(default_cfg.default_timeout_secs),
-                llm_timeout_secs: c.llm_timeout_secs.unwrap_or(default_cfg.llm_timeout_secs),
-                suppress_actions: c.suppress_actions.unwrap_or(false),
-                is_offline: offline_mode,
-                online_keys: vec![],
-            }
-        } else {
-            ExecutorConfig {
-                is_offline: offline_mode,
-                online_keys: vec![],
-                ..default_cfg
+        let executor_cfg = build_executor_config(config, is_offline);
+        let _ = app_handle.emit("scheduled-task-started", &spawned_task_id);
+
+        let run_once = |trigger: String| {
+            let graph = graph_clone.clone();
+            let executor_cfg = executor_cfg.clone();
+            let app_handle = app_handle.clone();
+            let task_id = spawned_task_id.clone();
+            async move {
+                match executor::run_graph(
+                    &graph,
+                    None,
+                    executor_cfg,
+                    "gui-scheduled",
+                    None,
+                    None,
+                )
+                .await
+                {
+                    Ok(record) => {
+                        persist_scheduled_output(&app_handle, &graph, &record, is_offline);
+                        let output = extract_agent_output(&record);
+                        let _ = app_handle.emit(
+                            "scheduled-task-execution",
+                            serde_json::json!({
+                                "taskId": task_id,
+                                "record": record,
+                                "trigger": trigger,
+                                "output": output,
+                            }),
+                        );
+                    }
+                    Err(e) => {
+                        let _ = app_handle.emit(
+                            "scheduled-task-error",
+                            serde_json::json!({
+                                "taskId": task_id,
+                                "error": e.to_string(),
+                                "trigger": trigger,
+                            }),
+                        );
+                    }
+                }
             }
         };
 
-        let _ = app_handle.emit("scheduled-task-started", &task_id);
+        run_once("immediate".to_string()).await;
 
-        // Run once immediately
-        let trigger = format!("cron:immediate");
-        match executor::run_graph(&graph, None, executor_cfg.clone(), "gui-scheduled", None, None).await {
-            Ok(record) => {
-                let _ = app_handle.emit("scheduled-task-execution", serde_json::json!({
-                    "taskId": task_id,
-                    "record": record,
-                    "trigger": "immediate"
-                }));
-            }
-            Err(e) => {
-                let _ = app_handle.emit("scheduled-task-error", serde_json::json!({
-                    "taskId": task_id,
-                    "error": e.to_string(),
-                    "trigger": "immediate"
-                }));
-            }
-        }
-
-        // Schedule subsequent runs
+        let mut cancelled = false;
         for datetime in schedule.upcoming(chrono::Utc) {
-            // Check for cancellation
             if cancel_rx.try_recv().is_ok() {
+                break;
+            }
+
+            while paused.load(Ordering::Relaxed) {
+                if cancel_rx.try_recv().is_ok() {
+                    cancelled = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            }
+            if cancelled {
                 break;
             }
 
             let now = chrono::Utc::now();
             if let Ok(duration) = (datetime - now).to_std() {
-                let _ = app_handle.emit("scheduled-task-next-run", serde_json::json!({
-                    "taskId": task_id,
-                    "nextRun": datetime.to_rfc3339(),
-                    "in": duration.as_secs_f64()
-                }));
+                let _ = app_handle.emit(
+                    "scheduled-task-next-run",
+                    serde_json::json!({
+                        "taskId": spawned_task_id,
+                        "nextRun": datetime.to_rfc3339(),
+                        "in": duration.as_secs_f64(),
+                        "paused": paused.load(Ordering::Relaxed),
+                    }),
+                );
 
                 tokio::select! {
-                    _ = tokio::time::sleep(duration) => {
-                        // Continue to execute
-                    }
-                    _ = &mut cancel_rx => {
-                        break;
-                    }
+                    _ = tokio::time::sleep(duration) => {}
+                    _ = &mut cancel_rx => { break; }
                 }
 
-                // Check again after sleep
-                if cancel_rx.try_recv().is_ok() {
+                while paused.load(Ordering::Relaxed) {
+                    if cancel_rx.try_recv().is_ok() {
+                        cancelled = true;
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                }
+                if cancelled {
                     break;
                 }
 
-                let trigger = format!("cron:{}", datetime);
-                match executor::run_graph(&graph, None, executor_cfg.clone(), "gui-scheduled", None, None).await {
-                    Ok(record) => {
-                        let _ = app_handle.emit("scheduled-task-execution", serde_json::json!({
-                            "taskId": task_id,
-                            "record": record,
-                            "trigger": trigger
-                        }));
-                    }
-                    Err(e) => {
-                        let _ = app_handle.emit("scheduled-task-error", serde_json::json!({
-                            "taskId": task_id,
-                            "error": e.to_string(),
-                            "trigger": trigger
-                        }));
-                    }
-                }
+                run_once(format!("cron:{}", datetime)).await;
             }
         }
 
-        // Clean up
-        let _ = app_handle.emit("scheduled-task-stopped", &task_id);
-        let mut tasks = state.active_tasks.lock().await;
-        tasks.remove(&task_id);
+        let _ = app_handle.emit("scheduled-task-stopped", &spawned_task_id);
+        let mut tasks = active_tasks.lock().await;
+        tasks.remove(&spawned_task_id);
     });
 
-    Ok(payload.task_id)
+    Ok(task_id)
 }
 
-/// Stop a scheduled graph execution by task_id
 #[tauri::command]
 pub async fn stop_scheduled_graph(
     state: State<'_, ScheduledTaskState>,
     task_id: String,
 ) -> Result<(), String> {
     let mut tasks = state.active_tasks.lock().await;
-    if let Some(cancel_tx) = tasks.remove(&task_id) {
-        let _ = cancel_tx.send(());
+    if let Some(handle) = tasks.remove(&task_id) {
+        let _ = handle.stop_tx.send(());
         Ok(())
     } else {
         Err(format!("Task '{}' not found", task_id))
     }
 }
 
-/// List all running scheduled tasks
 #[tauri::command]
-pub async fn list_scheduled_tasks(state: State<'_, ScheduledTaskState>) -> Result<Vec<String>, String> {
+pub async fn pause_scheduled_graph(
+    state: State<'_, ScheduledTaskState>,
+    task_id: String,
+) -> Result<(), String> {
     let tasks = state.active_tasks.lock().await;
-    Ok(tasks.keys().cloned().collect())
+    if let Some(handle) = tasks.get(&task_id) {
+        handle.paused.store(true, Ordering::Relaxed);
+        Ok(())
+    } else {
+        Err(format!("Task '{}' not found", task_id))
+    }
 }
+
+#[tauri::command]
+pub async fn resume_scheduled_graph(
+    state: State<'_, ScheduledTaskState>,
+    task_id: String,
+) -> Result<(), String> {
+    let tasks = state.active_tasks.lock().await;
+    if let Some(handle) = tasks.get(&task_id) {
+        handle.paused.store(false, Ordering::Relaxed);
+        Ok(())
+    } else {
+        Err(format!("Task '{}' not found", task_id))
+    }
+}
+
+#[tauri::command]
+pub async fn list_scheduled_tasks(
+    state: State<'_, ScheduledTaskState>,
+) -> Result<Vec<ScheduledTaskInfo>, String> {
+    let tasks = state.active_tasks.lock().await;
+    Ok(tasks
+        .iter()
+        .map(|(id, handle)| ScheduledTaskInfo {
+            task_id: id.clone(),
+            paused: handle.paused.load(Ordering::Relaxed),
+        })
+        .collect())
 }
 
 #[tauri::command]

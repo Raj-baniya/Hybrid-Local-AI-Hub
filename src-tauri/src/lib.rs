@@ -11,6 +11,8 @@ pub fn run() {
             commands::run_graph,
             commands::run_graph_scheduled,
             commands::stop_scheduled_graph,
+            commands::pause_scheduled_graph,
+            commands::resume_scheduled_graph,
             commands::list_scheduled_tasks,
             commands::validate_graph,
             commands::list_models,

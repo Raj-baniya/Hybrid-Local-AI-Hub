@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { NodeType } from '../schema/graphSchema';
 import {
   FolderSearch,
@@ -11,8 +12,8 @@ import {
   Database,
   GitFork,
   HardDrive,
-  Plus,
   Globe,
+  Plus,
   Terminal,
   Braces,
   Clock,
@@ -110,11 +111,11 @@ const PALETTE_ITEMS: PaletteItem[] = [
   },
   {
     type: 'WebScraperNode',
-    label: 'Web Scraper',
+    label: 'Web Scraper (Online)',
     category: 'Triggers & Inputs',
     icon: <Globe size={16} />,
     color: '#3b82f6',
-    desc: 'Scrape text from a URL',
+    desc: 'Fetch text from a URL (online only)',
   },
   {
     type: 'ShellCommandNode',
@@ -181,16 +182,38 @@ const PALETTE_ITEMS: PaletteItem[] = [
     color: '#e11d48',
     desc: 'LLM orchestrator node',
   },
+  {
+    type: 'NotifyDesktopNode', label: 'Desktop Notification', category: 'Routing & Storage', icon: <Clock size={16} />, color: '#0ea5e9', desc: 'Send a local desktop notification',
+  },
+  {
+    type: 'NotifyWebhookNode', label: 'Webhook Notification', category: 'Routing & Storage', icon: <Globe size={16} />, color: '#f43f5e', desc: 'Send an HTTP webhook (online only)',
+  },
+  {
+    type: 'ClipboardTriggerNode', label: 'Clipboard Input', category: 'Triggers & Inputs', icon: <FileText size={16} />, color: '#64748b', desc: 'Read text from the clipboard',
+  },
+  {
+    type: 'CsvReaderNode', label: 'CSV Reader', category: 'Triggers & Inputs', icon: <FileSpreadsheet size={16} />, color: '#16a34a', desc: 'Read rows from a CSV file',
+  },
+  {
+    type: 'DelayNode', label: 'Delay', category: 'AI & Processing', icon: <Clock size={16} />, color: '#f59e0b', desc: 'Wait before continuing',
+  },
+  {
+    type: 'TemplateFormatterNode', label: 'Template Formatter', category: 'AI & Processing', icon: <Braces size={16} />, color: '#8b5cf6', desc: 'Format text with placeholders',
+  },
+  {
+    type: 'MergeNode', label: 'Merge Inputs', category: 'Routing & Storage', icon: <GitFork size={16} />, color: '#0891b2', desc: 'Merge inputs into a JSON object',
+  },
 ];
 
 export const NodePalette: React.FC = () => {
   const addNode = useWorkflowStore((s) => s.addNode);
   const [search, setSearch] = useState('');
 
+  const isOfflineMode = useSettingsStore((s) => s.isOfflineMode);
   const filtered = PALETTE_ITEMS.filter((item) =>
     item.label.toLowerCase().includes(search.toLowerCase()) ||
     item.desc.toLowerCase().includes(search.toLowerCase())
-  );
+  ).filter((item) => !(isOfflineMode && item.type === 'WebScraperNode'));
 
   const categories = Array.from(new Set(PALETTE_ITEMS.map((i) => i.category)));
 
@@ -272,9 +295,7 @@ export const NodePalette: React.FC = () => {
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           {item.label}
-                          {item.type === 'WebScraperNode' && (
-                            <span style={{ fontSize: 8, padding: '2px 4px', background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>ONLINE</span>
-                          )}
+
                         </div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.desc}</div>
                       </div>
