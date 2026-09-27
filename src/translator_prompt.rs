@@ -8,15 +8,17 @@ pub fn build_system_prompt(is_offline: bool) -> String {
     let mut schema = SCHEMA_SECTION_PART_1.to_string();
     if !is_offline {
         schema.push_str(WEB_SCRAPER_NODE_SCHEMA);
+        schema.push_str(WEBHOOK_NODE_SCHEMA);
     }
     schema.push_str(SCHEMA_SECTION_PART_2);
 
     let mut instructions = INSTRUCTIONS_SECTION.to_string();
 
     if is_offline {
-        schema = schema.replace("26 Node Types Available", "25 Node Types Available");
-        instructions = instructions.replace("26 available node types", "25 available node types");
-        instructions = instructions.replace("outside the 31 available nodes", "outside the 25 available nodes");
+        schema = schema.replace("26 Node Types Available", "24 Node Types Available");
+        instructions = instructions.replace("26 available node types", "24 available node types");
+        instructions = instructions.replace("outside the 26 available nodes", "outside the 24 available nodes");
+        instructions = instructions.replace("outside the 31 available nodes", "outside the 24 available nodes");
         instructions = instructions.replace(
             "NOTE: The following analytics nodes are currently UNAVAILABLE and MUST NOT be used:",
             "NOTE: WebScraperNode and NotifyWebhookNode are online-only and MUST NOT be used in Strict Offline Mode."
@@ -140,6 +142,13 @@ const WEB_SCRAPER_NODE_SCHEMA: &str = r#"
 ```
 "#;
 
+const WEBHOOK_NODE_SCHEMA: &str = r#"
+**NotifyWebhookNode** - sends an HTTP POST request with a JSON payload
+```json
+{ "type": "NotifyWebhookNode", "url": "https://hooks.slack.com/services/T000/B000/XXX", "payload": "{ \"text\": \"Alert: {{input}}\" }" }
+```
+"#;
+
 const SCHEMA_SECTION_PART_2: &str = r#"
 **ShellCommandNode** — runs a local shell command (Powershell/Bash)
 ```json
@@ -184,11 +193,6 @@ const SCHEMA_SECTION_PART_2: &str = r#"
 **NotifyDesktopNode** - sends a native OS desktop notification
 ```json
 { "type": "NotifyDesktopNode", "title": "System Alert", "body": "CPU usage is at {{input}}%" }
-```
-
-**NotifyWebhookNode** - sends an HTTP POST request with a JSON payload
-```json
-{ "type": "NotifyWebhookNode", "url": "https://hooks.slack.com/services/T000/B000/XXX", "payload": "{ \"text\": \"Alert: {{input}}\" }" }
 ```
 
 **ClipboardTriggerNode** - triggers execution on clipboard content

@@ -285,13 +285,14 @@ export const SavedAgentsPanel: React.FC = () => {
               <button className="btn btn-secondary" onClick={() => setCliCommand(null)}>Close</button>
               <button className="btn btn-secondary" onClick={async () => {
                 try {
-                  await invoke('launch_agent_terminal', { name: cliCommand.name });
+                  const path = await invoke<string>('get_agent_path', { offlineMode: useSettingsStore.getState().isOfflineMode, name: cliCommand.name });
+                  await invoke('launch_terminal_interact', { agentPath: path });
                   setCliCommand(null);
                 } catch (err: any) {
                   alert(typeof err === 'string' ? err : "Failed to launch terminal: " + err.message);
                 }
               }}>
-                <Play size={14}/> Run in Terminal
+                <Play size={14}/> Load to Terminal
               </button>
               <button className="btn btn-primary" onClick={async () => { 
                 try {

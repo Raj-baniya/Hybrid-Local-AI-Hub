@@ -104,13 +104,15 @@ pub fn validate_templates(graph: &Graph) -> Result<()> {
             NodeType::CsvReaderNode(cfg) => vec![("filePath", &cfg.file_path)],
             NodeType::TemplateFormatterNode(cfg) => vec![("template", &cfg.template)],
             NodeType::ChromaDbStoreNode(cfg) => {
-                let mut fields = Vec::new();
                 if let Some(map) = &cfg.input_map {
-                    for value in map.values() {
-                        fields.push(("inputMap", value.as_str()));
+                    for (k, v) in map {
+                        let target_node = v.split('.').next().unwrap_or("");
+                        if !node_ids.contains(target_node) {
+                            errors.push(format!("ChromaDbStoreNode '{}': inputMap.{} references missing node '{}'", node.id, k, target_node));
+                        }
                     }
                 }
-                fields
+                vec![]
             }
             _ => vec![],
         };

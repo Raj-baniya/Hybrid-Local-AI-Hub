@@ -41,6 +41,9 @@ pub enum NodeType {
     DelayNode(DelayConfig),
     TemplateFormatterNode(TemplateFormatterConfig),
     MergeNode(MergeConfig),
+    GetCpuUsageNode(GetCpuUsageConfig),
+    GetMemoryUsageNode(GetMemoryUsageConfig),
+    ListProcessesNode(ListProcessesConfig),
 }
 
 // â”€â”€â”€ Per-variant config structs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -491,4 +494,21 @@ pub struct AiPlanConfig {
     pub objective: String,
     pub model_role: String,
     pub model: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetCpuUsageConfig {
+    pub average_over_seconds: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetMemoryUsageConfig {}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListProcessesConfig {
+    pub sort_by: Option<String>,
+    pub limit: Option<usize>,
 }

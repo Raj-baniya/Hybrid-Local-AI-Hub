@@ -54,7 +54,7 @@ async fn main() {
     };
 
     println!("Running graph...");
-    let result = run_graph(&graph, None, config, "test", None, None).await;
+    let result = run_graph(&graph, None, config, "test", None, None, None).await;
     
     match result {
         Ok(record) => {

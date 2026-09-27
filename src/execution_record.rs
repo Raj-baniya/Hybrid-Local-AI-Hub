@@ -99,7 +99,9 @@ pub struct ExecutionRecord {
     pub finished_at: Option<DateTime<Utc>>,
     pub overall_status: ExecutionStatus,
     pub nodes: Vec<NodeRecord>,
+    #[serde(default)]
     pub resumed_from: Option<String>,
+    #[serde(default)]
     pub nodes_skipped_on_recovery: Vec<String>,
 }
 

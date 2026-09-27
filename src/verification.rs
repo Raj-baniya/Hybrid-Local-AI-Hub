@@ -32,12 +32,17 @@ pub fn verify_assertion(
         VerificationAssertion::FileExists { path } => {
             let path = Path::new(path);
             let exists = path.exists();
+            let is_file = path.is_file();
             VerificationResult {
                 assertion: assertion.clone(),
-                passed: exists,
-                actual_value: if exists { "exists".to_string() } else { "not_exists".to_string() },
-                reason: if exists {
+                passed: is_file,
+                actual_value: if exists {
+                    if is_file { "file".to_string() } else { "directory".to_string() }
+                } else { "not_exists".to_string() },
+                reason: if is_file {
                     format!("File exists at: {}", path.display())
+                } else if exists {
+                    format!("Path exists but is a directory, not a file: {}", path.display())
                 } else {
                     format!("File does not exist at: {}", path.display())
                 },
@@ -84,25 +89,32 @@ pub fn verify_assertion(
 
         VerificationAssertion::ContentMatches { path, pattern } => {
             let path = Path::new(path);
-            let content = if path.exists() {
-                match fs::read_to_string(path) {
-                    Ok(c) => c,
-                    Err(e) => format!("error: {}", e),
+            if !path.exists() {
+                return Ok(VerificationResult {
+                    assertion: assertion.clone(),
+                    passed: false,
+                    actual_value: "file_not_found".to_string(),
+                    reason: format!("File not found at {}", path.display()),
+                });
+            }
+            let content = match fs::read_to_string(path) {
+                Ok(c) => c,
+                Err(e) => {
+                    return Ok(VerificationResult {
+                        assertion: assertion.clone(),
+                        passed: false,
+                        actual_value: "read_error".to_string(),
+                        reason: format!("Could not read file {}: {}", path.display(), e),
+                    });
                 }
-            } else {
-                "file_not_found".to_string()
             };
 
-            let (passed, match_detail) = if content.starts_with("error:") {
-                (false, content.clone())
-            } else {
-                match Regex::new(pattern) {
-                    Ok(re) => {
-                        let matches = re.is_match(&content);
-                        (matches, if matches { "pattern matched".to_string() } else { "pattern not matched".to_string() })
-                    }
-                    Err(e) => (false, format!("invalid_regex: {}", e)),
+            let (passed, match_detail) = match Regex::new(pattern) {
+                Ok(re) => {
+                    let matches = re.is_match(&content);
+                    (matches, if matches { "pattern matched".to_string() } else { "pattern not matched".to_string() })
                 }
+                Err(e) => (false, format!("invalid_regex: {}", e)),
             };
 
             VerificationResult {
@@ -118,7 +130,7 @@ pub fn verify_assertion(
         }
 
         VerificationAssertion::NumericEquals { value, expected } => {
-            let passed = (*value - *expected).abs() < f64::EPSILON;
+            let passed = *value == *expected;
             VerificationResult {
                 assertion: assertion.clone(),
                 passed,
@@ -150,9 +162,9 @@ pub fn verify_assertion(
 }
 
 fn compute_file_hash(path: &Path) -> Result<String> {
-    let contents = fs::read(path).map_err(|e| anyhow!("Failed to read file '{}': {}", path.display(), e))?;
+    let mut file = fs::File::open(path).map_err(|e| anyhow!("Failed to open file '{}': {}", path.display(), e))?;
     let mut hasher = Hasher::new();
-    hasher.update(&contents);
+    std::io::copy(&mut file, &mut hasher).map_err(|e| anyhow!("Failed to hash file '{}': {}", path.display(), e))?;
     let hash = hasher.finalize();
     Ok(hash.to_hex().to_string())
 }

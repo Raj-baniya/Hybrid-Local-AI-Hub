@@ -63,6 +63,8 @@ interface WorkflowState {
   activeTabId: string;
   selectedNodeId: string | null;
   activePanel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help';
+  showOutputPanel: boolean;
+  setShowOutputPanel: (show: boolean) => void;
   nodeStatusMap: Record<string, NodeExecutionState>;
   executionRecord: ExecutionRecord | null;
   isExecuting: boolean;
@@ -209,6 +211,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   selectedNodeId: null,
   activePanel: 'none',
+  showOutputPanel: false,
+  setShowOutputPanel: (show) => set({ showOutputPanel: show }),
   nodeStatusMap: {},
   executionRecord: null,
   isExecuting: false,
@@ -450,6 +454,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         break;
       case 'RegexExtractorNode':
         defaultData = { type, pattern: '.*', group: 0 };
+        break;
+      case 'GetCpuUsageNode':
+        defaultData = { type, averageOverSeconds: 1 };
+        break;
+      case 'GetMemoryUsageNode':
+        defaultData = { type };
+        break;
+      case 'ListProcessesNode':
+        defaultData = { type, sortBy: 'cpu', limit: 10 };
         break;
       default:
         throw new Error(`Unsupported node type: ${String(type)}`);

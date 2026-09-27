@@ -44,9 +44,11 @@ export const TopBar: React.FC = () => {
 
   const isPreRunDialogOpen = useWorkflowStore((s) => s.isPreRunDialogOpen);
   const setPreRunDialogOpen = useWorkflowStore((s) => s.setPreRunDialogOpen);
+  const showOutputPanel = useWorkflowStore((s) => s.showOutputPanel);
+  const setShowOutputPanel = useWorkflowStore((s) => s.setShowOutputPanel);
 
   const [preflightStatus, setPreflightStatus] = React.useState<string | null>(null);
-  const [executionModalOutput, setExecutionModalOutput] = React.useState<string | null>(null);
+
 
   const [scheduledTaskId, setScheduledTaskId] = useState<string | null>(null);
   const [isScheduledRunning, setIsScheduledRunning] = useState(false);
@@ -174,12 +176,12 @@ export const TopBar: React.FC = () => {
     const unlistenStarted = listen('scheduled-task-started', (event) => {
       setIsScheduledRunning(true);
       setScheduledTaskId(event.payload as string);
+      setShowOutputPanel(true);
     });
 
     const unlistenExecution = listen<any>('scheduled-task-execution', (event) => {
       const payload = event.payload;
       if (payload?.record) applyRecordToCanvas(payload.record);
-      if (payload?.output) setExecutionModalOutput(payload.output);
     });
 
     const unlistenError = listen<any>('scheduled-task-error', (event) => {
@@ -271,6 +273,7 @@ export const TopBar: React.FC = () => {
       }
 
       setPreflightStatus(null);
+      setShowOutputPanel(true);
       // 4. Run!
       const record = await invoke<ExecutionRecord>('run_graph', {
         graph,
@@ -328,7 +331,13 @@ export const TopBar: React.FC = () => {
     }
   };
 
-
+  const handleStopManual = async () => {
+    try {
+      await invoke('cancel_manual_graph');
+    } catch (err: any) {
+      console.error("Failed to cancel manual graph", err);
+    }
+  };
 
   const handleSave = async () => {
     const graph = getActiveGraph();
@@ -406,61 +415,7 @@ export const TopBar: React.FC = () => {
         document.body
       )}
 
-      {executionModalOutput !== null && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            background: 'var(--bg-panel)',
-            width: 700,
-            maxHeight: '80vh',
-            display: 'flex',
-            flexDirection: 'column',
-            borderRadius: 12,
-            border: '1px solid var(--border-medium)',
-            boxShadow: '0 16px 40px rgba(0,0,0,0.4)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border-medium)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: 'var(--bg-secondary)'
-            }}>
-              <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 16 }}>Execution Completed</h3>
-              <button 
-                onClick={() => setExecutionModalOutput(null)}
-                style={{
-                  background: 'transparent', border: 'none', color: 'var(--text-muted)',
-                  cursor: 'pointer', fontSize: 20
-                }}
-              >×</button>
-            </div>
-            <div style={{ padding: 20, overflowY: 'auto', flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-secondary)', fontSize: 14, fontFamily: 'monospace' }}>
-              {executionModalOutput}
-            </div>
-            <div style={{ padding: 16, borderTop: '1px solid var(--border-medium)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-secondary)' }}>
-              <button
-                onClick={() => setExecutionModalOutput(null)}
-                style={{
-                  padding: '8px 16px',
-                  background: 'var(--accent-cyan)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: 6,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >Close</button>
-            </div>
-          </div>
-        </div>
-      )}
+
       
       {/* Left: Tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, height: '100%', flex: 1, minWidth: 0 }}>
@@ -540,6 +495,14 @@ export const TopBar: React.FC = () => {
 
       {/* Center: Canvas Controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          className="btn btn-secondary btn-icon"
+          onClick={() => setShowOutputPanel(!showOutputPanel)}
+          title={showOutputPanel ? "Hide Output Panel" : "Show Output Panel"}
+        >
+          <Terminal size={14} color={showOutputPanel ? "var(--accent-cyan)" : "currentColor"} />
+        </button>
+
         <button className="btn btn-secondary" onClick={() => autoLayout('LR')} title="Organize Layout">
           <LayoutGrid size={14} />
           Auto Layout
@@ -606,26 +569,27 @@ export const TopBar: React.FC = () => {
             );
           }
 
-          return (
+          return isExecuting ? (
+            <button
+              className="btn"
+              onClick={handleStopManual}
+              style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: 'white' }}
+              title="Stop manual execution"
+            >
+              <Square size={14} fill="currentColor" />
+              Stop
+            </button>
+          ) : (
             <button
               className="btn btn-primary"
               onClick={handleRunRequest}
-              disabled={isExecuting}
               style={{ background: 'linear-gradient(135deg, var(--accent-emerald) 0%, #10b981 100%)' }}
             >
-              {isExecuting ? (
-                <>
-                  <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                  Executing...
-                </>
-              ) : (
-                <>
-                  <Play size={14} />
-                  Run Pipeline
-                </>
-              )}
+              <Play size={14} />
+              Run Pipeline
             </button>
           );
+
         })()}
       </div>
 

@@ -51,11 +51,17 @@ pub struct ChatState {
 pub struct ScheduledTaskHandle {
     pub stop_tx: oneshot::Sender<()>,
     pub paused: Arc<AtomicBool>,
+    pub cancel_flag: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
 pub struct ScheduledTaskState {
     pub active_tasks: Arc<tokio::sync::Mutex<HashMap<String, ScheduledTaskHandle>>>,
+}
+
+#[derive(Default)]
+pub struct ManualRunState {
+    pub cancel_flag: Arc<AtomicBool>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -118,12 +124,48 @@ pub fn get_cli_command(agent_path: String) -> String {
     format!("cargo run --bin hybrid-hub -- run '{}'", escaped_path)
 }
 
+#[tauri::command]
+pub async fn launch_terminal_interact(
+    app: tauri::AppHandle,
+    agent_path: String,
+) -> Result<(), String> {
+    let escaped_path = agent_path.replace("\"", "\\\"");
+    
+    // Attempt to find the binary similar to generate_cli_command
+    let mut cli_cmd = format!("cargo run --bin hybrid-hub -- interact \"{}\"", escaped_path);
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let sibling1 = dir.join("hybrid-hub.exe");
+            if sibling1.exists() {
+                cli_cmd = format!("\"{}\" interact \"{}\"", sibling1.display(), escaped_path);
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "cmd", "/K", &cli_cmd])
+            .spawn()
+            .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Fallback for mac/linux though user is on windows
+        return Err("Terminal launch is only fully supported on Windows currently.".to_string());
+    }
+
+    Ok(())
+}
+
 // â”€â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// 1. Run a workflow graph end-to-end.
 #[tauri::command]
 pub async fn run_graph(
     app: tauri::AppHandle,
+    state: State<'_, ManualRunState>,
     graph: Graph,
     config: Option<ExecutorConfigPayload>,
     offline_mode: Option<bool>,
@@ -206,7 +248,10 @@ pub async fn run_graph(
         }
     });
 
-    match executor::run_graph(&graph, None, executor_cfg, "gui", Some(tx), None).await {
+    let cancel_flag = state.cancel_flag.clone();
+    cancel_flag.store(false, Ordering::Relaxed);
+
+    match executor::run_graph(&graph, None, executor_cfg, "gui", Some(tx), None, Some(cancel_flag)).await {
         Ok(record) => {
             let _ = app.emit("execution-completed", &record);
             Ok(record)
@@ -1014,9 +1059,9 @@ fn normalize_cron_expression(expr: &str) -> Result<String, String> {
     match fields.len() {
         5 => Ok(format!("0 {}", trimmed)),
         6 => Ok(trimmed.to_string()),
-        7 => Ok(fields[..6].join(" ")),
+        7 => Ok(trimmed.to_string()),
         n => Err(format!(
-            "Invalid cron expression '{}': expected 5 or 6 fields, got {}",
+            "Invalid cron expression '{}': expected 5, 6, or 7 fields, got {}",
             expr, n
         )),
     }
@@ -1135,6 +1180,7 @@ pub async fn run_graph_scheduled(
 
     let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
     let paused = Arc::new(AtomicBool::new(false));
+    let run_cancel_flag = Arc::new(AtomicBool::new(false));
 
     {
         let mut tasks = state.active_tasks.lock().await;
@@ -1143,6 +1189,7 @@ pub async fn run_graph_scheduled(
             ScheduledTaskHandle {
                 stop_tx: cancel_tx,
                 paused: paused.clone(),
+                cancel_flag: run_cancel_flag.clone(),
             },
         );
     }
@@ -1162,6 +1209,7 @@ pub async fn run_graph_scheduled(
             let executor_cfg = executor_cfg.clone();
             let app_handle = app_handle.clone();
             let task_id = spawned_task_id.clone();
+            let c_flag = run_cancel_flag.clone();
             async move {
                 match executor::run_graph(
                     &graph,
@@ -1170,6 +1218,7 @@ pub async fn run_graph_scheduled(
                     "gui-scheduled",
                     None,
                     None,
+                    Some(c_flag),
                 )
                 .await
                 {
@@ -1253,10 +1302,22 @@ pub async fn run_graph_scheduled(
 
         let _ = app_handle.emit("scheduled-task-stopped", &spawned_task_id);
         let mut tasks = active_tasks.lock().await;
-        tasks.remove(&spawned_task_id);
+        if let Some(handle) = tasks.get(&spawned_task_id) {
+            if std::sync::Arc::ptr_eq(&handle.paused, &paused) {
+                tasks.remove(&spawned_task_id);
+            }
+        }
     });
 
     Ok(task_id)
+}
+
+#[tauri::command]
+pub async fn cancel_manual_graph(
+    state: State<'_, ManualRunState>,
+) -> Result<(), String> {
+    state.cancel_flag.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1266,6 +1327,7 @@ pub async fn stop_scheduled_graph(
 ) -> Result<(), String> {
     let mut tasks = state.active_tasks.lock().await;
     if let Some(handle) = tasks.remove(&task_id) {
+        handle.cancel_flag.store(true, Ordering::Relaxed);
         let _ = handle.stop_tx.send(());
         Ok(())
     } else {
@@ -1600,4 +1662,60 @@ pub fn delete_provider(app: tauri::AppHandle, name: String) -> Result<(), String
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_agent_path(
+    app: tauri::AppHandle,
+    name: String,
+    offline_mode: bool,
+) -> Result<String, String> {
+    let mut base_dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    
+    if offline_mode {
+        base_dir = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join(".hybrid-hub");
+    }
+
+    let agents_dir = base_dir.join("agents");
+    let file_path = agents_dir.join(format!("{}.json", name));
+    
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn launch_terminal_interact(
+    app: tauri::AppHandle,
+    agent_path: String,
+) -> Result<String, String> {
+    let path = std::path::Path::new(&agent_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", agent_path));
+    }
+
+    let bin_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    
+    // Convert to string safely handling spaces in paths for shell
+    let escaped_bin = bin_path.to_string_lossy().replace("\"", "\\\"");
+    let escaped_agent = path.to_string_lossy().replace("\"", "\\\"");
+
+    // Windows only
+    #[cfg(target_os = "windows")]
+    {
+        let script = format!("& '{}' interact '{}'", escaped_bin, escaped_agent);
+        let _ = std::process::Command::new("powershell")
+            .arg("-Command")
+            .arg(format!("Start-Process powershell -ArgumentList '-NoExit', '-Command', \"{}\"", script.replace("'", "''")))
+            .spawn()
+            .map_err(|e| format!("Failed to spawn terminal: {}", e))?;
+        return Ok("Terminal spawned".to_string());
+    }
+
+    // fallback for unsupported OS
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Interactive terminal launch is only supported on Windows currently.".to_string())
+    }
 }

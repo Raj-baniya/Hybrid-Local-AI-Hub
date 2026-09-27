@@ -137,6 +137,7 @@ export const ChatPanel: React.FC = () => {
     const currentGraph = isEditMode ? getActiveGraph() : null;
 
     const payloadMessages = [...messages, { role: 'user', content: userPrompt }];
+    const targetChatId = useChatStore.getState().activeChatId || newTaskId;
 
     invoke<Graph>(isEdit ? 'chat_edit' : 'chat_generate', isEdit ? {
       messages: payloadMessages,
@@ -151,17 +152,18 @@ export const ChatPanel: React.FC = () => {
       offlineMode: isOfflineMode,
     })
       .then((result) => {
-        addMessage({ role: 'assistant', content: `Generated graph: ${result.name || 'Untitled'} (${result.nodes.length} nodes)` });
-        setSuccess(result);
+        const assistantMsg = { role: 'assistant', content: `Generated graph: ${result.name || 'Untitled'} (${result.nodes.length} nodes)` };
+        if (useChatStore.getState().activeChatId === targetChatId || !useChatStore.getState().activeChatId) {
+            addMessage(assistantMsg as any);
+            setSuccess(result);
+        }
 
-        // Reuse the active chat ID if we're continuing an existing conversation,
-        // otherwise create a new entry with the task ID.
-        const existingChatId = useChatStore.getState().activeChatId;
-        const chatId = existingChatId || newTaskId;
+        const chatId = targetChatId;
 
         // Build the full messages array including the assistant reply we just added
         const allMessages = [
-          ...useChatStore.getState().messages
+          ...payloadMessages,
+          assistantMsg
         ];
 
         const entry = {

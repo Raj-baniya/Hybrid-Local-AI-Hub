@@ -1,4 +1,4 @@
-﻿import { useSettingsStore } from './settingsStore';
+import { useSettingsStore } from './settingsStore';
 import { create } from "zustand";
 import { Graph } from "../schema/graphSchema";
 import { invoke } from "@tauri-apps/api/core";
@@ -64,7 +64,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ status: "generating", errorMessage: null, resultMode: mode, resultPrompt: prompt }),
   setSuccess: (graph) => set({ status: "success", resultGraph: graph }),
   setError: (message) => set({ status: "error", errorMessage: message }),
-  reset: () => set({ status: "idle", resultGraph: null, errorMessage: null, instruction: "", resultMode: null, resultPrompt: null, activeChatId: null }),
+  reset: () => set({ status: "idle", resultGraph: null, errorMessage: null, instruction: "", resultMode: null, resultPrompt: null }),
   // clearHistory wipes the full session including any loaded graph, but keeps persisted history.
   clearHistory: () => set({ messages: [], instruction: "", status: "idle", resultGraph: null, errorMessage: null, resultMode: null, resultPrompt: null, activeChatId: null, isEditMode: false }),
   // startNewChat clears the current session and starts a fresh conversation with no active ID.

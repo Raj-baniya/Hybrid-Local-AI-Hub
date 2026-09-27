@@ -13,6 +13,7 @@ import { HelpAgentPanel } from './components/HelpAgentPanel';
 import { SetupWizard } from './components/SetupWizard';
 import { SavePromptModal } from './components/SavePromptModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AgentOutputPanel } from './components/AgentOutputPanel';
 import { useWorkflowStore } from './store/workflowStore';
 
 type OllamaStatus =
@@ -141,6 +142,13 @@ export const App: React.FC = () => {
             <div style={{ flex: 1, position: 'relative' }}>
               <GraphCanvas />
             </div>
+
+            {/* Output Panel on Right */}
+            {useWorkflowStore(s => s.showOutputPanel) && (
+              <div style={{ width: 400, height: '100%', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <AgentOutputPanel />
+              </div>
+            )}
 
           </div>
         </div>

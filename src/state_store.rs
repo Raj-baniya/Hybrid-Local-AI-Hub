@@ -1,4 +1,4 @@
-﻿use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::fs;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -102,6 +102,7 @@ impl StateStore {
             return None;
         }
         let content = fs::read_to_string(&path).ok()?;
+        let now = chrono::Utc::now();
         // Collect all records with this key, prefer the completed+verified one
         let mut completed_record: Option<SideEffectRecord> = None;
         for line in content.lines() {
@@ -110,6 +111,7 @@ impl StateStore {
             }
             if let Ok(record) = serde_json::from_str::<SideEffectRecord>(line) {
                 if record.idempotency_key == key {
+                    // intent_at age check removed to keep records effective for the lifetime of their run_id
                     if record.completed_at.is_some() && record.verified {
                         completed_record = Some(record);
                     }

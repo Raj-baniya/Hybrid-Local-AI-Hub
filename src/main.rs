@@ -1,4 +1,4 @@
-﻿use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 mod cli;
 
@@ -110,6 +110,13 @@ EXAMPLES:
 
     /// Show real example instructions for 'hybrid-hub chat'.
     Examples,
+
+    /// Launch interactive terminal UI for an agent automation
+    #[command(after_help = "\
+EXAMPLES:
+  hybrid-hub interact agent.json
+")]
+    Interact(cli::interact::InteractArgs),
 }
 
 #[tokio::main]
@@ -130,6 +137,7 @@ async fn main() {
         Some(Commands::Export(args)) => cli::export::export(args).await,
         Some(Commands::Import(args)) => cli::export::import(args).await,
         Some(Commands::Template(args)) => cli::template::template(args),
+        Some(Commands::Interact(args)) => cli::interact::interact(args).await,
         Some(Commands::Examples) => {
             print_examples();
             return;

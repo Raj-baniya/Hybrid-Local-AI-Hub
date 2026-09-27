@@ -512,4 +512,7 @@ export const customNodeTypes = {
   DelayNode: GenericUtilityNodeComponent,
   TemplateFormatterNode: GenericUtilityNodeComponent,
   MergeNode: GenericUtilityNodeComponent,
+  GetCpuUsageNode: GenericUtilityNodeComponent,
+  GetMemoryUsageNode: GenericUtilityNodeComponent,
+  ListProcessesNode: GenericUtilityNodeComponent,
 };

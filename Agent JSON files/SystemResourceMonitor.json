@@ -11,12 +11,17 @@
       }
     },
     {
-      "id": "node_shell",
-      "position": [400.0, 150.0],
+      "id": "node_cpu",
+      "position": [300.0, 100.0],
       "data": {
-        "type": "ShellCommandNode",
-        "command": "systeminfo",
-        "unsafeRawShell": false
+        "type": "GetCpuUsageNode"
+      }
+    },
+    {
+      "id": "node_mem",
+      "position": [300.0, 200.0],
+      "data": {
+        "type": "GetMemoryUsageNode"
       }
     },
     {
@@ -25,7 +30,7 @@
       "data": {
         "type": "OllamaSelectorNode",
         "model": "llama3.1",
-        "promptTemplate": "Here is the output of systeminfo. Briefly summarize the OS version, memory, and uptime in a few bullet points:\n{{input}}",
+        "promptTemplate": "Here is the current system resource usage:\nCPU: {{node_cpu.output}}%\nMemory: {{node_mem.output}}%\nBriefly summarize the resource health in a few bullet points.",
         "jsonMode": false
       }
     },
@@ -41,15 +46,29 @@
   ],
   "edges": [
     {
-      "id": "edge_1",
+      "id": "edge_1_cpu",
       "source": "node_schedule",
       "sourceHandle": null,
-      "target": "node_shell",
+      "target": "node_cpu",
       "targetHandle": null
     },
     {
-      "id": "edge_2",
-      "source": "node_shell",
+      "id": "edge_1_mem",
+      "source": "node_schedule",
+      "sourceHandle": null,
+      "target": "node_mem",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2_cpu",
+      "source": "node_cpu",
+      "sourceHandle": null,
+      "target": "node_ai",
+      "targetHandle": null
+    },
+    {
+      "id": "edge_2_mem",
+      "source": "node_mem",
       "sourceHandle": null,
       "target": "node_ai",
       "targetHandle": null

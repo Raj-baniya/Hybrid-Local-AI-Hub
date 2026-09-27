@@ -1,4 +1,4 @@
-﻿//! Execution engine: topological sort Ã¢â€ â€™ concurrent node execution via Kahn's algorithm.
+//! Execution engine: topological sort Ã¢â€ â€™ concurrent node execution via Kahn's algorithm.
 //!
 //! Failure policy:
 //!   - Default (`FailurePolicy::HaltOnFailure`): any node failure immediately skips
@@ -87,6 +87,7 @@ pub async fn run_graph(
     trigger_source: &str,
     event_sender: Option<tokio::sync::mpsc::UnboundedSender<crate::execution_record::NodeRecord>>,
     resume_run_id: Option<String>,
+    cancel_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
 ) -> Result<ExecutionRecord> {
     // Validate graph structure and templates before any node runs.
     crate::validate::validate_graph(graph)
@@ -109,19 +110,40 @@ pub async fn run_graph(
     let outputs: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     let mut already_completed: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut resumed_from: Option<String> = None;
+    let skipped: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     
+    // Compute current graph hash once for checkpoint verification and creation
+    let current_graph_hash = crate::state_store::graph_hash(&serde_json::to_string(graph).unwrap_or_default());
+
     // Attempt crash recovery: load checkpoints for this run_id
     if let Ok(Some(cp)) = state_store.load_checkpoint(&run_id).await {
-        resumed_from = Some(cp.checkpoint_id.clone());
-        
-        let mut out = outputs.lock().await;
-        for (k, v) in &cp.state {
-            out.insert(k.clone(), v.clone());
-        }
-        
-        // Mark all nodes present in checkpoint.state as already_completed
-        for (node_id, _) in &cp.state {
-            already_completed.insert(node_id.clone());
+        if cp.graph_hash == current_graph_hash {
+            resumed_from = Some(cp.checkpoint_id.clone());
+            
+            let mut out = outputs.lock().await;
+            for (k, v) in &cp.state {
+                out.insert(k.clone(), v.clone());
+            }
+            
+            // Mark all nodes present in checkpoint.state as already_completed
+            for (node_id, val) in &cp.state {
+                already_completed.insert(node_id.clone());
+                
+                // Reconstruct skip decisions for recovered ConditionalRouterNodes
+                if let Some(node) = graph.nodes.iter().find(|n| &n.id == node_id) {
+                    if let crate::schema::NodeType::ConditionalRouterNode(cfg) = &node.data {
+                        if val.starts_with("routed:") {
+                            let routed_to = val.trim_start_matches("routed:");
+                            let skipped_target = if routed_to == cfg.true_target {
+                                &cfg.false_target
+                            } else {
+                                &cfg.true_target
+                            };
+                            skipped.lock().await.insert(skipped_target.clone());
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -163,8 +185,7 @@ pub async fn run_graph(
     // Hoist failure policy before the loop so it's in scope everywhere.
     let failure_policy = config.failure_policy;
 
-    // Shared state.
-    let skipped: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+    // (skipped was moved up to be available during checkpoint recovery)
 
     // Kahn's BFS: start with all zero-in-degree nodes.
     let mut ready: VecDeque<String> = graph
@@ -174,9 +195,34 @@ pub async fn run_graph(
         .map(|n| n.id.clone())
         .collect();
 
+    let max_steps = graph.nodes.len() * 2; // safety cap
+    let mut step_count = 0usize;
+
     while !ready.is_empty() {
+        if let Some(ref flag) = cancel_flag {
+            if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                record.finish();
+                record.overall_status = crate::execution_record::ExecutionStatus::Failed;
+                record.save().await?;
+                return Err(anyhow!("Execution cancelled by user"));
+            }
+        }
+
         // Collect all currently-ready nodes into a concurrent execution layer.
         let layer: Vec<String> = ready.drain(..).collect();
+
+        step_count += layer.len();
+        if step_count > max_steps {
+            record.finish();
+            record.overall_status = crate::execution_record::ExecutionStatus::Failed;
+            record.nodes.push(crate::execution_record::NodeRecord::new("__safety_cap__", "SafetyCap"));
+            if let Some(nr) = record.nodes.last_mut() {
+                nr.start();
+                nr.fail(&format!("max_steps_exceeded: executed {} node-steps (limit {})", step_count, max_steps));
+            }
+            record.save().await?;
+            return Err(anyhow!("Execution safety cap reached: {} steps exceeded limit of {}", step_count, max_steps));
+        }
 
         let mut handles = vec![];
         for node_id in &layer {
@@ -254,6 +300,7 @@ pub async fn run_graph(
                     NodeType::WebScraperNode(_) => Some("net.egress"),
                     NodeType::NotifyWebhookNode(_) => Some("net.egress"),
                     NodeType::ChromaDbStoreNode(_) => Some("db.write"),
+                    NodeType::GetCpuUsageNode(_) | NodeType::GetMemoryUsageNode(_) | NodeType::ListProcessesNode(_) => Some("system.read"),
                     _ => None,
                 };
                 
@@ -297,6 +344,7 @@ pub async fn run_graph(
         // Collect results and update record.
         let mut any_failed = false;
         let mut failed_ids: Vec<String> = vec![];
+        let mut newly_skipped_ids: Vec<String> = vec![];
 
         for handle in handles {
             let (node_id, result) = handle.await.map_err(|e| anyhow!("Task panic: {e}"))?;
@@ -321,14 +369,27 @@ pub async fn run_graph(
                     }
                     let mut out = outputs.lock().await;
                     out.insert(node_id.clone(), output);
+                    let mut hashed_inputs = std::collections::HashMap::new();
+                    let preds: Vec<String> = graph
+                        .edges
+                        .iter()
+                        .filter(|e| e.target == *node_id)
+                        .map(|e| e.source.clone())
+                        .collect();
+                    for k in &preds {
+                        if let Some(v) = out.get(k) {
+                            hashed_inputs.insert(k.clone(), crate::state_store::graph_hash(v));
+                        }
+                    }
+
                     // Save checkpoint
                     let cp = crate::schema::Checkpoint {
                         checkpoint_id: uuid::Uuid::new_v4().to_string(),
                         run_id: run_id.clone(),
-                        graph_hash: crate::state_store::graph_hash(&serde_json::to_string(graph).unwrap_or_default()),
+                        graph_hash: current_graph_hash.clone(),
                         created_at: chrono::Utc::now().to_rfc3339(),
                         node_id: node_id.clone(),
-                        input_hashes: out.clone(),
+                        input_hashes: hashed_inputs,
                         state: out.clone(),
                     };
                     state_store.save_checkpoint(&cp).await?;
@@ -339,6 +400,7 @@ pub async fn run_graph(
                 }
                 Err(e) if e.to_string() == "SKIP" => {
                     nr.skip();
+                    newly_skipped_ids.push(node_id.clone());
                     if let Some(ref s) = event_sender {
                         let _ = s.send(nr.clone());
                     }
@@ -352,6 +414,18 @@ pub async fn run_graph(
                     failed_ids.push(node_id.clone());
                     if let Some(ref s) = event_sender {
                         let _ = s.send(nr.clone());
+                    }
+                }
+            }
+        }
+
+        // Propagate skip to dependents on explicit skip (e.g., from routing)
+        if !newly_skipped_ids.is_empty() {
+            let mut skip_guard = skipped.lock().await;
+            for skipped_id in &newly_skipped_ids {
+                if let Some(deps) = adj.get(skipped_id.as_str()) {
+                    for dep in deps {
+                        skip_guard.insert(dep.to_string());
                     }
                 }
             }
@@ -406,6 +480,11 @@ pub async fn run_graph(
     }
 
     record.save().await?;
+
+    if record.overall_status == crate::execution_record::ExecutionStatus::Success {
+        let _ = state_store.delete_checkpoint(&run_id).await;
+    }
+
     Ok(record)
 }
 
@@ -439,6 +518,7 @@ fn llm_timeout_if_needed(data: &NodeType, config: &ExecutorConfig) -> u64 {
     match data {
         NodeType::OllamaSelectorNode(_) | NodeType::LocalEmbedderNode(_) => config.llm_timeout_secs,
         NodeType::DelayNode(cfg) => cfg.duration_seconds.saturating_add(config.default_timeout_secs),
+        NodeType::GetCpuUsageNode(cfg) => cfg.average_over_seconds.unwrap_or(0).saturating_add(config.default_timeout_secs),
         _ => config.default_timeout_secs,
     }
 }
@@ -471,7 +551,9 @@ fn node_type_name(data: &NodeType) -> &'static str {
         NodeType::DelayNode(_) => "DelayNode",
         NodeType::TemplateFormatterNode(_) => "TemplateFormatterNode",
         NodeType::MergeNode(_) => "MergeNode",
-
+        NodeType::GetCpuUsageNode(_) => "GetCpuUsageNode",
+        NodeType::GetMemoryUsageNode(_) => "GetMemoryUsageNode",
+        NodeType::ListProcessesNode(_) => "ListProcessesNode",
     }
 }
 
@@ -555,8 +637,12 @@ async fn execute_node(
 
         // â”€â”€ ScheduleNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         NodeType::ScheduleNode(_cfg) => {
-            // Similar to FileWatcher, yields a placeholder when run sequentially.
-            Ok("[ScheduleNode: time-driven â€” use --watch mode]".to_string())
+            if trigger_source.starts_with("cron:") {
+                Ok(trigger_source.to_string())
+            } else {
+                let now = chrono::Utc::now().to_rfc3339();
+                Ok(format!("cron:{}", now))
+            }
         }
 
         // â”€â”€ Phase 2 Deterministic Analytics Nodes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -820,7 +906,17 @@ async fn execute_node(
         NodeType::OllamaSelectorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
-            let raw_prompt = interpolation::resolve(&cfg.prompt_template, &locked, single.as_deref())?;
+
+            // Pre-resolve single-brace {node_id} shorthand from all available outputs.
+            let mut pre_resolved = cfg.prompt_template.clone();
+            for (nid, val) in locked.iter() {
+                let placeholder = format!("{{{}}}", nid);
+                if pre_resolved.contains(&placeholder) {
+                    pre_resolved = pre_resolved.replace(&placeholder, val);
+                }
+            }
+
+            let raw_prompt = interpolation::resolve(&pre_resolved, &locked, single.as_deref())?;
             drop(locked);
 
             let mut images = Vec::new();
@@ -941,7 +1037,8 @@ async fn execute_node(
             }
 
             // Fix #3: idempotency check -- if this effect was already completed, skip re-write
-            let effect_key = format!("blake3:fs.write:{}", actual_path);
+            let content_hash = crate::state_store::graph_hash(&content);
+            let effect_key = format!("blake3:fs.write:{}:{}:{}", node_id, actual_path, content_hash);
             if let Some(_completed) = state_store.get_side_effect_by_key(&run_id, &effect_key).await {
                 // Effect already completed in a previous run - verify file exists
                 if std::path::Path::new(&actual_path).exists() {
@@ -1052,7 +1149,7 @@ async fn execute_node(
                     hasher.update(command_str.as_bytes());
                     format!("blake3:{}", hasher.finalize().to_hex())
                 };
-                let effect_key = format!("blake3:shell:{}", cmd_hash);
+                let effect_key = format!("blake3:shell.execute:{}:{}", node_id, cmd_hash);
                 if let Some(_completed) = state_store.get_side_effect_by_key(&run_id, &effect_key).await {
                     return Ok(format!("Idempotent: shell command already executed (hash: {})", cmd_hash));
                 }
@@ -1212,7 +1309,42 @@ async fn execute_node(
         NodeType::TemplateFormatterNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
-            let resolved = interpolation::resolve(&cfg.template, &locked, single.as_deref())?;
+
+            // Phase 1: resolve single-brace {node_id} shorthand from predecessor outputs.
+            // This supports templates like "CPU: {cpu_node}%" where cpu_node is an upstream node.
+            let mut pre_resolved = cfg.template.clone();
+            for pred_id in &predecessors {
+                if let Some(val) = locked.get(pred_id) {
+                    let placeholder = format!("{{{}}}", pred_id);
+                    pre_resolved = pre_resolved.replace(&placeholder, val);
+                }
+            }
+
+            // Also resolve {any_node_id} for non-predecessor nodes that are in the outputs map.
+            // This handles cases where the template references nodes that aren't direct predecessors
+            // but whose outputs are available (e.g. via edges to a common merge point).
+            for (nid, val) in locked.iter() {
+                let placeholder = format!("{{{}}}", nid);
+                if pre_resolved.contains(&placeholder) {
+                    pre_resolved = pre_resolved.replace(&placeholder, val);
+                }
+            }
+
+            // Check for unresolved single-brace placeholders that look like node references
+            // and warn loudly if any predecessor's output is missing.
+            for pred_id in &predecessors {
+                let placeholder = format!("{{{}}}", pred_id);
+                if pre_resolved.contains(&placeholder) {
+                    return Err(anyhow!(
+                        "TemplateFormatterNode '{}': placeholder '{{{}}}' has no upstream output. \
+                         Node '{}' may not have completed successfully.",
+                        node_id, pred_id, pred_id
+                    ));
+                }
+            }
+
+            // Phase 2: resolve standard double-brace {{node_id.output}} / {{input}} placeholders.
+            let resolved = interpolation::resolve(&pre_resolved, &locked, single.as_deref())?;
             Ok(resolved)
         }
         NodeType::MergeNode(_) => {
@@ -1277,6 +1409,65 @@ async fn execute_node(
                 return Err(anyhow::anyhow!("Webhook failed with status: {}", res.status()));
             }
             Ok(format!("Webhook sent successfully"))
+        }
+        NodeType::GetCpuUsageNode(cfg) => {
+            let mut sys = sysinfo::System::new();
+            sys.refresh_cpu_usage();
+            
+            if let Some(delay) = cfg.average_over_seconds {
+                tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+            } else {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+            // Refresh a second time to calculate the usage delta
+            sys.refresh_cpu_usage();
+            let cpus = sys.cpus();
+            let avg = if cpus.is_empty() {
+                0.0
+            } else {
+                cpus.iter().map(|c| c.cpu_usage()).sum::<f32>() / cpus.len() as f32
+            };
+            Ok(format!("{:.2}", avg))
+        }
+        NodeType::GetMemoryUsageNode(_) => {
+            let mut sys = sysinfo::System::new();
+            sys.refresh_memory();
+            let used = sys.used_memory();
+            let total = sys.total_memory();
+            let percentage = if total == 0 {
+                0.0
+            } else {
+                (used as f64 / total as f64) * 100.0
+            };
+            Ok(format!("{:.2}", percentage))
+        }
+        NodeType::ListProcessesNode(cfg) => {
+            let mut sys = sysinfo::System::new();
+            // Initial refresh to populate the process list
+            sys.refresh_processes();
+            // Need a delay to measure CPU usage deltas for processes
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            sys.refresh_processes();
+            let mut procs: Vec<_> = sys.processes().iter().collect();
+            if let Some(ref sort) = cfg.sort_by {
+                match sort.as_str() {
+                    "cpu" => procs.sort_by(|a, b| b.1.cpu_usage().partial_cmp(&a.1.cpu_usage()).unwrap_or(std::cmp::Ordering::Equal)),
+                    "memory" => procs.sort_by(|a, b| b.1.memory().cmp(&a.1.memory())),
+                    _ => {}
+                }
+            }
+            if let Some(limit) = cfg.limit {
+                procs.truncate(limit);
+            }
+            let out: Vec<_> = procs.into_iter().map(|(pid, p)| {
+                serde_json::json!({
+                    "pid": pid.as_u32(),
+                    "name": p.name(),
+                    "cpu": p.cpu_usage(),
+                    "memory": p.memory(),
+                })
+            }).collect();
+            Ok(serde_json::to_string(&out)?)
         }
     }
 }

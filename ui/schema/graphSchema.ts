@@ -153,6 +153,21 @@ export const AiPlanConfigSchema = z.object({
   model: z.string().optional(),
 });
 
+export const GetCpuUsageConfigSchema = z.object({
+  type: z.literal('GetCpuUsageNode'),
+  averageOverSeconds: z.number().int().positive().optional().nullable(),
+});
+
+export const GetMemoryUsageConfigSchema = z.object({
+  type: z.literal('GetMemoryUsageNode'),
+});
+
+export const ListProcessesConfigSchema = z.object({
+  type: z.literal('ListProcessesNode'),
+  sortBy: z.string().optional().nullable(),
+  limit: z.number().int().positive().optional().nullable(),
+});
+
 export const NodeTypeSchema = z.discriminatedUnion('type', [
   FileWatcherConfigSchema,
   TextInputConfigSchema,
@@ -180,6 +195,9 @@ export const NodeTypeSchema = z.discriminatedUnion('type', [
   DelayConfigSchema,
   TemplateFormatterConfigSchema,
   MergeConfigSchema,
+  GetCpuUsageConfigSchema,
+  GetMemoryUsageConfigSchema,
+  ListProcessesConfigSchema,
 ]);
 
 export const GraphNodeSchema = z.object({
@@ -224,6 +242,9 @@ export type TransformAggregateConfig = z.infer<typeof TransformAggregateConfigSc
 export type AnalysisStatsHypothesisTestConfig = z.infer<typeof AnalysisStatsHypothesisTestConfigSchema>;
 export type AiInterpretConfig = z.infer<typeof AiInterpretConfigSchema>;
 export type AiPlanConfig = z.infer<typeof AiPlanConfigSchema>;
+export type GetCpuUsageConfig = z.infer<typeof GetCpuUsageConfigSchema>;
+export type GetMemoryUsageConfig = z.infer<typeof GetMemoryUsageConfigSchema>;
+export type ListProcessesConfig = z.infer<typeof ListProcessesConfigSchema>;
 
 export type NodeType = z.infer<typeof NodeTypeSchema>;
 export type GraphNode = z.infer<typeof GraphNodeSchema>;

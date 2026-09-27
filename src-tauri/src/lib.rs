@@ -7,8 +7,10 @@ pub fn run() {
         .manage(commands::PullState::default())
         .manage(commands::ChatState::default())
         .manage(commands::ScheduledTaskState::default())
+        .manage(commands::ManualRunState::default())
         .invoke_handler(tauri::generate_handler![
             commands::run_graph,
+            commands::cancel_manual_graph,
             commands::run_graph_scheduled,
             commands::stop_scheduled_graph,
             commands::pause_scheduled_graph,
@@ -38,7 +40,7 @@ pub fn run() {
             commands::save_agent_output,
             commands::get_agent_output,
             commands::get_agent_path,
-            commands::launch_agent_terminal,
+            commands::launch_terminal_interact,
             commands::help_agent_ask,
             commands::save_chat_history,
             commands::list_chat_history,

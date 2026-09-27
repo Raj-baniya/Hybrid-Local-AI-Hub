@@ -31,3 +31,5 @@ output/
 *.log
 
 # samples/ is intentionally tracked (workflow examples for users)
+
+src-tauri/logs/

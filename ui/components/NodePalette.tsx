@@ -133,6 +133,30 @@ const PALETTE_ITEMS: PaletteItem[] = [
     color: '#10b981',
     desc: 'Extract text using Regex',
   },
+  {
+    type: 'GetCpuUsageNode',
+    label: 'Get CPU Usage',
+    category: 'Triggers & Inputs',
+    icon: <Terminal size={16} />,
+    color: '#3b82f6',
+    desc: 'Get actual system CPU utilization',
+  },
+  {
+    type: 'GetMemoryUsageNode',
+    label: 'Get Memory Usage',
+    category: 'Triggers & Inputs',
+    icon: <Database size={16} />,
+    color: '#3b82f6',
+    desc: 'Get actual system memory utilization',
+  },
+  {
+    type: 'ListProcessesNode',
+    label: 'List Processes',
+    category: 'Triggers & Inputs',
+    icon: <Terminal size={16} />,
+    color: '#3b82f6',
+    desc: 'List running OS processes',
+  },
   // ─── Phase 2 Nodes ─────────────────────────────────────────────────────────
   {
     type: 'SourceFileNode',

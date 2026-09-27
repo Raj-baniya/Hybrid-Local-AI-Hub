@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "name": "Autonomous System Controller",
+  "nodes": [
+    {
+      "id": "trigger_node",
+      "position": [100, 100],
+      "data": {
+        "type": "ScheduleNode",
+        "cronExpression": "*/10 * * * * *"
+      }
+    },
+    {
+      "id": "cpu_node",
+      "position": [300, 50],
+      "data": {
+        "type": "GetCpuUsageNode",
+        "averageOverSeconds": 1
+      }
+    },
+    {
+      "id": "mem_node",
+      "position": [300, 150],
+      "data": {
+        "type": "GetMemoryUsageNode"
+      }
+    },
+    {
+      "id": "proc_node",
+      "position": [300, 250],
+      "data": {
+        "type": "ListProcessesNode",
+        "sortBy": "cpu",
+        "limit": 5
+      }
+    },
+    {
+      "id": "merge_node",
+      "position": [500, 150],
+      "data": {
+        "type": "TemplateFormatterNode",
+        "template": "System Health:\nCPU Usage: {cpu_node}%\nMemory Usage: {mem_node}%\nTop Processes:\n{proc_node}"
+      }
+    },
+    {
+      "id": "ai_planner",
+      "position": [700, 150],
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "promptTemplate": "You are a local autonomous system controller. Below is the system state:\n\n{merge_node}\n\nIf the CPU usage is above 80 or Memory is above 90, respond strictly with \"ACTION: ALERT\". Otherwise, respond strictly with \"ACTION: ALL_GOOD\". Do not explain.",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "router",
+      "position": [900, 150],
+      "data": {
+        "type": "ConditionalRouterNode",
+        "condition": "ALERT",
+        "trueTarget": "format_log",
+        "falseTarget": "all_good_notify"
+      }
+    },
+    {
+      "id": "format_log",
+      "position": [1000, 50],
+      "data": {
+        "type": "TemplateFormatterNode",
+        "template": "--- ALERT ---\n{merge_node}\n"
+      }
+    },
+    {
+      "id": "save_log",
+      "position": [1100, 50],
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "system_alert_log.txt",
+        "append": true
+      }
+    },
+    {
+      "id": "alert_notify",
+      "position": [1300, 50],
+      "data": {
+        "type": "NotifyDesktopNode",
+        "title": "System Alert!",
+        "body": "High CPU or Memory detected. Top processes saved to system_alert_log.txt."
+      }
+    },
+    {
+      "id": "all_good_notify",
+      "position": [1100, 250],
+      "data": {
+        "type": "NotifyDesktopNode",
+        "title": "System Health",
+        "body": "System is running smoothly."
+      }
+    }
+  ],
+  "edges": [
+    {"id": "e1", "source": "trigger_node", "target": "cpu_node"},
+    {"id": "e2", "source": "trigger_node", "target": "mem_node"},
+    {"id": "e3", "source": "trigger_node", "target": "proc_node"},
+    {"id": "e_m1", "source": "cpu_node", "target": "merge_node"},
+    {"id": "e_m2", "source": "mem_node", "target": "merge_node"},
+    {"id": "e_m3", "source": "proc_node", "target": "merge_node"},
+    {"id": "e_llm", "source": "merge_node", "target": "ai_planner"},
+    {"id": "e_router", "source": "ai_planner", "target": "router"},
+    {"id": "e_route_t", "source": "router", "target": "format_log"},
+    {"id": "e_route_f", "source": "router", "target": "all_good_notify"},
+    {"id": "e_format_dep", "source": "merge_node", "target": "format_log"},
+    {"id": "e_save", "source": "format_log", "target": "save_log"},
+    {"id": "e_notify", "source": "save_log", "target": "alert_notify"}
+  ]
+}

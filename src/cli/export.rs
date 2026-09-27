@@ -327,7 +327,9 @@ fn build_readme(graph: &Graph, manifest: &BundleManifest, source_path: &std::pat
                 NodeType::MergeNode(_) => "MergeNode",
                 NodeType::NotifyDesktopNode(_) => "NotifyDesktopNode",
                 NodeType::NotifyWebhookNode(_) => "NotifyWebhookNode",
-
+                NodeType::GetCpuUsageNode(_) => "GetCpuUsageNode",
+                NodeType::GetMemoryUsageNode(_) => "GetMemoryUsageNode",
+                NodeType::ListProcessesNode(_) => "ListProcessesNode",
             };
             format!("- **{}** ({})", n.id, type_name)
         })
