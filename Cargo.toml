@@ -49,6 +49,7 @@ console = "0.15"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

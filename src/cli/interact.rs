@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use hybrid_local_ai_hub::schema::Graph;
 use hybrid_local_ai_hub::executor::ExecutorConfig;
 use console::{style, Term};
-use std::io::Write;
+
 
 #[derive(Args, Debug)]
 pub struct InteractArgs {

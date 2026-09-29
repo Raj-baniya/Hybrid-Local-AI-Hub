@@ -8,6 +8,7 @@ async fn main() {
         name: Some("Test Graph".into()),
         nodes: vec![],
         edges: vec![],
+        goal: None,
     };
 
     // Node 1: CsvReaderNode

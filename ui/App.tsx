@@ -12,8 +12,8 @@ import { SavedAgentsPanel } from './components/SavedAgentsPanel';
 import { HelpAgentPanel } from './components/HelpAgentPanel';
 import { SetupWizard } from './components/SetupWizard';
 import { SavePromptModal } from './components/SavePromptModal';
-import { SettingsModal } from './components/SettingsModal';
 import { AgentOutputPanel } from './components/AgentOutputPanel';
+import { NodeInspectorPanel } from './components/NodeInspectorPanel';
 import { useWorkflowStore } from './store/workflowStore';
 
 type OllamaStatus =
@@ -24,6 +24,7 @@ type OllamaStatus =
 export const App: React.FC = () => {
   const activePanel = useWorkflowStore((s) => s.activePanel);
   const showOutputPanel = useWorkflowStore((s) => s.showOutputPanel);
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const [showWizard, setShowWizard] = useState<boolean | null>(null);
   const theme = useWorkflowStore((s) => s.theme);
 
@@ -144,10 +145,10 @@ export const App: React.FC = () => {
               <GraphCanvas />
             </div>
 
-            {/* Output Panel on Right */}
-            {showOutputPanel && (
+            {/* Output Panel / Inspector Panel on Right */}
+            {(showOutputPanel || selectedNodeId) && (
               <div style={{ width: 400, height: '100%', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <AgentOutputPanel />
+                {selectedNodeId ? <NodeInspectorPanel /> : <AgentOutputPanel />}
               </div>
             )}
 

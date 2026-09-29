@@ -102,7 +102,7 @@ impl StateStore {
             return None;
         }
         let content = fs::read_to_string(&path).ok()?;
-        let now = chrono::Utc::now();
+        let _now = chrono::Utc::now();
         // Collect all records with this key, prefer the completed+verified one
         let mut completed_record: Option<SideEffectRecord> = None;
         for line in content.lines() {

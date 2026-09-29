@@ -107,6 +107,7 @@ fn simple_graph(nodes: Vec<GraphNode>, edges: Vec<GraphEdge>) -> Graph {
         name: Some("Test Graph".to_string()),
         nodes,
         edges,
+        goal: None,
     }
 }
 
@@ -330,6 +331,7 @@ fn graph_json_round_trips() {
         name: Some("Test Graph".to_string()),
         nodes,
         edges: vec![],
+        goal: None,
     };
 
     let json = serde_json::to_string_pretty(&graph).expect("serialize");

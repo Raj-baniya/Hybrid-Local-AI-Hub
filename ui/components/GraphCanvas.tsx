@@ -116,6 +116,8 @@ export const GraphCanvas: React.FC = () => {
         snapToGrid
         snapGrid={[15, 15]}
         panOnScroll={true}
+        zoomOnScroll={false}
+        zoomOnPinch={true}
         selectionOnDrag={true}
         defaultEdgeOptions={{
           animated: true,

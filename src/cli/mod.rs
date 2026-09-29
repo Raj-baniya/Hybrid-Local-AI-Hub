@@ -7,3 +7,4 @@ pub mod run;
 pub mod template;
 pub mod validate;
 pub mod interact;
+pub mod agent;

@@ -152,10 +152,75 @@ pub async fn launch_terminal_interact(
         return Ok("Terminal spawned".to_string());
     }
 
-    // fallback for unsupported OS
+// fallback for unsupported OS
     #[cfg(not(target_os = "windows"))]
     {
         Err("Interactive terminal launch is only supported on Windows currently.".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn cmd_load_in_terminal(agent_path: String) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?
+        .parent().ok_or("no exe dir")?.join(if cfg!(windows) { "hybrid-hub.exe" } else { "hybrid-hub" });
+    let exe = exe.to_string_lossy().to_string();
+    let display_cmd = format!("\"{}\" agent \"{}\"", exe, agent_path);
+
+    #[cfg(target_os = "windows")]
+    let r = std::process::Command::new("cmd")
+        .args(["/C", "start", "Hybrid Hub Agent", "cmd", "/K", &display_cmd])
+        .spawn();
+
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("osascript")
+        .args(["-e", &format!("tell application \"Terminal\" to do script \"{}\"",
+            display_cmd.replace('\\', "\\\\").replace('"', "\\\""))])
+        .spawn();
+
+    #[cfg(target_os = "linux")]
+    let r = ["x-terminal-emulator", "gnome-terminal", "konsole", "xterm"].iter()
+        .find_map(|t| std::process::Command::new(t)
+            .args(if *t == "gnome-terminal" { vec!["--", "sh", "-c", &display_cmd] } else { vec!["-e", &display_cmd] })
+            .spawn().ok())
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no terminal found"));
+
+    r.map(|_| ()).map_err(|e| format!("Could not open a terminal ({}). Run this yourself:\n{}", e, display_cmd))
+}
+
+#[tauri::command]
+pub async fn validate_node(node: hybrid_local_ai_hub::schema::GraphNode) -> Result<serde_json::Value, String> {
+    use hybrid_local_ai_hub::schema::NodeType;
+
+    match &node.data {
+        NodeType::SourceFileNode(cfg) => {
+            if std::path::Path::new(&cfg.path).exists() {
+                Ok(serde_json::json!({ "success": true, "message": "File exists and is accessible." }))
+            } else {
+                Err(format!("File not found at path: {}", cfg.path))
+            }
+        },
+        NodeType::OllamaSelectorNode(cfg) => {
+            if cfg.model.is_empty() {
+                return Err("No model selected.".to_string());
+            }
+            Ok(serde_json::json!({ "success": true, "message": format!("Model '{}' is configured.", cfg.model) }))
+        },
+        NodeType::ImageInputNode(cfg) => {
+            if std::path::Path::new(&cfg.image_path).exists() {
+                Ok(serde_json::json!({ "success": true, "message": "Image exists and is accessible." }))
+            } else {
+                Err(format!("Image not found at path: {}", cfg.image_path))
+            }
+        },
+        NodeType::ShellCommandNode(cfg) => {
+            if cfg.command.is_empty() {
+                return Err("Command is empty.".to_string());
+            }
+            Ok(serde_json::json!({ "success": true, "message": "Command format is valid." }))
+        },
+        _ => {
+            Ok(serde_json::json!({ "success": true, "message": "Node configuration format is valid." }))
+        }
     }
 }
 

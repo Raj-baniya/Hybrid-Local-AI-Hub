@@ -2076,6 +2076,7 @@ dependencies = [
  "shlex",
  "sysinfo 0.30.13",
  "tauri-winrt-notification",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "uuid",

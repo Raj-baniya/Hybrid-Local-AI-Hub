@@ -107,6 +107,14 @@ EXAMPLES:
   hybrid-hub template use summarizer -o summarizer.json
 ")]
     Template(cli::template::TemplateArgs),
+    
+    /// Run the goal-driven terminal agent.
+    #[command(after_help = "\
+EXAMPLES:
+  hybrid-hub agent workflow.json
+  hybrid-hub agent --task \"Do something\"
+")]
+    Agent(cli::agent::AgentArgs),
 
     /// Show real example instructions for 'hybrid-hub chat'.
     Examples,
@@ -138,6 +146,7 @@ async fn main() {
         Some(Commands::Import(args)) => cli::export::import(args).await,
         Some(Commands::Template(args)) => cli::template::template(args),
         Some(Commands::Interact(args)) => cli::interact::interact(args).await,
+        Some(Commands::Agent(args)) => { cli::agent::run(args).await; Ok(()) },
         Some(Commands::Examples) => {
             print_examples();
             return;
