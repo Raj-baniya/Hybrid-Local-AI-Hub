@@ -126,37 +126,37 @@ pub fn get_cli_command(agent_path: String) -> String {
 
 #[tauri::command]
 pub async fn launch_terminal_interact(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     agent_path: String,
-) -> Result<(), String> {
-    let escaped_path = agent_path.replace("\"", "\\\"");
-    
-    // Attempt to find the binary similar to generate_cli_command
-    let mut cli_cmd = format!("cargo run --bin hybrid-hub -- interact \"{}\"", escaped_path);
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(dir) = exe_path.parent() {
-            let sibling1 = dir.join("hybrid-hub.exe");
-            if sibling1.exists() {
-                cli_cmd = format!("\"{}\" interact \"{}\"", sibling1.display(), escaped_path);
-            }
-        }
+) -> Result<String, String> {
+    let path = std::path::Path::new(&agent_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", agent_path));
     }
 
+    let bin_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    
+    // Convert to string safely handling spaces in paths for shell
+    let escaped_bin = bin_path.to_string_lossy().replace("\"", "\\\"");
+    let escaped_agent = path.to_string_lossy().replace("\"", "\\\"");
+
+    // Windows only
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "cmd", "/K", &cli_cmd])
+        let script = format!("& '{}' interact '{}'", escaped_bin, escaped_agent);
+        let _ = std::process::Command::new("powershell")
+            .arg("-Command")
+            .arg(format!("Start-Process powershell -ArgumentList '-NoExit', '-Command', \"{}\"", script.replace("'", "''")))
             .spawn()
-            .map_err(|e| format!("Failed to launch terminal: {}", e))?;
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    {
-        // Fallback for mac/linux though user is on windows
-        return Err("Terminal launch is only fully supported on Windows currently.".to_string());
+            .map_err(|e| format!("Failed to spawn terminal: {}", e))?;
+        return Ok("Terminal spawned".to_string());
     }
 
-    Ok(())
+    // fallback for unsupported OS
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Interactive terminal launch is only supported on Windows currently.".to_string())
+    }
 }
 
 // â”€â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -914,31 +914,6 @@ pub fn delete_agent(app: tauri::AppHandle, name: String, offline_mode: bool) -> 
     Ok(())
 }
 
-#[tauri::command]
-pub fn save_agent_output(
-    app: tauri::AppHandle,
-    name: String,
-    output: String,
-    offline_mode: bool,
-) -> Result<(), String> {
-    let base_dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    let outputs_dir = get_env_dir(&base_dir, "outputs", offline_mode);
-
-    std::fs::create_dir_all(&outputs_dir)
-        .map_err(|e| format!("Failed to create outputs dir: {e}"))?;
-
-    if !is_valid_filename(&name) {
-        return Err(
-            "Agent name contains invalid characters. Please avoid < > : \" / \\ | ? *".to_string(),
-        );
-    }
-
-    let path = outputs_dir.join(format!("{}_output.txt", name));
-    std::fs::write(&path, output).map_err(|e| format!("Failed to write agent output: {e}"))
-}
 
 #[tauri::command]
 pub fn get_agent_output(
@@ -1105,8 +1080,6 @@ fn persist_scheduled_output(app: &AppHandle, graph: &Graph, record: &ExecutionRe
         .clone()
         .filter(|n| !n.trim().is_empty() && is_valid_filename(n))
         .unwrap_or_else(|| "scheduled-agent".to_string());
-    let output = extract_agent_output(record);
-    let _ = save_agent_output(app.clone(), name, output, offline_mode);
     let _ = save_execution_log(app.clone(), record.clone(), offline_mode);
 }
 
@@ -1664,58 +1637,3 @@ pub fn delete_provider(app: tauri::AppHandle, name: String) -> Result<(), String
     Ok(())
 }
 
-#[tauri::command]
-pub fn get_agent_path(
-    app: tauri::AppHandle,
-    name: String,
-    offline_mode: bool,
-) -> Result<String, String> {
-    let mut base_dir = app
-        .path()
-        .app_data_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
-    
-    if offline_mode {
-        base_dir = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join(".hybrid-hub");
-    }
-
-    let agents_dir = base_dir.join("agents");
-    let file_path = agents_dir.join(format!("{}.json", name));
-    
-    Ok(file_path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub async fn launch_terminal_interact(
-    app: tauri::AppHandle,
-    agent_path: String,
-) -> Result<String, String> {
-    let path = std::path::Path::new(&agent_path);
-    if !path.exists() {
-        return Err(format!("File not found: {}", agent_path));
-    }
-
-    let bin_path = std::env::current_exe().map_err(|e| e.to_string())?;
-    
-    // Convert to string safely handling spaces in paths for shell
-    let escaped_bin = bin_path.to_string_lossy().replace("\"", "\\\"");
-    let escaped_agent = path.to_string_lossy().replace("\"", "\\\"");
-
-    // Windows only
-    #[cfg(target_os = "windows")]
-    {
-        let script = format!("& '{}' interact '{}'", escaped_bin, escaped_agent);
-        let _ = std::process::Command::new("powershell")
-            .arg("-Command")
-            .arg(format!("Start-Process powershell -ArgumentList '-NoExit', '-Command', \"{}\"", script.replace("'", "''")))
-            .spawn()
-            .map_err(|e| format!("Failed to spawn terminal: {}", e))?;
-        return Ok("Terminal spawned".to_string());
-    }
-
-    // fallback for unsupported OS
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("Interactive terminal launch is only supported on Windows currently.".to_string())
-    }
-}

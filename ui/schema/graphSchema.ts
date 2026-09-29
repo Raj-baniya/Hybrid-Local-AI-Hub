@@ -214,11 +214,41 @@ export const GraphEdgeSchema = z.object({
   targetHandle: z.string().optional().nullable(),
 });
 
+export const GoalCheckSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('file_exists'), path: z.string() }),
+  z.object({ type: z.literal('dir_exists'), path: z.string() }),
+  z.object({ type: z.literal('file_contains'), path: z.string(), text: z.string().optional().nullable(), regex: z.string().optional().nullable() }),
+  z.object({ type: z.literal('command_exit_zero'), command: z.string() }),
+  z.object({ type: z.literal('output_contains'), text: z.string() }),
+  z.object({ type: z.literal('llm_judge'), question: z.string() }),
+]);
+
+export const GoalCriterionSchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  check: GoalCheckSchema,
+});
+
+export const GoalLimitsSchema = z.object({
+  maxSteps: z.number().int(),
+  timeoutSecs: z.number().int(),
+  patience: z.number().int(),
+  maxFalseClaims: z.number().int(),
+});
+
+export const GoalSchema = z.object({
+  task: z.string(),
+  successCriteria: z.array(GoalCriterionSchema),
+  limits: GoalLimitsSchema,
+  workingDir: z.string(),
+});
+
 export const GraphSchema = z.object({
   version: z.number().default(1),
   name: z.string().optional().nullable(),
   nodes: z.array(GraphNodeSchema),
   edges: z.array(GraphEdgeSchema),
+  goal: GoalSchema.optional().nullable(),
 });
 
 
@@ -250,3 +280,7 @@ export type NodeType = z.infer<typeof NodeTypeSchema>;
 export type GraphNode = z.infer<typeof GraphNodeSchema>;
 export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
 export type Graph = z.infer<typeof GraphSchema>;
+export type Goal = z.infer<typeof GoalSchema>;
+export type GoalCriterion = z.infer<typeof GoalCriterionSchema>;
+export type GoalCheck = z.infer<typeof GoalCheckSchema>;
+export type GoalLimits = z.infer<typeof GoalLimitsSchema>;

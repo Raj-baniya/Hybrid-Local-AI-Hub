@@ -253,6 +253,46 @@ pub struct Graph {
     pub name: Option<String>,
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
+    #[serde(default)]
+    pub goal: Option<Goal>,
+}
+// ─── Goal Config ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Goal {
+    pub task: String,
+    pub success_criteria: Vec<GoalCriterion>,
+    pub limits: GoalLimits,
+    pub working_dir: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalCriterion {
+    pub id: String,
+    pub description: String,
+    pub check: GoalCheck,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum GoalCheck {
+    FileExists { path: String },
+    DirExists { path: String },
+    FileContains { path: String, text: Option<String>, regex: Option<String> },
+    CommandExitZero { command: String },
+    OutputContains { text: String },
+    LlmJudge { question: String },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalLimits {
+    pub max_steps: u32,
+    pub timeout_secs: u64,
+    pub patience: u32,
+    pub max_false_claims: u32,
 }
 
 // â”€â”€â”€ Defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

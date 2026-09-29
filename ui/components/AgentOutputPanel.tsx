@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Terminal, XCircle, CheckCircle2, CircleDashed } from 'lucide-react';
+import { useWorkflowStore } from '../store/workflowStore';
 
 interface NodeOutputMessage {
   nodeId: string;
@@ -13,12 +14,25 @@ export const AgentOutputPanel: React.FC = () => {
   const [messages, setMessages] = useState<NodeOutputMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const unlistenStarted = listen('scheduled-task-started', () => {
-      // Clear logs on a new run
-      setMessages([]);
-    });
+  const activeTabId = useWorkflowStore(s => s.activeTabId);
+  const storageKey = `agent-chat-${activeTabId}`;
 
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        setMessages(JSON.parse(saved));
+      } catch (e) {}
+    } else {
+      setMessages([]);
+    }
+  }, [activeTabId]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(messages));
+  }, [messages, storageKey]);
+
+  useEffect(() => {
     const unlistenProgress = listen<any>('node-progress', (event) => {
       const nr = event.payload;
       setMessages(prev => {
@@ -35,7 +49,6 @@ export const AgentOutputPanel: React.FC = () => {
     });
 
     return () => {
-      unlistenStarted.then(fn => fn());
       unlistenProgress.then(fn => fn());
     };
   }, []);

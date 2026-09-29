@@ -23,6 +23,7 @@ type OllamaStatus =
 
 export const App: React.FC = () => {
   const activePanel = useWorkflowStore((s) => s.activePanel);
+  const showOutputPanel = useWorkflowStore((s) => s.showOutputPanel);
   const [showWizard, setShowWizard] = useState<boolean | null>(null);
   const theme = useWorkflowStore((s) => s.theme);
 
@@ -144,7 +145,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Output Panel on Right */}
-            {useWorkflowStore(s => s.showOutputPanel) && (
+            {showOutputPanel && (
               <div style={{ width: 400, height: '100%', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <AgentOutputPanel />
               </div>

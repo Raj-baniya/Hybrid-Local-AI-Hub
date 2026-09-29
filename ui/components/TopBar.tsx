@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import ReactDOM from 'react-dom';
+import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { save, open } from '@tauri-apps/plugin-dialog';
@@ -17,6 +17,7 @@ import {
   Square,
   Pause,
   PlayCircle,
+  Terminal,
 } from 'lucide-react';
 import { PreRunDialog } from './PreRunDialog';
 
@@ -305,22 +306,10 @@ export const TopBar: React.FC = () => {
         }
       });
 
-      if (finalOutput && finalOutput !== "No output generated." && record.overall_status === 'success') {
-         // Auto-save the output internally
-         const activeTab = useWorkflowStore.getState().tabs.find(t => t.id === useWorkflowStore.getState().activeTabId);
-         if (activeTab && activeTab.title) {
-            try {
-               await invoke('save_agent_output', { offlineMode: isOfflineMode,  name: activeTab.title, output: finalOutput });
-            } catch (err) {
-               console.warn("Could not auto-save output, tab name might be invalid:", err);
-            }
-         }
-      }
-
       if (record.overall_status !== 'success') {
         setActivePanel('logs');
       } else {
-        setExecutionModalOutput(finalOutput);
+        setShowOutputPanel(true);
       }
     } catch (err: any) {
       console.error("Execution failed:", err);
@@ -390,7 +379,7 @@ export const TopBar: React.FC = () => {
         zIndex: 20,
       }}
     >
-      {isPreRunDialogOpen && ReactDOM.createPortal(
+      {isPreRunDialogOpen && createPortal(
         <PreRunDialog 
           onConfirm={handleRunConfirm}
           onCancel={() => setPreRunDialogOpen(false)} 
@@ -398,7 +387,7 @@ export const TopBar: React.FC = () => {
         document.body
       )}
 
-      {preflightStatus && ReactDOM.createPortal(
+      {preflightStatus && createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',

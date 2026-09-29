@@ -203,6 +203,7 @@ pub async fn run_graph(
             if flag.load(std::sync::atomic::Ordering::Relaxed) {
                 record.finish();
                 record.overall_status = crate::execution_record::ExecutionStatus::Failed;
+                record.termination_reason = Some("stopped_by_user".to_string());
                 record.save().await?;
                 return Err(anyhow!("Execution cancelled by user"));
             }
@@ -220,6 +221,7 @@ pub async fn run_graph(
                 nr.start();
                 nr.fail(&format!("max_steps_exceeded: executed {} node-steps (limit {})", step_count, max_steps));
             }
+            record.termination_reason = Some("max_steps_exceeded".to_string());
             record.save().await?;
             return Err(anyhow!("Execution safety cap reached: {} steps exceeded limit of {}", step_count, max_steps));
         }
@@ -345,9 +347,48 @@ pub async fn run_graph(
         let mut any_failed = false;
         let mut failed_ids: Vec<String> = vec![];
         let mut newly_skipped_ids: Vec<String> = vec![];
+        let mut hit_terminal_node = false;
 
+        let abort_handles: Vec<_> = handles.iter().map(|h| h.abort_handle()).collect();
+        let mut futures_unordered = futures::stream::FuturesUnordered::new();
         for handle in handles {
-            let (node_id, result) = handle.await.map_err(|e| anyhow!("Task panic: {e}"))?;
+            futures_unordered.push(handle);
+        }
+
+        use futures::StreamExt;
+        
+        while !futures_unordered.is_empty() {
+            let res_opt = tokio::select! {
+                res = futures_unordered.next() => res,
+                _ = async {
+                    if let Some(ref flag) = cancel_flag {
+                        loop {
+                            if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                                break;
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                    } else {
+                        futures::future::pending::<()>().await;
+                    }
+                } => None,
+            };
+
+            let res = match res_opt {
+                Some(r) => r,
+                None => {
+                    for ah in abort_handles {
+                        ah.abort();
+                    }
+                    record.termination_reason = Some("stopped_by_user".to_string());
+                    record.finish();
+                    record.overall_status = crate::execution_record::ExecutionStatus::Failed;
+                    record.save().await?;
+                    return Err(anyhow!("Execution cancelled by user"));
+                }
+            };
+
+            let (node_id, result) = res.map_err(|e| anyhow!("Task panic: {e}"))?;
 
             let nr = match record
                 .nodes
@@ -396,6 +437,11 @@ pub async fn run_graph(
 
                     if let Some(ref s) = event_sender {
                         let _ = s.send(nr.clone());
+                    }
+
+                    // Check if this is a terminal node (no outgoing edges)
+                    if adj.get(node_id.as_str()).map(|deps| deps.is_empty()).unwrap_or(true) {
+                        hit_terminal_node = true;
                     }
                 }
                 Err(e) if e.to_string() == "SKIP" => {
@@ -463,6 +509,17 @@ pub async fn run_graph(
                 }
             }
         }
+        
+        // Break if we hit a terminal node to bound the execution
+        if hit_terminal_node {
+            record.termination_reason = Some("completed".to_string());
+            break;
+        }
+    }
+
+    // Default termination reason if completed via all ready nodes consumed
+    if record.termination_reason.is_none() {
+        record.termination_reason = Some("completed".to_string());
     }
 
     // Fix #10: save resumed_from before finishing
@@ -1331,16 +1388,15 @@ async fn execute_node(
             }
 
             // Check for unresolved single-brace placeholders that look like node references
-            // and warn loudly if any predecessor's output is missing.
-            for pred_id in &predecessors {
-                let placeholder = format!("{{{}}}", pred_id);
-                if pre_resolved.contains(&placeholder) {
-                    return Err(anyhow!(
-                        "TemplateFormatterNode '{}': placeholder '{{{}}}' has no upstream output. \
-                         Node '{}' may not have completed successfully.",
-                        node_id, pred_id, pred_id
-                    ));
-                }
+            // and fail loudly if any are left unreplaced.
+            let re = regex::Regex::new(r"\{([a-zA-Z0-9_-]+)\}").unwrap();
+            if let Some(caps) = re.captures(&pre_resolved) {
+                let placeholder = &caps[1];
+                return Err(anyhow::anyhow!(
+                    "TemplateFormatterNode '{}': placeholder '{{{}}}' has no matching upstream output. \
+                     Ensure node '{}' exists and completed successfully.",
+                    node_id, placeholder, placeholder
+                ));
             }
 
             // Phase 2: resolve standard double-brace {{node_id.output}} / {{input}} placeholders.
@@ -1511,4 +1567,77 @@ fn extract_pdf_text(
     }
 
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_template_formatter_node_success() {
+        let node_id = "merge_node";
+        let cfg = TemplateFormatterConfig {
+            template: "CPU: {cpu_node}%, Mem: {mem_node}%, Procs: {proc_node}".to_string(),
+        };
+
+        let mut outputs = HashMap::new();
+        outputs.insert("cpu_node".to_string(), "45".to_string());
+        outputs.insert("mem_node".to_string(), "60".to_string());
+        outputs.insert("proc_node".to_string(), "chrome, code".to_string());
+        let locked_outputs = Arc::new(tokio::sync::Mutex::new(outputs));
+
+        let node_data = NodeType::TemplateFormatterNode(cfg);
+        
+        let ollama = Arc::new(crate::ollama::OllamaClient::new("localhost".to_string(), 11434));
+        let chroma = None;
+        let skipped = Arc::new(tokio::sync::Mutex::new(std::collections::HashSet::new()));
+        
+        let result = execute_node(
+            node_id,
+            &node_data,
+            vec!["cpu_node".to_string(), "mem_node".to_string(), "proc_node".to_string()],
+            ollama,
+            chroma,
+            locked_outputs,
+            skipped,
+            None,
+        ).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "CPU: 45%, Mem: 60%, Procs: chrome, code");
+    }
+
+    #[tokio::test]
+    async fn test_template_formatter_node_unresolved_fails() {
+        let node_id = "merge_node";
+        let cfg = TemplateFormatterConfig {
+            template: "CPU: {cpu_node}%, Mem: {mem_node}%".to_string(),
+        };
+
+        let mut outputs = HashMap::new();
+        outputs.insert("cpu_node".to_string(), "45".to_string());
+        // mem_node is missing
+        let locked_outputs = Arc::new(tokio::sync::Mutex::new(outputs));
+
+        let node_data = NodeType::TemplateFormatterNode(cfg);
+        let ollama = Arc::new(crate::ollama::OllamaClient::new("localhost".to_string(), 11434));
+        let chroma = None;
+        let skipped = Arc::new(tokio::sync::Mutex::new(std::collections::HashSet::new()));
+        
+        let result = execute_node(
+            node_id,
+            &node_data,
+            vec!["cpu_node".to_string()],
+            ollama,
+            chroma,
+            locked_outputs,
+            skipped,
+            None,
+        ).await;
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("placeholder '{mem_node}' has no matching upstream output"));
+    }
 }

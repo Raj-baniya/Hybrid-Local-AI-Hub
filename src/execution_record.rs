@@ -103,6 +103,8 @@ pub struct ExecutionRecord {
     pub resumed_from: Option<String>,
     #[serde(default)]
     pub nodes_skipped_on_recovery: Vec<String>,
+    #[serde(default)]
+    pub termination_reason: Option<String>,
 }
 
 impl ExecutionRecord {
@@ -117,6 +119,7 @@ impl ExecutionRecord {
             nodes: Vec::new(),
             resumed_from: None,
             nodes_skipped_on_recovery: Vec::new(),
+            termination_reason: None,
         }
     }
 

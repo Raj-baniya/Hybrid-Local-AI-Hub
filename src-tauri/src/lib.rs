@@ -37,7 +37,6 @@ pub fn run() {
             commands::rename_agent,
             commands::delete_agent,
             commands::load_agent,
-            commands::save_agent_output,
             commands::get_agent_output,
             commands::get_agent_path,
             commands::launch_terminal_interact,
