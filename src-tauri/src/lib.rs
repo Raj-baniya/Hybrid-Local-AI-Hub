@@ -11,6 +11,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::run_graph,
             commands::cancel_manual_graph,
+            commands::pause_manual_graph,
+            commands::resume_manual_graph,
             commands::run_graph_scheduled,
             commands::stop_scheduled_graph,
             commands::pause_scheduled_graph,
@@ -49,6 +51,7 @@ pub fn run() {
             commands::get_providers,
             commands::save_provider,
             commands::delete_provider,
+            commands::run_terminal_agent,
         ])
         .run(tauri::generate_context!());
 

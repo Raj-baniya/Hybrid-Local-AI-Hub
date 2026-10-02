@@ -22,6 +22,10 @@ export const SettingsModal: React.FC = () => {
   
   const theme = useWorkflowStore((s) => s.theme);
   const setTheme = useWorkflowStore((s) => s.setTheme);
+  const ollamaModel = useSettingsStore((s) => s.ollamaModel);
+  const setOllamaModel = useSettingsStore((s) => s.setOllamaModel);
+  const ollamaUrl = useSettingsStore((s) => s.ollamaUrl);
+  const setOllamaUrl = useSettingsStore((s) => s.setOllamaUrl);
 
   const [activeTab, setActiveTab] = useState<'general' | 'providers' | 'models' | 'agents'>('general');
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
@@ -287,6 +291,44 @@ export const SettingsModal: React.FC = () => {
                     />
                   </span>
                 </label>
+              </div>
+
+              
+              {/* Ollama Settings */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  padding: 20,
+                  background: 'var(--bg-tertiary)',
+                  borderRadius: 16,
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 15 }}>Ollama Settings (Local AI)</div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ollama URL</label>
+                    <input
+                      type="text"
+                      value={ollamaUrl}
+                      onChange={(e) => setOllamaUrl(e.target.value)}
+                      className="input-field"
+                      style={{ width: '100%', marginTop: 4, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', padding: '8px 12px', borderRadius: 8 }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Default Terminal Agent Model</label>
+                    <input
+                      type="text"
+                      value={ollamaModel}
+                      onChange={(e) => setOllamaModel(e.target.value)}
+                      className="input-field"
+                      style={{ width: '100%', marginTop: 4, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', padding: '8px 12px', borderRadius: 8 }}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Theme Toggle */}

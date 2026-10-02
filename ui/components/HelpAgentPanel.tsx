@@ -32,6 +32,14 @@ export const HelpAgentPanel: React.FC = () => {
   const isOfflineMode = useSettingsStore((s) => s.isOfflineMode);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textAreaRef.current) {
+      textAreaRef.current.style.height = 'auto';
+      textAreaRef.current.style.height = Math.min(textAreaRef.current.scrollHeight, 150) + 'px';
+    }
+  }, [inputText]);
 
   useEffect(() => {
     invoke<OllamaStatus>('cmd_check_ollama').then((s) => {
@@ -399,7 +407,8 @@ export const HelpAgentPanel: React.FC = () => {
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
           <textarea
-            rows={Math.min(5, inputText.split('\n').length || 1)}
+            ref={textAreaRef}
+            rows={1}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onPaste={handlePaste}

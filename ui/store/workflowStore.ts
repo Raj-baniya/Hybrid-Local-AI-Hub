@@ -62,7 +62,14 @@ interface WorkflowState {
   canRedo: () => boolean;
   activeTabId: string;
   selectedNodeId: string | null;
-  activePanel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help';
+  activePanel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help' | 'terminalAgent';
+  terminalRunning: boolean;
+  terminalLogs: string[];
+  terminalExecutionId: string;
+  setTerminalRunning: (r: boolean) => void;
+  setTerminalLogs: (logs: string[]) => void;
+  appendTerminalLog: (log: string) => void;
+  setTerminalExecutionId: (id: string) => void;
   showOutputPanel: boolean;
   setShowOutputPanel: (show: boolean) => void;
   nodeStatusMap: Record<string, NodeExecutionState>;
@@ -72,6 +79,8 @@ interface WorkflowState {
   
   isPreRunDialogOpen: boolean;
   setPreRunDialogOpen: (isOpen: boolean) => void;
+  terminalTask: string;
+  setTerminalTask: (task: string) => void;
 
   // Tab management
   createTab: (title?: string, initialGraph?: Graph) => string;
@@ -97,7 +106,7 @@ interface WorkflowState {
 
   // Selection & UI
   setSelectedNodeId: (nodeId: string | null) => void;
-  setActivePanel: (panel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help') => void;
+  setActivePanel: (panel: 'none' | 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help' | 'terminalAgent') => void;
   setTheme: (theme: 'dark' | 'light') => void;
 
   // Execution & Logs
@@ -118,14 +127,21 @@ const defaultInitialGraph: Graph = {
 };
 
 function graphToCanvas(graph: Graph): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = graph.nodes.map((n, idx) => ({
-    id: n.id,
-    type: n.data.type,
-    position: n.position
-      ? { x: n.position[0], y: n.position[1] }
-      : { x: 100 + idx * 300, y: 150 + (idx % 2) * 50 },
-    data: n.data,
-  }));
+  const nodes: Node[] = graph.nodes.map((n: any, idx) => {
+    const type = n.type || (n.data && n.data.type);
+    const data = n.data ? { ...n.data } : { ...n };
+    if (data.id) delete data.id;
+    if (data.position) delete data.position;
+
+    return {
+      id: n.id,
+      type: type,
+      position: n.position
+        ? { x: n.position[0], y: n.position[1] }
+        : { x: 100 + idx * 300, y: 150 + (idx % 2) * 50 },
+      data: data,
+    };
+  });
 
   const edges: Edge[] = graph.edges.map((e) => ({
     id: e.id,
@@ -139,13 +155,13 @@ function graphToCanvas(graph: Graph): { nodes: Node[]; edges: Edge[] } {
   return { nodes, edges };
 }
 
-export function canvasToGraph(nodes: Node[], edges: Edge[]): Graph {
+export function canvasToGraph(nodes: Node[], edges: Edge[]): any {
   return {
     version: 1,
     nodes: nodes.map((n) => ({
       id: n.id,
       position: [Math.round(n.position.x), Math.round(n.position.y)],
-      data: n.data as NodeType,
+      ...n.data,
     })),
     edges: edges.map((e) => ({
       id: e.id,
@@ -211,6 +227,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   selectedNodeId: null,
   activePanel: 'none',
+  terminalRunning: false,
+  terminalLogs: [],
+  terminalExecutionId: '',
+  setTerminalRunning: (r) => set({ terminalRunning: r }),
+  setTerminalLogs: (logs) => set({ terminalLogs: logs }),
+  appendTerminalLog: (log) => set((s) => ({ terminalLogs: [...s.terminalLogs, log] })),
+  setTerminalExecutionId: (id) => set({ terminalExecutionId: id }),
   showOutputPanel: false,
   setShowOutputPanel: (show) => set({ showOutputPanel: show }),
   nodeStatusMap: {},
@@ -220,6 +243,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   isPreRunDialogOpen: false,
   tabToClose: null,
   isSavePromptOpen: false,
+  terminalTask: '',
+  setTerminalTask: (task) => set({ terminalTask: task }),
 
   setPreRunDialogOpen: (isOpen) => set({ isPreRunDialogOpen: isOpen }),
 

@@ -241,11 +241,12 @@ pub fn cmd_load_in_terminal(agent_path: String) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?
         .parent().ok_or("no exe dir")?.join(if cfg!(windows) { "hybrid-hub.exe" } else { "hybrid-hub" });
     let exe = exe.to_string_lossy().to_string();
-    let display_cmd = format!("\"{exe}\" agent \"{agent_path}\"");
+    let agent_path_canonical = std::fs::canonicalize(&agent_path).unwrap_or_else(|_| std::path::PathBuf::from(&agent_path)).to_string_lossy().to_string();
+    if !agent_path_canonical.contains("saved-agents") { return Err("Agent path must be within saved-agents".to_string()); }
 
     #[cfg(target_os = "windows")]
     let r = std::process::Command::new("cmd")
-        .args(["/C", "start", "Hybrid Hub Agent", "cmd", "/K", &display_cmd]) // 3rd arg is the window title
+        .args(["/C", "start", "Hybrid Hub Agent", "cmd", "/K", &exe, "agent", &agent_path_canonical]) // 3rd arg is the window title
         .spawn();
 
     #[cfg(target_os = "macos")]

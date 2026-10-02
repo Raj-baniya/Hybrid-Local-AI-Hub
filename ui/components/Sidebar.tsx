@@ -1,5 +1,5 @@
 import React from 'react';
-import { Network, Sparkles, Terminal, LifeBuoy, Settings } from 'lucide-react';
+import { Network, Sparkles, Terminal, LifeBuoy, Settings, TerminalSquare } from 'lucide-react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useSettingsStore } from '../store/settingsStore';
 
@@ -7,13 +7,14 @@ export const Sidebar: React.FC = () => {
   const { activePanel, setActivePanel } = useWorkflowStore();
   const setSettingsModalOpen = useSettingsStore((s) => s.setSettingsModalOpen);
 
-  const togglePanel = (panel: 'nodes' | 'chat' | 'logs' | 'models' | 'agents' | 'help') => {
+  const togglePanel = (panel: 'nodes' | 'chat' | 'logs' | 'models' | 'inspector' | 'agents' | 'help' | 'terminalAgent') => {
     setActivePanel(activePanel === panel ? 'none' : panel);
   };
 
   const navItems = [
     { id: 'nodes', icon: Network, title: 'Node Palette' },
     { id: 'chat', icon: Sparkles, title: 'Chat AI' },
+    { id: 'terminalAgent', icon: TerminalSquare, title: 'Terminal Agent' },
     { id: 'logs', icon: Terminal, title: 'Execution Logs' },
     { id: 'help', icon: LifeBuoy, title: 'Help Agent' },
   ] as const;

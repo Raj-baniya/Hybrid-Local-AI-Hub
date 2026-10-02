@@ -23,6 +23,7 @@ pub enum NodeType {
     PDFExtractorNode(PDFExtractorConfig),
     ChromaDbStoreNode(ChromaDbStoreConfig),
     ConditionalRouterNode(ConditionalRouterConfig),
+    #[serde(alias = "LocalFileStoreNode")]
     LocalFileWriterNode(LocalFileWriterConfig),
     WebScraperNode(WebScraperConfig),
     ShellCommandNode(ShellCommandConfig),
@@ -227,9 +228,15 @@ pub struct ScheduleConfig {
 /// A node in the graph. `position` is optional/unused in CLI mode but kept for
 /// forward JSON-compatibility when a GUI is added.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+pub struct Position {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
 pub struct GraphNode {
     pub id: String,
-    pub position: Option<(f64, f64)>,
+    pub position: Option<Position>,
     pub data: NodeType,
 }
 
@@ -444,6 +451,7 @@ pub struct Checkpoint {
     pub graph_hash: String,
     pub created_at: String,
     pub node_id: String,
+    #[serde(default)]
     pub input_hashes: std::collections::HashMap<String, String>,
     pub state: std::collections::HashMap<String, String>,
 }

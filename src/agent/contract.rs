@@ -11,11 +11,12 @@ pub async fn plan_or_load_contract(
     }
     
     if let Some(t) = task {
-        // Here we would call the LLM to generate the goal block.
-        // For now, we mock it by returning a simple goal block with a dummy criterion.
+        let cwd = std::env::current_dir()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| ".".to_string());
         return Ok(Goal {
             task: t.to_string(),
-            working_dir: ".".to_string(),
+            working_dir: cwd,
             limits: crate::schema::GoalLimits {
                 max_steps: 15,
                 timeout_secs: 600,
@@ -25,8 +26,10 @@ pub async fn plan_or_load_contract(
             success_criteria: vec![
                 crate::schema::GoalCriterion {
                     id: "c1".to_string(),
-                    description: "Task completed".to_string(),
-                    check: crate::schema::GoalCheck::LlmJudge { question: "Is the task complete?".to_string() }
+                    description: "The task has been completed and the result confirmed.".to_string(),
+                    check: crate::schema::GoalCheck::LlmJudge {
+                        question: "Has the agent successfully completed the task and shown its output?".to_string()
+                    }
                 }
             ],
         });

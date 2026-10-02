@@ -88,6 +88,7 @@ pub async fn run_graph(
     event_sender: Option<tokio::sync::mpsc::UnboundedSender<crate::execution_record::NodeRecord>>,
     resume_run_id: Option<String>,
     cancel_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pause_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
 ) -> Result<ExecutionRecord> {
     // Validate graph structure and templates before any node runs.
     crate::validate::validate_graph(graph)
@@ -179,6 +180,8 @@ pub async fn run_graph(
 
     // Build adjacency and in-degree maps.
     let (adj, mut in_degree) = build_adj_and_indegree(graph);
+    let original_in_degree = in_degree.clone();
+    let mut skipped_parents_count: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
 
     let suppress_actions = config.suppress_actions;
 
@@ -199,6 +202,18 @@ pub async fn run_graph(
     let mut step_count = 0usize;
 
     while !ready.is_empty() {
+        if let Some(ref flag) = pause_flag {
+            while flag.load(std::sync::atomic::Ordering::Relaxed) {
+                // If cancelled while paused, break out of pause immediately
+                if let Some(ref cflag) = cancel_flag {
+                    if cflag.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+        }
+
         if let Some(ref flag) = cancel_flag {
             if flag.load(std::sync::atomic::Ordering::Relaxed) {
                 record.finish();
@@ -280,9 +295,16 @@ pub async fn run_graph(
             let state_store = state_store.clone();
             let run_id_clone = run_id.clone();
             let already_completed_clone = already_completed.clone();
+            let is_explicit_skipped = skipped.lock().await.contains(&node_id);
+            let sp_count = *skipped_parents_count.get(&node_id).unwrap_or(&0);
+            let in_deg = original_in_degree.get(node_id.as_str()).copied().unwrap_or(0);
+            let should_skip = is_explicit_skipped || match &node_data {
+                NodeType::MergeNode(_) => in_deg > 0 && sp_count >= in_deg,
+                _ => sp_count > 0,
+            };
+
             let handle = tokio::spawn(async move {
-                // If this node was skipped (because an upstream failed), skip it too.
-                if skipped.lock().await.contains(&node_id) {
+                if should_skip {
                     return (node_id.clone(), Err::<String, anyhow::Error>(anyhow!("SKIP")));
                 }
 
@@ -347,7 +369,7 @@ pub async fn run_graph(
         let mut any_failed = false;
         let mut failed_ids: Vec<String> = vec![];
         let mut newly_skipped_ids: Vec<String> = vec![];
-        let mut hit_terminal_node = false;
+        
 
         let abort_handles: Vec<_> = handles.iter().map(|h| h.abort_handle()).collect();
         let mut futures_unordered = futures::stream::FuturesUnordered::new();
@@ -441,7 +463,7 @@ pub async fn run_graph(
 
                     // Check if this is a terminal node (no outgoing edges)
                     if adj.get(node_id.as_str()).map(|deps| deps.is_empty()).unwrap_or(true) {
-                        hit_terminal_node = true;
+                        
                     }
                 }
                 Err(e) if e.to_string() == "SKIP" => {
@@ -465,13 +487,12 @@ pub async fn run_graph(
             }
         }
 
-        // Propagate skip to dependents on explicit skip (e.g., from routing)
+        // Propagate skip to dependents by counting
         if !newly_skipped_ids.is_empty() {
-            let mut skip_guard = skipped.lock().await;
             for skipped_id in &newly_skipped_ids {
                 if let Some(deps) = adj.get(skipped_id.as_str()) {
                     for dep in deps {
-                        skip_guard.insert(dep.to_string());
+                        *skipped_parents_count.entry(dep.to_string()).or_insert(0) += 1;
                     }
                 }
             }
@@ -510,11 +531,7 @@ pub async fn run_graph(
             }
         }
         
-        // Break if we hit a terminal node to bound the execution
-        if hit_terminal_node {
-            record.termination_reason = Some("completed".to_string());
-            break;
-        }
+
     }
 
     // Default termination reason if completed via all ready nodes consumed
@@ -1258,9 +1275,12 @@ async fn execute_node(
                 let cmd_hash = {
                     let mut hasher = blake3::Hasher::new();
                     hasher.update(cfg.command.as_bytes());
+                    if let Some(s) = single.as_deref() {
+                        hasher.update(s.as_bytes());
+                    }
                     format!("blake3:{}", hasher.finalize().to_hex())
                 };
-                let effect_key = format!("blake3:shell:{}", cmd_hash);
+                let effect_key = format!("blake3:shell:{}:{}", node_id, cmd_hash);
                 if let Some(_completed) = state_store.get_side_effect_by_key(&run_id, &effect_key).await {
                     drop(locked);
                     return Ok(format!("Idempotent: shell command already executed (hash: {})", cmd_hash));
@@ -1389,7 +1409,7 @@ async fn execute_node(
 
             // Check for unresolved single-brace placeholders that look like node references
             // and fail loudly if any are left unreplaced.
-            let re = regex::Regex::new(r"\{([a-zA-Z0-9_-]+)\}").unwrap();
+            let re = regex::Regex::new(r"(?:^|[^{])\{([a-zA-Z0-9_-]+)\}(?:[^}]|$)").unwrap();
             if let Some(caps) = re.captures(&pre_resolved) {
                 let placeholder = &caps[1];
                 return Err(anyhow::anyhow!(

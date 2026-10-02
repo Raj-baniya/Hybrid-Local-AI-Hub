@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useChatStore } from '../store/chatStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -38,8 +39,19 @@ export const ChatPanel: React.FC = () => {
   const [providers, setProviders] = useState<{ name: string, model: string }[]>([]);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<string>('');
+  const [enhancing, setEnhancing] = useState(false);
+  const [suggestedPrompt, setSuggestedPrompt] = useState<string | null>(null);
+  const [originalPrompt, setOriginalPrompt] = useState<string | "">("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textAreaRef.current) {
+      textAreaRef.current.style.height = 'auto';
+      textAreaRef.current.style.height = Math.min(textAreaRef.current.scrollHeight, 250) + 'px';
+    }
+  }, [prompt]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -117,26 +129,57 @@ export const ChatPanel: React.FC = () => {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleEnhanceAndGenerate = async () => {
     if (!prompt.trim()) return;
     if (!model) {
-      setError("No model selected — install one in the Model Manager first.");
+      setError("No model selected.");
       return;
     }
 
-    addMessage({ role: 'user', content: prompt });
-    const userPrompt = prompt;
-    setPrompt("");
+    setEnhancing(true);
+    setError("");
+    setSuggestedPrompt(null);
+    setOriginalPrompt(prompt);
+    
+    try {
+      const url = useSettingsStore.getState().ollamaUrl;
+      const response = await fetch(`${url}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model,
+          prompt: `You are an AI assistant helping a user build a professional automation workflow. The user typed: "${prompt}". Fix any spelling or grammatical errors, clarify ambiguous instructions, and make it sound professional and concise. ONLY output the revised prompt. NO conversational filler. NO markdown formatting.`,
+          stream: false
+        })
+      });
+      
+      const data = await response.json();
+      const enhanced = data.response?.trim();
+      
+      if (enhanced && enhanced.toLowerCase() !== prompt.toLowerCase() && !enhanced.toLowerCase().includes('here is the')) {
+        setSuggestedPrompt(enhanced);
+      } else {
+        proceedWithGeneration(prompt);
+      }
+    } catch (err) {
+      console.error("Enhancement failed:", err);
+      proceedWithGeneration(prompt);
+    } finally {
+      setEnhancing(false);
+    }
+  };
 
-    startGeneration(isEditMode, userPrompt);
+  const proceedWithGeneration = (finalPrompt: string) => {
+    addMessage({ role: 'user', content: finalPrompt });
+    setPrompt("");
+    startGeneration(isEditMode, finalPrompt);
     const newTaskId = crypto.randomUUID();
     setTaskId(newTaskId);
     setGenerationProgress('');
 
     const isEdit = isEditMode;
     const currentGraph = isEditMode ? getActiveGraph() : null;
-
-    const payloadMessages = [...messages, { role: 'user', content: userPrompt }];
+    const payloadMessages = [...messages, { role: 'user', content: finalPrompt }];
     const targetChatId = useChatStore.getState().activeChatId || newTaskId;
 
     invoke<Graph>(isEdit ? 'chat_edit' : 'chat_generate', isEdit ? {
@@ -144,12 +187,12 @@ export const ChatPanel: React.FC = () => {
       existingGraph: currentGraph,
       model,
       taskId: newTaskId,
-      offlineMode: isOfflineMode,
+      isOffline: isOfflineMode,
     } : {
       messages: payloadMessages,
       model,
       taskId: newTaskId,
-      offlineMode: isOfflineMode,
+      isOffline: isOfflineMode,
     })
       .then((result) => {
         const assistantMsg = { role: 'assistant', content: `Generated graph: ${result.name || 'Untitled'} (${result.nodes.length} nodes)` };
@@ -159,23 +202,17 @@ export const ChatPanel: React.FC = () => {
         }
 
         const chatId = targetChatId;
-
-        // Build the full messages array including the assistant reply we just added
-        const allMessages = [
-          ...payloadMessages,
-          assistantMsg
-        ];
+        const allMessages = [...payloadMessages, assistantMsg];
 
         const entry = {
           id: chatId,
           timestamp: new Date().toISOString(),
-          instruction: userPrompt,
+          instruction: finalPrompt,
           model,
           graph: result,
           messages: allMessages,
         };
         invoke('save_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode, entry }).then(() => {
-          // Set the active chat ID so subsequent messages update this same entry
           useChatStore.getState().setActiveChatId(chatId);
           useChatStore.getState().fetchHistory();
         }).catch(err => console.error("Failed to save history", err));
@@ -205,10 +242,21 @@ export const ChatPanel: React.FC = () => {
       }
     }
 
-    try {
-      await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode, name: agentName, graph: generatedGraph });
-    } catch (err) {
-      console.error("Failed to auto-save generated agent:", err);
+    const autoSave = useSettingsStore.getState().autoSaveAgents;
+    let shouldSave = autoSave;
+    
+    if (shouldSave === null) {
+      const yes = await confirm('Do you want to automatically save generated agents to your library when loading them onto the canvas?', { title: 'Auto-Save Agents' });
+      useSettingsStore.getState().setAutoSaveAgents(yes);
+      shouldSave = yes;
+    }
+
+    if (shouldSave) {
+      try {
+        await invoke('save_agent', { offlineMode: useSettingsStore.getState().isOfflineMode, name: agentName, graph: generatedGraph });
+      } catch (err) {
+        console.error("Failed to auto-save generated agent:", err);
+      }
     }
 
     if (inNewTab) {
@@ -313,7 +361,7 @@ export const ChatPanel: React.FC = () => {
                   if (loading) return;
                   clearHistory();
                 }}
-                disabled={loading}
+                disabled={loading || enhancing}
                 style={{ padding: '6px 12px', fontSize: 12 }}
               >
                 Clear History
@@ -391,7 +439,44 @@ export const ChatPanel: React.FC = () => {
             ))
           )}
 
-          {loading && (
+                    {suggestedPrompt && (
+            <div style={{
+              padding: 20,
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              borderRadius: 16,
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 600,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-blue)', fontWeight: 600 }}>
+                <Sparkles size={18} /> I noticed some typos or ambiguities. Did you mean this?
+              </div>
+              <div style={{ fontSize: 14, color: 'var(--text-primary)', fontStyle: 'italic', padding: 12, background: 'var(--bg-card)', borderRadius: 8 }}>
+                "{suggestedPrompt}"
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => {
+                  const p = suggestedPrompt;
+                  setSuggestedPrompt(null);
+                  proceedWithGeneration(p);
+                }}>
+                  Yes, use this
+                </button>
+                <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => {
+                  setSuggestedPrompt(null);
+                  proceedWithGeneration(originalPrompt);
+                }}>
+                  No, use my original
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(loading || enhancing) && (
             <div style={{ display: 'flex', gap: 12, maxWidth: '85%' }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
@@ -468,19 +553,19 @@ export const ChatPanel: React.FC = () => {
               <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                 {resultMode ? (
                   <>
-                    <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(false)} disabled={loading}>
+                    <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(false)} disabled={loading || enhancing}>
                       <ArrowRight size={16} /> Update Current Canvas
                     </button>
-                    <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(true)} disabled={loading}>
+                    <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(true)} disabled={loading || enhancing}>
                       <RefreshCw size={16} /> Open as New Tab
                     </button>
                   </>
                 ) : (
                   <>
-                    <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(true)} disabled={loading}>
+                    <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleLoadOntoCanvas(true)} disabled={loading || enhancing}>
                       <ArrowRight size={16} /> Open in New Tab
                     </button>
-                    <button className="btn btn-danger" style={{ flex: 1, justifyContent: 'center', background: 'transparent', border: '1px solid var(--accent-rose)', color: 'var(--accent-rose)' }} onClick={() => handleLoadOntoCanvas(false)} disabled={loading}>
+                    <button className="btn btn-danger" style={{ flex: 1, justifyContent: 'center', background: 'transparent', border: '1px solid var(--accent-rose)', color: 'var(--accent-rose)' }} onClick={() => handleLoadOntoCanvas(false)} disabled={loading || enhancing}>
                       <RefreshCw size={16} /> Overwrite Current
                     </button>
                   </>
@@ -496,7 +581,8 @@ export const ChatPanel: React.FC = () => {
           {/* Text Area Row */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
             <textarea
-              rows={Math.max(3, Math.min(8, prompt.split('\n').length || 1))}
+              ref={textAreaRef}
+              rows={1}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe the workflow you want to build..."
@@ -504,7 +590,7 @@ export const ChatPanel: React.FC = () => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   if (loading) return;
-                  handleGenerate();
+                  handleEnhanceAndGenerate();
                 }
               }}
               style={{
@@ -520,7 +606,7 @@ export const ChatPanel: React.FC = () => {
                 lineHeight: 1.5,
                 maxHeight: 250
               }}
-              disabled={loading}
+              disabled={loading || enhancing}
             />
             {loading ? (
               <button
@@ -534,7 +620,7 @@ export const ChatPanel: React.FC = () => {
             ) : (
               <button
                 className="btn btn-primary"
-                onClick={handleGenerate}
+                onClick={handleEnhanceAndGenerate}
                 disabled={!prompt.trim() || !model}
                 style={{ height: 50, width: 50, borderRadius: '50%', justifyContent: 'center', padding: 0 }}
                 title="Send Request"

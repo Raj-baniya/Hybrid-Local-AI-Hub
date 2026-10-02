@@ -1,5 +1,5 @@
 use crate::agent::tools::ToolCall;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq)]
 pub enum HookDecision {
@@ -16,7 +16,12 @@ pub struct Hooks {
 impl Hooks {
     pub fn new(working_dir: &str, auto_approve: bool) -> Self {
         Self {
-            working_dir: PathBuf::from(working_dir).canonicalize().unwrap_or_else(|_| PathBuf::from(working_dir)),
+            working_dir: {
+            let p = PathBuf::from(working_dir);
+            let c = p.canonicalize().unwrap_or(p);
+            let s = c.to_string_lossy();
+            if s.starts_with(r"\\?\") { PathBuf::from(&s[4..]) } else { c }
+        },
             auto_approve,
         }
     }
@@ -50,7 +55,16 @@ impl Hooks {
                     return HookDecision::Ask;
                 }
 
-                HookDecision::Allow
+                let shell_syntax = ["&", "||", ";", "|", "$", "`"];
+                if shell_syntax.iter().any(|&s| lower_cmd.contains(s)) {
+                    return HookDecision::Ask;
+                }
+                let allowed = ["ls", "dir", "cat", "type", "echo", "pwd"];
+                let exe = lower_cmd.split_whitespace().next().unwrap_or("");
+                if allowed.contains(&exe) {
+                    return HookDecision::Allow;
+                }
+                HookDecision::Ask
             }
             "write_file" => {
                 let path_str = call.parameters.get("path").cloned().unwrap_or_default();
@@ -74,26 +88,29 @@ impl Hooks {
     }
 
     fn is_outside_working_dir(&self, target_path: &str) -> bool {
-        let path = Path::new(target_path);
-        
-        // If it's absolute, check if it starts with working_dir
+        let path = std::path::Path::new(target_path);
+        if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return true;
+        }
         if path.is_absolute() {
             !path.starts_with(&self.working_dir)
         } else {
-            // It's relative, assume it's relative to working_dir, so it's inside unless it contains '..'
-            // Note: A full canonicalize would be better but target might not exist yet.
-            path.components().any(|c| matches!(c, std::path::Component::ParentDir))
+            false
         }
     }
 }
 
 pub fn ask_user(call: &ToolCall) -> bool {
-    // In a real CLI, this would prompt standard input.
-    // We will implement this for the CLI runner later.
-    // For tests, we mock it or default to false.
     println!("DANGEROUS ACTION DETECTED: {:?}", call);
     println!("Do you want to allow this? (y/N)");
-    // default false for now unless overridden in tests
+    
+    let mut input = String::new();
+    if std::io::stdin().read_line(&mut input).is_ok() {
+        let ans = input.trim().to_lowercase();
+        if ans == "y" || ans == "yes" {
+            return true;
+        }
+    }
     false
 }
 

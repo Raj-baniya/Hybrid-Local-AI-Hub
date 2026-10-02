@@ -25,7 +25,7 @@ The Antigravity SDK automatically discovers these servers when configured in the
 To achieve complete automation without human supervision, the system utilizes the Antigravity Automation bridge. This local server eliminates manual interaction by automatically approving execution prompts and interacting with the UI. 
 
 The automation bridge runs entirely on the local machine and exposes two critical local endpoints:
-*   **REST API (Default Port 5000):** Used to programmatically enqueue prompts and manage state. You will utilize the `POST /toggle_auto_run` and `POST /toggle_auto_allow` endpoints to permanently suppress user confirmation dialogs for long-running autonomous sessions.
+*   **REST API (Default Port 5000):** Used to programmatically enqueue prompts and manage state. You will utilize the `POST /toggle_auto_run` and `POST /toggle_auto_allow` endpoints to automatically confirm safe operations, but destructive operations will still require manual user confirmation.
 *   **WebSocket Stream (Default Port 9812):** Used to stream AI reasoning, standard output, and tool execution status in real-time with sub-second latency back to your external dashboards or voice-synthesizers. 
 
 Using the `POST /send_command` endpoint, external scripts or triggers can inject chat instructions directly into the active AI context stream, allowing the agent to react to external programmatic stimuli instantly. 

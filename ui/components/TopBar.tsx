@@ -57,7 +57,7 @@ export const TopBar: React.FC = () => {
   const [nextRunLabel, setNextRunLabel] = useState<string | null>(null);
 
   const hasScheduleNode = (graph: Graph): boolean => {
-    return graph.nodes.some(n => n.data.type === 'ScheduleNode');
+    return graph.nodes.some(n => n.data?.type === 'ScheduleNode');
   };
 
   const applyRecordToCanvas = (record: ExecutionRecord) => {
@@ -288,6 +288,7 @@ export const TopBar: React.FC = () => {
       setExecutionRecord(record);
 
       let finalOutput = "No output generated.";
+console.log(finalOutput);
 
       record.nodes.forEach((nr) => {
         const rawStatus = (nr.status ?? '').toLowerCase();
@@ -501,7 +502,7 @@ export const TopBar: React.FC = () => {
           const graph = getActiveGraph();
           const hasSchedule = hasScheduleNode(graph);
 
-          if (hasSchedule && isScheduledRunning) {
+          if (isScheduledRunning) {
             return (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {nextRunLabel && (

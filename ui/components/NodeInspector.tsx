@@ -3,7 +3,37 @@ import { useWorkflowStore } from '../store/workflowStore';
 import { NodeType } from '../schema/graphSchema';
 import { Trash2, X, Activity, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
+
+const nodeDescriptions: Record<string, string> = {
+  FileWatcherNode: "Monitors a directory for file changes (create, modify, delete) matching a specific pattern. Often used to trigger workflows when a new file arrives.",
+  TextInputNode: "Provides a static text block or a template. You can reference previous node outputs using {{node_id.output}}.",
+  ImageInputNode: "Loads an image from the local filesystem for processing by AI models.",
+  ScheduleNode: "Triggers the workflow repeatedly based on a Cron expression (e.g., '*/5 * * * *' for every 5 minutes).",
+  LLMNode: "Passes input text to the Local AI model to generate text or analyze content.",
+  SystemCommandNode: "Executes a shell command or script on your local operating system.",
+  ExtractRegexNode: "Extracts specific pieces of text using Regular Expressions.",
+  WebScraperNode: "Scrapes the content of a target URL and returns it as plain text.",
+  NotifyWebhookNode: "Sends a POST request to an external URL to notify other systems.",
+  WriteFileNode: "Writes the input content into a specified file on your local disk.",
+  TextCombineNode: "Combines inputs from multiple preceding nodes into a single text string.",
+  PythonScriptNode: "Executes a custom Python script locally.",
+  DelayNode: "Pauses the workflow execution for a specified number of seconds.",
+  ConditionNode: "Evaluates a logical condition based on inputs and routes the flow accordingly.",
+};
+
+const AutoResizeTextarea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => {
+  const ref = React.useRef<HTMLTextAreaElement>(null);
+  React.useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = Math.min(ref.current.scrollHeight, 250) + 'px';
+    }
+  }, [props.value]);
+  return <textarea ref={ref} {...props} />;
+};
+
 export const NodeInspector: React.FC = () => {
+
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useWorkflowStore((s) => s.setSelectedNodeId);
   const activeTabId = useWorkflowStore((s) => s.activeTabId);
@@ -69,7 +99,7 @@ export const NodeInspector: React.FC = () => {
         return (
           <>
             <label style={labelStyle}>Text Content / Template</label>
-            <textarea
+            <AutoResizeTextarea
               rows={6}
               value={data.text}
               onChange={(e) => updateNodeData(selectedNode.id, { text: e.target.value })}
@@ -130,7 +160,7 @@ export const NodeInspector: React.FC = () => {
               ))}
             </select>
             <label style={labelStyle}>Prompt Template</label>
-            <textarea
+            <AutoResizeTextarea
               rows={6}
               value={data.promptTemplate}
               onChange={(e) => updateNodeData(selectedNode.id, { promptTemplate: e.target.value })}
@@ -330,7 +360,7 @@ export const NodeInspector: React.FC = () => {
             <label style={labelStyle}>Webhook URL</label>
             <input type="text" value={data.url || ''} onChange={(e) => updateNodeData(selectedNode.id, { url: e.target.value })} style={inputStyle} placeholder="https://hooks.example.com/..." />
             <label style={labelStyle}>Payload Template</label>
-            <textarea rows={3} value={data.payload || ''} onChange={(e) => updateNodeData(selectedNode.id, { payload: e.target.value })} style={textareaStyle} placeholder='{"text": "{{input}}"}' />
+            <AutoResizeTextarea rows={3} value={data.payload || ''} onChange={(e) => updateNodeData(selectedNode.id, { payload: e.target.value })} style={textareaStyle} placeholder='{"text": "{{input}}"}' />
           </>
         );
 
@@ -361,7 +391,7 @@ export const NodeInspector: React.FC = () => {
         return (
           <>
             <label style={labelStyle}>Template</label>
-            <textarea rows={4} value={data.template || ''} onChange={(e) => updateNodeData(selectedNode.id, { template: e.target.value })} style={textareaStyle} placeholder="Result: {{node_id.output}}" />
+            <AutoResizeTextarea rows={4} value={data.template || ''} onChange={(e) => updateNodeData(selectedNode.id, { template: e.target.value })} style={textareaStyle} placeholder="Result: {{node_id.output}}" />
           </>
         );
 
@@ -412,7 +442,7 @@ export const NodeInspector: React.FC = () => {
         return (
           <>
             <label style={labelStyle}>Required Facts (one per line)</label>
-            <textarea rows={3} value={(data.requiresFacts || []).join('\n')} onChange={(e) => updateNodeData(selectedNode.id, { requiresFacts: e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean) })} style={textareaStyle} />
+            <AutoResizeTextarea rows={3} value={(data.requiresFacts || []).join('\n')} onChange={(e) => updateNodeData(selectedNode.id, { requiresFacts: e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean) })} style={textareaStyle} />
             <label style={labelStyle}>Max Claims</label>
             <input type="number" min={0} value={data.maxClaims ?? 5} onChange={(e) => {
               const val = parseInt(e.target.value, 10);
@@ -425,7 +455,7 @@ export const NodeInspector: React.FC = () => {
         return (
           <>
             <label style={labelStyle}>Objective</label>
-            <textarea rows={3} value={data.objective || ''} onChange={(e) => updateNodeData(selectedNode.id, { objective: e.target.value })} style={textareaStyle} />
+            <AutoResizeTextarea rows={3} value={data.objective || ''} onChange={(e) => updateNodeData(selectedNode.id, { objective: e.target.value })} style={textareaStyle} />
             <label style={labelStyle}>Model Role</label>
             <input type="text" value={data.modelRole || 'planner'} onChange={(e) => updateNodeData(selectedNode.id, { modelRole: e.target.value })} style={inputStyle} />
           </>
@@ -467,6 +497,9 @@ export const NodeInspector: React.FC = () => {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5, padding: "12px", background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border-subtle)" }}>
+          {nodeDescriptions[data.type] || "A custom workflow node."}
+        </div>
         {renderFields()}
 
         {selectedNodeStatus && selectedNodeStatus.status !== 'idle' && (

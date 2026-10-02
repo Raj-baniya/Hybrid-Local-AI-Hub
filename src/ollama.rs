@@ -279,6 +279,50 @@ impl OllamaClient {
         Ok(())
     }
 
+
+    /// Chat with the model using /api/chat which properly supports system prompts.
+    pub async fn chat(
+        &self,
+        model: &str,
+        system: &str,
+        user_prompt: &str,
+    ) -> Result<String> {
+        let body = serde_json::json!({
+            "model": model,
+            "stream": false,
+            "options": { "temperature": 0.1 },
+            "messages": [
+                { "role": "system", "content": system },
+                { "role": "user",   "content": user_prompt }
+            ]
+        });
+
+        let resp = self
+            .try_post("/api/chat", &body)
+            .await
+            .map_err(|e| anyhow!("Ollama chat request failed: {e}"))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Ollama /api/chat returned HTTP {status}: {body_text}"));
+        }
+
+        let val: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| anyhow!("Failed to parse chat response: {e}"))?;
+
+        let content = val
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        Ok(content)
+    }
+
     /// Check whether the Ollama service is reachable at the configured URL.
     pub async fn is_reachable(&self) -> bool {
         self.http

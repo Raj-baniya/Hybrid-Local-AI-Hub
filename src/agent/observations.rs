@@ -15,9 +15,13 @@ pub fn truncate(obs: &str, limit: usize) -> String {
         return obs.to_string();
     }
     let half = limit / 2;
-    let head = &obs[..half];
-    let tail = &obs[obs.len() - half..];
-    format!("{}\n\n[... {} chars omitted ...]\n\n{}", head, obs.len() - limit, tail)
+    let mut head_idx = half;
+    while head_idx > 0 && !obs.is_char_boundary(head_idx) { head_idx -= 1; }
+    let mut tail_idx = obs.len() - half;
+    while tail_idx < obs.len() && !obs.is_char_boundary(tail_idx) { tail_idx += 1; }
+    let head = &obs[..head_idx];
+    let tail = &obs[tail_idx..];
+    format!("{}\n\n[... {} bytes omitted ...]\n\n{}", head, tail_idx - head_idx, tail)
 }
 
 pub struct AgentState {

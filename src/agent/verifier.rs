@@ -98,6 +98,11 @@ pub async fn verify_deterministic(
                 let tc = ToolCall { name: "run_command".to_string(), parameters: params };
                 
                 let decision = hooks.pre(&tc).await;
+                if matches!(decision, HookDecision::Ask) && !hooks.auto_approve {
+                    all_passed = false;
+                    results.push(CriterionResult { id: c.id.clone(), passed: false, detail: "Command requires approval.".into() });
+                    continue;
+                }
                 if matches!(decision, HookDecision::Deny(_)) {
                     all_passed = false;
                     results.push(CriterionResult { id: c.id.clone(), passed: false, detail: "Command denied by safety hooks.".into() });
@@ -110,8 +115,9 @@ pub async fn verify_deterministic(
                 {
                     if let Ok(mut child) = tokio::process::Command::new("cmd")
                         .args(&["/C", command])
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .kill_on_drop(true)
                         .spawn()
                     {
                         if let Ok(Ok(status)) = tokio::time::timeout(std::time::Duration::from_secs(10), child.wait()).await {
@@ -123,8 +129,9 @@ pub async fn verify_deterministic(
                 {
                     if let Ok(mut child) = tokio::process::Command::new("sh")
                         .args(&["-c", command])
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .kill_on_drop(true)
                         .spawn()
                     {
                         if let Ok(Ok(status)) = tokio::time::timeout(std::time::Duration::from_secs(10), child.wait()).await {

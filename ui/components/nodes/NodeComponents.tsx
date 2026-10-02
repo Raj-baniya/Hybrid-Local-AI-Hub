@@ -48,7 +48,7 @@ export const FileWatcherNodeComponent: React.FC<NodeProps> = ({ id, data, select
       icon={<FolderSearch size={16} />}
       headerColor="#06b6d4"
       selected={selected}
-      hasTargetHandle={false}
+      hasTargetHandle={true}
       hasSourceHandle={true}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -76,7 +76,7 @@ export const ScheduleNodeComponent: React.FC<NodeProps> = ({ id, data, selected 
       icon={<Clock size={16} />}
       headerColor="#f59e0b"
       selected={selected}
-      hasTargetHandle={false}
+      hasTargetHandle={true}
       hasSourceHandle={true}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -101,7 +101,7 @@ export const TextInputNodeComponent: React.FC<NodeProps> = ({ id, data, selected
       hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ maxHeight: 60, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-secondary)' }}>
+      <div style={{ color: 'var(--text-secondary)' }}>
         {cfg.text || '(empty)'}
       </div>
     </CustomNodeWrapper>
@@ -117,10 +117,10 @@ export const ImageInputNodeComponent: React.FC<NodeProps> = ({ id, data, selecte
       icon={<ImageIcon size={16} />}
       headerColor="#a855f7"
       selected={selected}
-      hasTargetHandle={false}
+      hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ fontFamily: 'monospace', color: '#c084fc', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div style={{ fontFamily: 'monospace', color: '#c084fc', overflowWrap: 'anywhere' }}>
         {cfg.imagePath}
       </div>
     </CustomNodeWrapper>
@@ -184,7 +184,7 @@ export const OllamaSelectorNodeComponent: React.FC<NodeProps> = ({ id, data, sel
             ))}
           </select>
         </div>
-        <div style={{ maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-secondary)', fontSize: 11 }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 11, overflowWrap: 'anywhere' }}>
           {cfg.promptTemplate}
         </div>
       </div>
@@ -265,7 +265,7 @@ export const ConditionalRouterNodeComponent: React.FC<NodeProps> = ({ id, data, 
       headerColor="#ec4899"
       selected={selected}
       hasTargetHandle={true}
-      hasSourceHandle={false}
+      hasSourceHandle={true}
       sourceHandles={[
         { id: 'true', label: 'True' },
         { id: 'false', label: 'False' },
@@ -294,10 +294,10 @@ export const LocalFileWriterNodeComponent: React.FC<NodeProps> = ({ id, data, se
       headerColor="#14b8a6"
       selected={selected}
       hasTargetHandle={true}
-      hasSourceHandle={false}
+      hasSourceHandle={true}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ fontFamily: 'monospace', color: '#2dd4bf', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontFamily: 'monospace', color: '#2dd4bf', overflowWrap: 'anywhere' }}>
           {cfg.outputPath}
         </div>
         <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
@@ -313,7 +313,7 @@ export const WebScraperNodeComponent: React.FC<NodeProps> = ({ id, data, selecte
   return (
     <CustomNodeWrapper id={id} title="Web Scraper (Online)" icon={<Globe size={16} />} headerColor="#3b82f6" selected={selected} hasTargetHandle={true} hasSourceHandle={true}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.url}</div>
+        <div style={{ overflowWrap: 'anywhere' }}>{cfg.url}</div>
         <div style={{ fontSize: 9, color: '#f43f5e', fontWeight: 700 }}>ONLINE ONLY</div>
       </div>
     </CustomNodeWrapper>
@@ -332,7 +332,7 @@ export const ShellCommandNodeComponent: React.FC<NodeProps> = ({ id, data, selec
       hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ fontFamily: 'monospace', color: '#f87171', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ fontFamily: 'monospace', color: '#f87171', overflowWrap: 'anywhere' }}>
         {cfg.command}
       </div>
     </CustomNodeWrapper>
@@ -376,10 +376,10 @@ export const SourceFileNodeComponent: React.FC<NodeProps> = ({ id, data, selecte
       icon={<FileSpreadsheet size={16} />}
       headerColor="#0284c7"
       selected={selected}
-      hasTargetHandle={false}
+      hasTargetHandle={true}
       hasSourceHandle={true}
     >
-      <div style={{ fontFamily: 'monospace', color: '#38bdf8', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div style={{ fontFamily: 'monospace', color: '#38bdf8', overflowWrap: 'anywhere' }}>
         {cfg.path}
       </div>
     </CustomNodeWrapper>

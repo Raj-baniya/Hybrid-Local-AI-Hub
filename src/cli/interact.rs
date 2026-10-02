@@ -131,6 +131,7 @@ pub async fn interact(args: InteractArgs) -> Result<()> {
                 None,
                 None,
                 None,
+                None,
             ).await;
             
             match result {

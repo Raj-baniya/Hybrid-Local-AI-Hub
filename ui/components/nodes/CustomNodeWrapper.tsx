@@ -29,7 +29,6 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
 }) => {
   const status = useWorkflowStore((s) => s.nodeStatusMap[id]);
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
-  const setSelectedNodeId = useWorkflowStore((s) => s.setSelectedNodeId);
 
   const getStatusBadge = () => {
     if (!status || status.status === 'idle') return null;
@@ -73,7 +72,6 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
       </NodeToolbar>
       <div
       className="custom-node-card"
-      onClick={() => setSelectedNodeId(id)}
       style={{
         width: 280,
         borderRadius: 12,

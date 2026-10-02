@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ReactFlowProvider } from '@xyflow/react';
 import { TopBar } from './components/TopBar';
@@ -10,10 +10,11 @@ import { LogPanel } from './components/LogPanel';
 import { ModelManager } from './components/ModelManager';
 import { SavedAgentsPanel } from './components/SavedAgentsPanel';
 import { HelpAgentPanel } from './components/HelpAgentPanel';
+import { TerminalAgentPanel } from './components/TerminalAgentPanel';
 import { SetupWizard } from './components/SetupWizard';
 import { SavePromptModal } from './components/SavePromptModal';
+import { SettingsModal } from './components/SettingsModal';
 import { AgentOutputPanel } from './components/AgentOutputPanel';
-import { NodeInspectorPanel } from './components/NodeInspectorPanel';
 import { useWorkflowStore } from './store/workflowStore';
 
 type OllamaStatus =
@@ -24,9 +25,40 @@ type OllamaStatus =
 export const App: React.FC = () => {
   const activePanel = useWorkflowStore((s) => s.activePanel);
   const showOutputPanel = useWorkflowStore((s) => s.showOutputPanel);
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
-  const [showWizard, setShowWizard] = useState<boolean | null>(null);
+    const [showWizard, setShowWizard] = useState<boolean | null>(null);
   const theme = useWorkflowStore((s) => s.theme);
+
+  const [leftWidth, setLeftWidth] = useState<number>(360);
+  const isResizingLeft = useRef(false);
+  const [rightWidth, setRightWidth] = useState<number>(400);
+  const isResizingRight = useRef(false);
+
+  useEffect(() => {
+    setLeftWidth((activePanel === 'chat' || activePanel === 'help' || activePanel === 'logs') ? 750 : 360);
+  }, [activePanel]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingLeft.current) {
+        setLeftWidth(Math.max(250, Math.min(e.clientX - 60, window.innerWidth - rightWidth - 100))); 
+      }
+      if (isResizingRight.current) {
+        setRightWidth(Math.max(250, Math.min(window.innerWidth - e.clientX, window.innerWidth - leftWidth - 100)));
+      }
+    };
+    const handleMouseUp = () => {
+      isResizingLeft.current = false;
+      isResizingRight.current = false;
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [leftWidth, rightWidth]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -117,39 +149,77 @@ export const App: React.FC = () => {
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
             
             {/* Active Side Panel */}
-            {activePanel !== 'none' && (
-              <div style={{ width: (activePanel === 'chat' || activePanel === 'help' || activePanel === 'logs') ? 750 : 360, height: '100%', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'width 0.2s ease-in-out' }}>
-                <div style={{ display: activePanel === 'nodes' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
-                  <NodePalette />
+            {activePanel !== 'none' && activePanel !== 'terminalAgent' && (
+              <>
+                <div style={{ width: leftWidth, height: '100%', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                  <div style={{ display: activePanel === 'nodes' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
+                    <NodePalette />
+                  </div>
+                  <div style={{ display: activePanel === 'chat' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
+                    <ChatPanel />
+                  </div>
+                  <div style={{ display: activePanel === 'logs' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
+                    <LogPanel />
+                  </div>
+                  <div style={{ display: activePanel === 'models' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
+                    <ModelManager />
+                  </div>
+                  <div style={{ display: activePanel === 'agents' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
+                    <SavedAgentsPanel />
+                  </div>
+                  <div style={{ display: activePanel === 'help' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
+                    <HelpAgentPanel />
+                  </div>
                 </div>
-                <div style={{ display: activePanel === 'chat' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
-                  <ChatPanel />
-                </div>
-                <div style={{ display: activePanel === 'logs' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
-                  <LogPanel />
-                </div>
-                <div style={{ display: activePanel === 'models' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
-                  <ModelManager />
-                </div>
-                <div style={{ display: activePanel === 'agents' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
-                  <SavedAgentsPanel />
-                </div>
-                <div style={{ display: activePanel === 'help' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
-                  <HelpAgentPanel />
-                </div>
-              </div>
+                {/* Drag Handle */}
+                <div 
+                  onMouseDown={() => {
+                    isResizingLeft.current = true;
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                  }}
+                  style={{
+                    width: 4,
+                    cursor: 'col-resize',
+                    background: 'var(--border-subtle)',
+                    zIndex: 50,
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-blue)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--border-subtle)'}
+                />
+              </>
             )}
 
             {/* Main Canvas */}
             <div style={{ flex: 1, position: 'relative' }}>
-              <GraphCanvas />
+              {activePanel === 'terminalAgent' ? <TerminalAgentPanel /> : <GraphCanvas />}
             </div>
 
             {/* Output Panel / Inspector Panel on Right */}
-            {(showOutputPanel || selectedNodeId) && (
-              <div style={{ width: 400, height: '100%', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                {selectedNodeId ? <NodeInspectorPanel /> : <AgentOutputPanel />}
-              </div>
+            {showOutputPanel && (
+              <>
+                {/* Right Drag Handle */}
+                <div 
+                  onMouseDown={() => {
+                    isResizingRight.current = true;
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                  }}
+                  style={{
+                    width: 4,
+                    cursor: 'col-resize',
+                    background: 'var(--border-subtle)',
+                    zIndex: 50,
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-blue)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--border-subtle)'}
+                />
+                <div style={{ width: rightWidth, height: '100%', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                  <AgentOutputPanel />
+                </div>
+              </>
             )}
 
           </div>

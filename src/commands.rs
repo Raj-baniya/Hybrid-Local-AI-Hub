@@ -1271,7 +1271,6 @@ pub async fn run_graph_scheduled(
                     None,
                     None,
                     Some(c_flag),
-                    None,
                 )
                 .await
                 {
@@ -1372,6 +1371,7 @@ pub async fn cancel_manual_graph(
     state.cancel_flag.store(true, Ordering::Relaxed);
     Ok(())
 }
+
 #[tauri::command]
 pub async fn pause_manual_graph(
     state: State<'_, ManualRunState>,
@@ -1388,6 +1388,21 @@ pub async fn resume_manual_graph(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn pause_manual_graph(
+    state: State<'_, ManualRunState>,
+) -> Result<(), String> {
+    state.pause_flag.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn resume_manual_graph(
+    state: State<'_, ManualRunState>,
+) -> Result<(), String> {
+    state.pause_flag.store(false, Ordering::Relaxed);
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn stop_scheduled_graph(

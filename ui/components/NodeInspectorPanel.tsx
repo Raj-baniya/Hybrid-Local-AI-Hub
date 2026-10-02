@@ -70,7 +70,7 @@ export const NodeInspectorPanel: React.FC = () => {
         
         <div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>TYPE</div>
-          <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{node.data.type}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{String(node.data.type)}</div>
         </div>
 
         <div>

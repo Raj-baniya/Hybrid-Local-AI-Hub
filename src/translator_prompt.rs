@@ -14,15 +14,12 @@ pub fn build_system_prompt(is_offline: bool) -> String {
 
     let mut instructions = INSTRUCTIONS_SECTION.to_string();
 
+    let node_count = if is_offline { "24" } else { "26" };
+    schema = schema.replace("26 Node Types Available", &format!("{} Node Types Available", node_count));
+    instructions = instructions.replace("26 available node types", &format!("{} available node types", node_count));
+    instructions = instructions.replace("outside the 26 available nodes", &format!("outside the {} available nodes", node_count));
     if is_offline {
-        schema = schema.replace("26 Node Types Available", "24 Node Types Available");
-        instructions = instructions.replace("26 available node types", "24 available node types");
-        instructions = instructions.replace("outside the 26 available nodes", "outside the 24 available nodes");
-        instructions = instructions.replace("outside the 31 available nodes", "outside the 24 available nodes");
-        instructions = instructions.replace(
-            "NOTE: The following analytics nodes are currently UNAVAILABLE and MUST NOT be used:",
-            "NOTE: WebScraperNode and NotifyWebhookNode are online-only and MUST NOT be used in Strict Offline Mode."
-        );
+        instructions.push_str("\nNOTE: WebScraperNode and NotifyWebhookNode are online-only and MUST NOT be used in Strict Offline Mode.");
     }
 
     let mut examples = EXAMPLES_SECTION.to_string();
@@ -231,7 +228,7 @@ const SCHEMA_SECTION_PART_2: &str = r#"
 - ConditionalRouterNode `trueTarget` and `falseTarget` must be existing node ids.
 - `{{input}}` is only valid on nodes with exactly one incoming edge. Otherwise use `{{node_id.output}}`.
 - A TextInputNode with zero incoming edges MUST contain real hardcoded text (e.g. "My customer complaint is about billing"). NEVER use `{{input}}` on a source TextInputNode.
-- The closed vocabulary is exactly the 26 available node types defined above. The analytics and notification nodes are available. Do not invent new types.
+- The closed vocabulary is exactly the 26 available node types defined above. The analytics and notification nodes are available. Do not invent new types. IMPORTANT: NEVER use `LocalFileStoreNode`. Use `LocalFileWriterNode` to save files.
 - ALWAYS use a highly specific filename for LocalFileWriterNode `outputPath` based on the task (e.g. `./Agent JSON files/Agent Output/fitness_plan.txt` instead of generic `result.txt`) so multiple agents don't overwrite each other's outputs.
 - YOU ARE AN EXPERT PROMPT ENGINEER. When generating `promptTemplate` for `OllamaSelectorNode`, NEVER use a basic one-liner like "Summarize this: {{input}}". You MUST generate a highly detailed, professional prompt containing: 1) A clear persona/role, 2) Step-by-step thinking instructions, and 3) Strict output formatting constraints. For example: "You are an expert financial analyst. Read the following text and extract key metrics. Think step-by-step. Output your final answer as a markdown list. Text to analyze:\n\n{{input}}"
 "#;

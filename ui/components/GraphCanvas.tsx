@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -8,6 +8,7 @@ import {
   ReactFlowInstance,
   BackgroundVariant,
   Panel,
+  Node,
 } from '@xyflow/react';
 import { Undo2, Redo2 } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
@@ -37,13 +38,16 @@ export const GraphCanvas: React.FC = () => {
   const theme = useWorkflowStore((s) => s.theme);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
-  const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+  const [clipboard, setClipboard] = useState<Node[]>([]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
       const key = e.key.toLowerCase();
+      
+      // Undo / Redo
       if ((e.ctrlKey || e.metaKey) && key === 'z') {
         if (e.shiftKey) redo();
         else undo();
@@ -52,10 +56,50 @@ export const GraphCanvas: React.FC = () => {
         redo();
         e.preventDefault();
       }
+      
+      // Delete
+      else if (key === 'delete' || key === 'backspace') {
+        const selected = activeTab.nodes.filter(n => n.selected);
+        if (selected.length > 0) {
+           pushHistory();
+           deleteNodes(selected.map(n => n.id));
+        }
+      }
+
+      // Copy
+      else if ((e.ctrlKey || e.metaKey) && key === 'c') {
+         const selected = activeTab.nodes.filter(n => n.selected);
+         if (selected.length > 0) {
+            setClipboard(JSON.parse(JSON.stringify(selected)));
+         }
+      }
+
+      // Paste
+      else if ((e.ctrlKey || e.metaKey) && key === 'v') {
+         if (clipboard.length > 0) {
+            pushHistory();
+            const newNodes = clipboard.map((n, i) => {
+                const nodeType = (n.data as any).type || 'unknown';
+                const newId = `${nodeType.toLowerCase().replace('node', '')}_${Date.now().toString().slice(-4)}${i}`;
+                return {
+                   ...n,
+                   id: newId,
+                   position: { x: n.position.x + 30, y: n.position.y + 30 },
+                   selected: true,
+                };
+            });
+            // Deselect old nodes
+            onNodesChange(activeTab.nodes.map(n => ({ id: n.id, type: 'select', selected: false } as any)));
+            
+            const addChanges = newNodes.map(n => ({ type: 'add', item: n }));
+            onNodesChange(addChanges as any);
+         }
+      }
     };
+    
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, activeTab.nodes, pushHistory, deleteNodes, clipboard, onNodesChange]);
 
   const handleConnect = useCallback(
     (params: Connection) => {
@@ -72,15 +116,11 @@ export const GraphCanvas: React.FC = () => {
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  const onDragEnter = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-  }, []);
-
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
 
-      const type = event.dataTransfer.getData('application/reactflow') as NodeType['type'];
+      const type = event.dataTransfer.getData('application/reactflow') as NodeType['type'] || event.dataTransfer.getData('text/plain') as NodeType['type'];
       if (!type || !rfInstance || !reactFlowWrapper.current) return;
 
       const position = rfInstance.screenToFlowPosition({
@@ -99,7 +139,6 @@ export const GraphCanvas: React.FC = () => {
       style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg-primary)' }}
       onDrop={onDrop}
       onDragOver={onDragOver}
-      onDragEnter={onDragEnter}
     >
       <ReactFlow
         nodes={activeTab.nodes}
@@ -110,8 +149,10 @@ export const GraphCanvas: React.FC = () => {
         nodeTypes={customNodeTypes}
         onInit={setRfInstance}
         onPaneClick={() => setSelectedNodeId(null)}
+        onNodeClick={(_, node) => setSelectedNodeId(node.id)}
         onNodesDelete={(nodes) => deleteNodes(nodes.map((n) => n.id))}
         onNodeDragStart={() => pushHistory()}
+        deleteKeyCode={["Backspace", "Delete"]}
         fitView
         snapToGrid
         snapGrid={[15, 15]}
@@ -143,7 +184,7 @@ export const GraphCanvas: React.FC = () => {
           <button 
             onClick={redo} 
             disabled={!canRedo} 
-            title="Redo (Ctrl+Y)"
+            title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
             style={{ 
               background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, 
               padding: '6px', color: canRedo ? 'var(--text-primary)' : 'var(--text-muted)',
@@ -155,22 +196,31 @@ export const GraphCanvas: React.FC = () => {
           </button>
         </Panel>
 
-        <Controls
-          style={{
-            background: 'var(--bg-glass)',
-            borderColor: 'var(--border-subtle)',
-            fill: 'var(--text-muted)',
-            borderRadius: 8,
-          }}
+        <Controls 
+           style={{ 
+              background: 'var(--bg-card)', 
+              border: '1px solid var(--border-medium)', 
+              borderRadius: 8,
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              overflow: 'hidden'
+           }} 
         />
-        <MiniMap
-          nodeColor={() => 'var(--bg-tertiary)'}
-          maskColor={theme === 'dark' ? 'rgba(9, 13, 22, 0.75)' : 'rgba(255, 255, 255, 0.75)'}
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 8,
+        <MiniMap 
+          nodeColor={(node) => {
+            switch (node.type) {
+              case 'ScheduleNode': return '#f59e0b';
+              case 'TextInputNode': return '#3b82f6';
+              case 'AiPlanNode': return '#e11d48';
+              default: return theme === 'dark' ? '#475569' : '#cbd5e1';
+            }
           }}
+          maskColor={theme === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.7)'}
+          style={{ 
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-medium)',
+            borderRadius: 8,
+            overflow: 'hidden'
+          }} 
         />
       </ReactFlow>
     </div>

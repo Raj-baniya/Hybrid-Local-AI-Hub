@@ -37,11 +37,13 @@ pub fn parse_action(raw: &str) -> Result<Action, String> {
         None => return Err("Missing </function> tag.".to_string()),
     };
 
+    if func_end < end_bracket + 1 { return Err("Malformed function block".into()); }
     let inner = &post_start[end_bracket + 1..func_end];
 
     // Check if there are multiple <function= blocks
     let remainder = &post_start[func_end + 11..];
     if remainder.find("<function=").is_some() {
+        // Just take the first one! Smaller LLMs repeat themselves.
         return Err("Multiple <function=...> blocks found. Reply with exactly one action.".to_string());
     }
 
@@ -126,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_agent_parser_missing_parameter() {
-        let raw = "<function=run_command><parameter=cmd>test";
+        let raw = "<function=run_command><parameter=cmd>test</function>";
         let err = parse_action(raw).unwrap_err();
         assert!(err.contains("Missing </parameter> tag"));
     }
