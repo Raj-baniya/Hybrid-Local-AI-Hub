@@ -13,13 +13,9 @@ import {
   FolderOpen,
   Sparkles,
   ScrollText,
-  Cpu,
   Plus,
   X,
   Loader2,
-  Moon,
-  Sun,
-  Bot,
   LifeBuoy,
 } from 'lucide-react';
 import { PreRunDialog } from './PreRunDialog';
@@ -44,8 +40,7 @@ export const Navbar: React.FC = () => {
   const setNodeStatus = useWorkflowStore((s) => s.setNodeStatus);
   const clearNodeStatuses = useWorkflowStore((s) => s.clearNodeStatuses);
   const setExecutionRecord = useWorkflowStore((s) => s.setExecutionRecord);
-  const theme = useWorkflowStore((s) => s.theme);
-  const setTheme = useWorkflowStore((s) => s.setTheme);
+  const isOfflineMode = useSettingsStore((s) => s.isOfflineMode);
 
   const isPreRunDialogOpen = useWorkflowStore((s) => s.isPreRunDialogOpen);
   const setPreRunDialogOpen = useWorkflowStore((s) => s.setPreRunDialogOpen);

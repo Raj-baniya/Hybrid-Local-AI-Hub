@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { useWorkflowStore } from '../store/workflowStore';
-import { Cpu, Download, CheckCircle, AlertCircle, Loader2, RefreshCw, X, StopCircle, Trash2 } from 'lucide-react';
+import { Download, CheckCircle, AlertCircle, Loader2, RefreshCw, StopCircle, Trash2 } from 'lucide-react';
 
 type OllamaStatus =
   | { state: "NotRunning" }
@@ -30,8 +29,6 @@ const RECOMMENDED_MODELS = [
 ];
 
 export const ModelManager: React.FC = () => {
-  const setActivePanel = useWorkflowStore((s) => s.setActivePanel);
-
   const [status, setStatus] = useState<OllamaStatus | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -267,4 +264,3 @@ export const ModelManager: React.FC = () => {
     </div>
   );
 };
-
