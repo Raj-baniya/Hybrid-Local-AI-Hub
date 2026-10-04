@@ -14,11 +14,8 @@ import {
   Plus,
   X,
   Loader2,
-  Moon,
-  Sun,
 } from 'lucide-react';
 import { PreRunDialog } from './PreRunDialog';
-import { SettingsModal } from './SettingsModal';
 
 export const TopBar: React.FC = () => {
   const tabs = useWorkflowStore((s) => s.tabs);
@@ -41,8 +38,6 @@ export const TopBar: React.FC = () => {
   const setNodeStatus = useWorkflowStore((s) => s.setNodeStatus);
   const clearNodeStatuses = useWorkflowStore((s) => s.clearNodeStatuses);
   const setExecutionRecord = useWorkflowStore((s) => s.setExecutionRecord);
-  const theme = useWorkflowStore((s) => s.theme);
-  const setTheme = useWorkflowStore((s) => s.setTheme);
 
   const isPreRunDialogOpen = useWorkflowStore((s) => s.isPreRunDialogOpen);
   const setPreRunDialogOpen = useWorkflowStore((s) => s.setPreRunDialogOpen);
@@ -256,7 +251,8 @@ export const TopBar: React.FC = () => {
               <div style={{ fontSize: 16 }}>{preflightStatus}</div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {executionModalOutput !== null && (
