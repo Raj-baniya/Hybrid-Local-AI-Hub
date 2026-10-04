@@ -2,7 +2,6 @@ import { useSettingsStore } from './settingsStore';
 import { create } from "zustand";
 import { Graph } from "../schema/graphSchema";
 import { invoke } from "@tauri-apps/api/core";
-import { useWorkflowStore } from "./workflowStore";
 
 export type ChatGenerationStatus = "idle" | "generating" | "success" | "error";
 
@@ -66,7 +65,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   
   fetchHistory: async () => {
     try {
-      const history = await invoke('list_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode });
+      const history = await invoke<ChatHistoryEntry[]>('list_chat_history', { offlineMode: useSettingsStore.getState().isOfflineMode });
       set({ history });
     } catch (e) {
       console.error("Failed to load chat history", e);
