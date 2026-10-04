@@ -38,7 +38,7 @@ impl ToolBox {
         let path = std::path::Path::new(p);
         if path.is_absolute() { path.to_path_buf() } else { self.workspace.join(path) }
     }
-    pub async fn execute(&self, call: &ToolCall, deadline: std::time::Instant) -> String {
+    pub async fn execute(&self, call: &ToolCall, _deadline: std::time::Instant) -> String {
         match call.name.as_str() {
             "run_command" => {
                 let cmd = call.parameters.get("command").cloned().unwrap_or_default();
@@ -246,7 +246,7 @@ mod tests {
             ])),
         };
         let cfg = AgentConfig { task: Some("x".into()), goal: None };
-        let rep = run_agent(cfg, &fake_llm, &ToolBox::new(), &Hooks::new(".", false)).await.unwrap();
+        let rep = run_agent(cfg, &fake_llm, &ToolBox::new(std::path::PathBuf::from(".")), &Hooks::new(".", false)).await.unwrap();
         assert_eq!(rep.reason, StopReason::Stalled);
     }
 }

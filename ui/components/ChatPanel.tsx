@@ -6,7 +6,7 @@ import { useWorkflowStore } from '../store/workflowStore';
 import { useChatStore } from '../store/chatStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { Graph } from '../schema/graphSchema';
-import { Sparkles, ArrowRight, CheckCircle, AlertCircle, Loader2, RefreshCw, X, Send, Bot, User, StopCircle } from 'lucide-react';
+import { Sparkles, ArrowRight, CheckCircle, AlertCircle, Loader2, RefreshCw, X, Send, Bot, User, StopCircle, Settings, Zap, Network } from 'lucide-react';
 import { ChatHistorySidebar } from './ChatHistorySidebar';
 
 type OllamaStatus =
@@ -48,8 +48,9 @@ export const ChatPanel: React.FC = () => {
 
   useEffect(() => {
     if (textAreaRef.current) {
-      textAreaRef.current.style.height = 'auto';
-      textAreaRef.current.style.height = Math.min(textAreaRef.current.scrollHeight, 250) + 'px';
+      textAreaRef.current.style.height = '52px';
+      const scrollH = textAreaRef.current.scrollHeight;
+      textAreaRef.current.style.height = Math.max(52, Math.min(scrollH, 250)) + 'px';
     }
   }, [prompt]);
 
@@ -77,10 +78,12 @@ export const ChatPanel: React.FC = () => {
   useEffect(() => {
     const currentModel = useChatStore.getState().model;
     if (isOfflineMode) {
+      // Always allow Nemotron Superfast even with no local models
+      if (currentModel === 'NEMOTRON_SUPER') return;
       const valid = installedModels.some(m => m.name === currentModel);
       if (!valid) {
-        if (installedModels.length > 0) setModel(installedModels[0].name);
-        else setModel('');
+        // Default to Nemotron Superfast in offline mode
+        setModel('NEMOTRON_SUPER');
       }
     } else {
       const validApiValues = providers.map(p => `API|${p.name}|${p.model}`);
@@ -182,17 +185,20 @@ export const ChatPanel: React.FC = () => {
     const payloadMessages = [...messages, { role: 'user', content: finalPrompt }];
     const targetChatId = useChatStore.getState().activeChatId || newTaskId;
 
+    const isNemotron = model === 'NEMOTRON_SUPER';
+    const actualModel = isNemotron ? 'API|NVIDIA|nvidia/nemotron-3-super-120b-a12b' : model;
+    const actualOffline = isNemotron ? false : isOfflineMode;
     invoke<Graph>(isEdit ? 'chat_edit' : 'chat_generate', isEdit ? {
       messages: payloadMessages,
       existingGraph: currentGraph,
-      model,
+      model: actualModel,
       taskId: newTaskId,
-      isOffline: isOfflineMode,
+      isOffline: actualOffline,
     } : {
       messages: payloadMessages,
-      model,
+      model: actualModel,
       taskId: newTaskId,
-      isOffline: isOfflineMode,
+      isOffline: actualOffline,
     })
       .then((result) => {
         const assistantMsg = { role: 'assistant', content: `Generated graph: ${result.name || 'Untitled'} (${result.nodes.length} nodes)` };
@@ -268,6 +274,8 @@ export const ChatPanel: React.FC = () => {
     reset();
   };
 
+  const [showHistory, setShowHistory] = useState(false);
+
   return (
     <div
       className="animate-slide-in-right"
@@ -276,9 +284,10 @@ export const ChatPanel: React.FC = () => {
         height: '100%',
         display: 'flex',
         flexDirection: 'row',
+        position: 'relative',
       }}
     >
-      <ChatHistorySidebar />
+      {showHistory && <ChatHistorySidebar />}
       <div style={{
         flex: 1,
         background: 'var(--bg-secondary)',
@@ -290,7 +299,7 @@ export const ChatPanel: React.FC = () => {
           style={{
             padding: '16px 20px',
             background: 'var(--bg-card)',
-            borderBottom: '1px solid var(--border-subtle)',
+            borderBottom: '1px solid var(--neo-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -305,13 +314,20 @@ export const ChatPanel: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Chat-to-Graph Compiler</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowHistory(!showHistory)}
+                  style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, height: 24 }}
+                >
+                  {showHistory ? 'Hide History' : 'History'}
+                </button>
                 <select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   style={{
                     padding: '4px 8px',
                     background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
+                    border: '1px solid var(--neo-border)',
                     borderRadius: 6,
                     color: 'var(--text-primary)',
                     fontSize: 11,
@@ -321,13 +337,12 @@ export const ChatPanel: React.FC = () => {
                   }}
                 >
                   {isOfflineMode ? (
-                    installedModels.length === 0 ? (
-                      <option value="">No local models</option>
-                    ) : (
-                      installedModels.map((m) => (
+                    <>
+                      <option value="NEMOTRON_SUPER">⚡ Superfast Model</option>
+                      {installedModels.map((m) => (
                         <option key={m.name} value={m.name}>{m.name}</option>
-                      ))
-                    )
+                      ))}
+                    </>
                   ) : (
                     providers.length === 0 ? (
                       <option value="">No API models configured</option>
@@ -395,10 +410,37 @@ export const ChatPanel: React.FC = () => {
         >
           {messages.length === 0 && !loading && !error && !generatedGraph ? (
             <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', maxWidth: 400 }}>
-              <Sparkles size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
-              <h3 style={{ fontSize: 18, color: 'var(--text-primary)', marginBottom: 8 }}>How can I help you?</h3>
+              <div style={{ position: 'relative', width: 200, height: 200, margin: '0 auto 24px auto', animation: 'float 6s ease-in-out infinite' }}>
+                 {/* Central Core */}
+                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, background: 'var(--bg-card)', border: '4px solid var(--accent-cyan)', borderRadius: '50%', padding: 16, animation: 'pulse-glow 3s infinite', boxShadow: '0 0 0 8px rgba(6, 182, 212, 0.1)' }}>
+                    <Sparkles size={32} style={{ color: 'var(--accent-cyan)' }} />
+                 </div>
+                 {/* Orbiting Elements */}
+                 <div style={{ position: 'absolute', top: '20%', left: '10%', animation: 'float 4s ease-in-out infinite alternate' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '2px solid var(--accent-amber)', borderRadius: '50%', padding: 8, animation: 'spin-slow 10s linear infinite' }}>
+                       <Settings size={20} color="var(--accent-amber)" />
+                    </div>
+                 </div>
+                 <div style={{ position: 'absolute', bottom: '20%', right: '10%', animation: 'float 5s ease-in-out infinite alternate-reverse' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '2px solid var(--accent-violet)', borderRadius: '50%', padding: 8, animation: 'pulse-glow 4s infinite' }}>
+                       <Network size={20} color="var(--accent-violet)" />
+                    </div>
+                 </div>
+                 <div style={{ position: 'absolute', top: '20%', right: '15%', animation: 'float 4.5s ease-in-out infinite alternate' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '2px solid var(--accent-emerald)', borderRadius: '50%', padding: 8 }}>
+                       <Zap size={20} color="var(--accent-emerald)" />
+                    </div>
+                 </div>
+                 {/* Connecting Lines */}
+                 <svg width="200" height="200" style={{ position: 'absolute', top: 0, left: 0, zIndex: 1, pointerEvents: 'none' }}>
+                    <line x1="100" y1="100" x2="40" y2="60" stroke="var(--accent-amber)" strokeWidth="2" strokeDasharray="4 4" style={{ animation: 'dash 1s linear infinite' }} />
+                    <line x1="100" y1="100" x2="160" y2="140" stroke="var(--accent-violet)" strokeWidth="2" strokeDasharray="4 4" style={{ animation: 'dash 1.5s linear infinite reverse' }} />
+                    <line x1="100" y1="100" x2="150" y2="60" stroke="var(--accent-emerald)" strokeWidth="2" strokeDasharray="4 4" style={{ animation: 'dash 1s linear infinite' }} />
+                 </svg>
+              </div>
+              <h3 style={{ fontSize: 18, color: 'var(--text-primary)', marginBottom: 8, fontWeight: 700 }}>Initialize Automation</h3>
               <p style={{ fontSize: 13, lineHeight: 1.5 }}>
-                Describe a workflow you want to build, and I will generate the nodes and connections for you.
+                Describe a workflow you want to build, and the AI will autonomously compile the nodes and connections for you.
               </p>
             </div>
           ) : (
@@ -428,7 +470,7 @@ export const ChatPanel: React.FC = () => {
                   borderTopLeftRadius: msg.role === 'user' ? 16 : 4,
                   fontSize: 14,
                   background: msg.role === 'user' ? 'rgba(6, 182, 212, 0.1)' : 'var(--bg-card)',
-                  border: msg.role === 'user' ? '1px solid rgba(6, 182, 212, 0.2)' : '1px solid var(--border-subtle)',
+                  border: msg.role === 'user' ? '1px solid rgba(6, 182, 212, 0.2)' : '1px solid var(--neo-border)',
                   color: 'var(--text-primary)',
                   lineHeight: 1.5,
                   boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
@@ -492,7 +534,7 @@ export const ChatPanel: React.FC = () => {
                 borderTopLeftRadius: 4,
                 fontSize: 14,
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--neo-border)',
                 color: 'var(--text-primary)',
                 lineHeight: 1.5,
                 boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
@@ -576,7 +618,7 @@ export const ChatPanel: React.FC = () => {
         </div>
 
         {/* Input Area */}
-        <div style={{ padding: '20px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)', zIndex: 10 }}>
+        <div style={{ padding: '20px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--neo-border)', zIndex: 10 }}>
 
           {/* Text Area Row */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
@@ -596,15 +638,17 @@ export const ChatPanel: React.FC = () => {
               style={{
                 flex: 1,
                 padding: '14px 16px',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-medium)',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--neo-border)',
                 borderRadius: 16,
                 color: 'var(--text-primary)',
                 fontSize: 14,
                 outline: 'none',
                 resize: 'none',
                 lineHeight: 1.5,
-                maxHeight: 250
+                minHeight: 52,
+                maxHeight: 250,
+                overflowY: 'auto'
               }}
               disabled={loading || enhancing}
             />

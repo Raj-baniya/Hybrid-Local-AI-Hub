@@ -460,6 +460,14 @@ export const GenericUtilityNodeComponent: React.FC<NodeProps> = ({ id, data, sel
     NotifyDesktopNode: 'Desktop Notification', NotifyWebhookNode: 'Webhook Notification',
     ClipboardTriggerNode: 'Clipboard Input', CsvReaderNode: 'CSV Reader', DelayNode: 'Delay',
     TemplateFormatterNode: 'Template Formatter', MergeNode: 'Merge Inputs',
+    DocumentQaRAGNode: 'Document QA RAG', LocalVisionInterpreterNode: 'Vision Interpreter',
+    KillProcessNode: 'Kill Process', UIActionNode: 'UI Action', NativeWindowControlNode: 'Native Window Control',
+    CallAgentNode: 'Call Agent',
+    ScreenCaptureNode: 'Screen Capture',
+    MouseKeyboardSimNode: 'Mouse/Keyboard Sim',
+    LocalOCRNode: 'Local OCR',
+    DuckDbQueryNode: 'DuckDB Query',
+    WasmSandboxNode: 'Wasm Sandbox',
   };
   return (
     <CustomNodeWrapper id={id} title={labels[cfg.type] || cfg.type} icon={<Braces size={16} />} headerColor="#64748b" selected={selected} hasTargetHandle={true} hasSourceHandle={true}>
@@ -515,4 +523,15 @@ export const customNodeTypes = {
   GetCpuUsageNode: GenericUtilityNodeComponent,
   GetMemoryUsageNode: GenericUtilityNodeComponent,
   ListProcessesNode: GenericUtilityNodeComponent,
+  DocumentQaRAGNode: GenericUtilityNodeComponent,
+  LocalVisionInterpreterNode: GenericUtilityNodeComponent,
+  KillProcessNode: GenericUtilityNodeComponent,
+  UIActionNode: GenericUtilityNodeComponent,
+  NativeWindowControlNode: GenericUtilityNodeComponent,
+  CallAgentNode: GenericUtilityNodeComponent,
+  ScreenCaptureNode: GenericUtilityNodeComponent,
+  MouseKeyboardSimNode: GenericUtilityNodeComponent,
+  LocalOCRNode: GenericUtilityNodeComponent,
+  DuckDbQueryNode: GenericUtilityNodeComponent,
+  WasmSandboxNode: GenericUtilityNodeComponent,
 };

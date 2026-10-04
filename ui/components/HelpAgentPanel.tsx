@@ -36,8 +36,9 @@ export const HelpAgentPanel: React.FC = () => {
 
   useEffect(() => {
     if (textAreaRef.current) {
-      textAreaRef.current.style.height = 'auto';
-      textAreaRef.current.style.height = Math.min(textAreaRef.current.scrollHeight, 150) + 'px';
+      textAreaRef.current.style.height = '52px';
+      const scrollH = textAreaRef.current.scrollHeight;
+      textAreaRef.current.style.height = Math.max(52, Math.min(scrollH, 150)) + 'px';
     }
   }, [inputText]);
 
@@ -168,11 +169,14 @@ export const HelpAgentPanel: React.FC = () => {
       if (graph && graph.nodes.length > 0) {
         contextStr = JSON.stringify(graph, null, 2);
       }
+      const isNemotron = selectedModel === 'NEMOTRON_SUPER';
+      const actualModel = isNemotron ? 'nvidia/nemotron-4-340b-instruct' : selectedModel;
+      const actualUrl = isNemotron ? 'https://integrate.api.nvidia.com/v1' : "http://127.0.0.1:11434";
       await invoke<string>('help_agent_ask', {
         prompt: newMsg.text,
         images: newMsg.images || [],
-        model: selectedModel,
-        url: "http://127.0.0.1:11434",
+        model: actualModel,
+        url: actualUrl,
         workflowContext: contextStr,
         taskId: newTaskId
       }).then(response => {
@@ -208,7 +212,7 @@ export const HelpAgentPanel: React.FC = () => {
         style={{
           padding: '16px 20px',
           background: 'var(--bg-card)',
-          borderBottom: '1px solid var(--border-subtle)',
+          borderBottom: '1px solid var(--neo-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -229,7 +233,7 @@ export const HelpAgentPanel: React.FC = () => {
                 style={{
                   padding: '4px 8px',
                   background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-subtle)',
+                  border: '1px solid var(--neo-border)',
                   borderRadius: 6,
                   color: 'var(--text-primary)',
                   fontSize: 11,
@@ -239,13 +243,12 @@ export const HelpAgentPanel: React.FC = () => {
                 }}
               >
                 {isOfflineMode ? (
-                  models.length === 0 ? (
-                    <option value="">No local models</option>
-                  ) : (
-                    models.map((m) => (
+                  <>
+                    <option value="NEMOTRON_SUPER">⚡ Superfast Model</option>
+                    {models.map((m) => (
                       <option key={m.name} value={m.name}>{m.name}</option>
-                    ))
-                  )
+                    ))}
+                  </>
                 ) : (
                   providers.length === 0 ? (
                     <option value="">No API models configured</option>
@@ -326,7 +329,7 @@ export const HelpAgentPanel: React.FC = () => {
               )}
               <div style={{
                 background: m.role === 'user' ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-card)',
-                border: m.role === 'user' ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid var(--border-subtle)',
+                border: m.role === 'user' ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid var(--neo-border)',
                 padding: '12px 16px',
                 borderRadius: 16,
                 borderTopRightRadius: m.role === 'user' ? 4 : 16,
@@ -368,7 +371,7 @@ export const HelpAgentPanel: React.FC = () => {
               borderTopLeftRadius: 4,
               fontSize: 14, 
               background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
+              border: '1px solid var(--neo-border)',
               color: 'var(--text-primary)',
               lineHeight: 1.5,
               boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
@@ -388,7 +391,7 @@ export const HelpAgentPanel: React.FC = () => {
       </div>
 
       {/* Input Area */}
-      <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)', zIndex: 10 }}>
+      <div style={{ padding: '20px 24px', borderTop: '1px solid var(--neo-border)', background: 'var(--bg-card)', zIndex: 10 }}>
         {attachedImages.length > 0 && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
             {attachedImages.map((img, i) => (
@@ -423,23 +426,28 @@ export const HelpAgentPanel: React.FC = () => {
             style={{
               flex: 1,
               padding: '14px 16px',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-medium)',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--neo-border)',
               borderRadius: 16,
               color: 'var(--text-primary)',
               fontSize: 14,
               outline: 'none',
               resize: 'none',
               lineHeight: 1.5,
-              maxHeight: 150
+              maxHeight: 150,
+              overflowY: 'auto',
+              boxShadow: '0 0 0 2px transparent',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
             }}
+            onFocus={e => { e.target.style.borderColor = 'var(--accent-emerald)'; e.target.style.boxShadow = '0 0 0 2px rgba(16,185,129,0.15)'; }}
+            onBlur={e => { e.target.style.borderColor = 'var(--neo-border)'; e.target.style.boxShadow = '0 0 0 2px transparent'; }}
           />
           <div style={{ display: 'flex', gap: 8 }}>
             {loading ? (
               <button
                 className="btn btn-secondary"
                 onClick={handleStop}
-                style={{ height: 50, width: 50, borderRadius: '50%', padding: 0, justifyContent: 'center', color: 'var(--accent-rose)' }}
+                style={{ height: 50, width: 50, borderRadius: '50%', padding: 0, justifyContent: 'center', color: 'var(--accent-rose)', boxShadow: 'none' }}
                 title="Stop Generation"
               >
                 <StopCircle size={24} />
@@ -449,7 +457,7 @@ export const HelpAgentPanel: React.FC = () => {
                 className="btn btn-primary"
                 onClick={handleSend}
                 disabled={(!inputText.trim() && attachedImages.length === 0)}
-                style={{ height: 50, width: 50, borderRadius: '50%', padding: 0, justifyContent: 'center' }}
+                style={{ height: 50, width: 50, borderRadius: '50%', padding: 0, justifyContent: 'center', boxShadow: 'none' }}
               >
                 <Send size={20} />
               </button>

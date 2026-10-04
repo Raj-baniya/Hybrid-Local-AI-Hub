@@ -63,6 +63,7 @@ pub struct ScheduledTaskState {
 pub struct ManualRunState {
     pub cancel_flag: Arc<AtomicBool>,
     pub pause_flag: Arc<AtomicBool>,
+    pub manual_input_tx: Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::Sender<String>>>>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -288,9 +289,18 @@ pub async fn run_graph(
     // Validate first before executing.
     validate::validate_graph(&graph).map_err(|errs| errs.join("\n"))?;
 
+    let (input_tx, input_rx) = tokio::sync::mpsc::channel(1);
+    {
+        let mut guard = state.manual_input_tx.lock().await;
+        *guard = Some(input_tx);
+    }
+    let manual_input_rx = Some(std::sync::Arc::new(tokio::sync::Mutex::new(input_rx)));
+
     let default_cfg = ExecutorConfig::default();
     let executor_cfg = if let Some(c) = config {
         ExecutorConfig {
+            manual_input_rx: manual_input_rx.clone(),
+            agents_dir: Default::default(),
             ollama_url: c.ollama_url.unwrap_or(default_cfg.ollama_url),
             chroma_url: c.chroma_url.unwrap_or(default_cfg.chroma_url),
             failure_policy: if c.continue_on_failure.unwrap_or(false) {
@@ -307,7 +317,9 @@ pub async fn run_graph(
             online_keys,
         }
     } else {
-        ExecutorConfig {
+        ExecutorConfig { 
+            manual_input_rx: None,
+            agents_dir: Default::default(),
             is_offline,
             online_keys,
             ..default_cfg
@@ -454,7 +466,7 @@ pub async fn chat_generate(
         OllamaStatus::Ready { models } => models.into_iter().map(|mi| mi.name).collect(),
         _ => return Err("No local model detected â€” install one first.".to_string()),
     };
-    if !installed.contains(&m) {
+    if !installed.contains(&m) && !m.contains("API|") && m != "NEMOTRON_SUPER" {
         return Err(format!(
             "Model '{m}' is not installed. Installed models: {:?}",
             installed
@@ -491,7 +503,9 @@ pub async fn chat_generate(
         }
     }
 
-    let online_keys = if !is_offline {
+    // online_keys is only for the COMPILER LLM (the AI generating the graph JSON).
+    // Graph node OllamaSelectorNodes always use local Ollama models regardless of compiler mode.
+    let online_keys = if !is_offline || m.starts_with("API|") || m == "NEMOTRON_SUPER" {
         if let Ok(providers) = get_providers(app.clone()) {
             providers
                 .into_iter()
@@ -508,8 +522,12 @@ pub async fn chat_generate(
         vec![]
     };
 
+    // Force graph node execution to always use local Ollama (graph_is_offline is always true)
+    // Only the compiler LLM itself may be online; the nodes it generates are always local
+    let graph_is_offline = true;
+
     let mut result = tokio::select! {
-        res = compiler::generate_workflow(&messages, &m, &u, is_offline, online_keys, Some(progress_tx.clone())) => res,
+        res = compiler::generate_workflow(&messages, &m, &u, graph_is_offline, online_keys, Some(progress_tx.clone())) => res,
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
 
@@ -560,7 +578,7 @@ pub async fn chat_edit(
         OllamaStatus::Ready { models } => models.into_iter().map(|mi| mi.name).collect(),
         _ => return Err("No local model detected â€” install one first.".to_string()),
     };
-    if !installed.contains(&m) {
+    if !installed.contains(&m) && !m.contains("API|") && m != "NEMOTRON_SUPER" {
         return Err(format!(
             "Model '{m}' is not installed. Installed models: {:?}",
             installed
@@ -597,7 +615,7 @@ pub async fn chat_edit(
         }
     }
 
-    let online_keys = if !is_offline {
+    let online_keys = if !is_offline || m.starts_with("API|") || m == "NEMOTRON_SUPER" {
         if let Ok(providers) = get_providers(app.clone()) {
             providers
                 .into_iter()
@@ -614,8 +632,10 @@ pub async fn chat_edit(
         vec![]
     };
 
+    let graph_is_offline = true;
+
     let result = tokio::select! {
-        res = compiler::edit_workflow(&messages, &existing_graph, &m, &u, is_offline, online_keys, Some(progress_tx.clone())) => res,
+        res = compiler::edit_workflow(&messages, &existing_graph, &m, &u, graph_is_offline, online_keys, Some(progress_tx.clone())) => res,
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
 
@@ -1154,7 +1174,7 @@ fn extract_agent_output(record: &ExecutionRecord) -> String {
 }
 
 fn persist_scheduled_output(app: &AppHandle, graph: &Graph, record: &ExecutionRecord, offline_mode: bool) {
-    let name = graph
+    let _name = graph
         .name
         .clone()
         .filter(|n| !n.trim().is_empty() && is_valid_filename(n))
@@ -1168,7 +1188,9 @@ fn build_executor_config(
 ) -> ExecutorConfig {
     let default_cfg = ExecutorConfig::default();
     if let Some(c) = config {
-        ExecutorConfig {
+        ExecutorConfig { 
+            manual_input_rx: None,
+            agents_dir: Default::default(),
             ollama_url: c.ollama_url.unwrap_or(default_cfg.ollama_url),
             chroma_url: c.chroma_url.unwrap_or(default_cfg.chroma_url),
             failure_policy: if c.continue_on_failure.unwrap_or(false) {
@@ -1185,7 +1207,9 @@ fn build_executor_config(
             online_keys: vec![],
         }
     } else {
-        ExecutorConfig {
+        ExecutorConfig { 
+            manual_input_rx: None,
+            agents_dir: Default::default(),
             is_offline: offline_mode,
             online_keys: vec![],
             ..default_cfg
@@ -1373,6 +1397,22 @@ pub async fn cancel_manual_graph(
     Ok(())
 }
 #[tauri::command]
+pub async fn send_manual_input(
+    state: State<'_, ManualRunState>,
+    input: String,
+) -> Result<(), String> {
+    let tx_guard = state.manual_input_tx.lock().await;
+    if let Some(tx) = tx_guard.as_ref() {
+        if tx.send(input).await.is_err() {
+            return Err("Input channel closed".into());
+        }
+    } else {
+        return Err("No active prompt waiting for input".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn pause_manual_graph(
     state: State<'_, ManualRunState>,
 ) -> Result<(), String> {
@@ -1456,8 +1496,8 @@ pub async fn help_agent_ask(
     workflow_context: Option<String>,
     task_id: Option<String>,
 ) -> Result<String, String> {
-    let client = OllamaClient::new_no_timeout(&url);
-
+    let pm = hybrid_local_ai_hub::providers::ProviderManager::new(&url, false, vec![]);
+    
     let mut full_prompt = String::from("You are an expert developer and AI assistant. The user has encountered an error or needs help debugging.\n");
     if let Some(ctx) = workflow_context {
         full_prompt.push_str(&format!(
@@ -1472,8 +1512,14 @@ pub async fn help_agent_ask(
         state.active_tasks.lock().await.insert(id.clone(), tx);
     }
 
+    let actual_model = if model == "NEMOTRON_SUPER" || model.contains("nemotron") {
+        "API|NVIDIA|nvidia/nemotron-3-super-120b-a12b"
+    } else {
+        model.as_str()
+    };
+
     let result = tokio::select! {
-        res = client.generate(&model, &full_prompt, images, false) => res.map_err(|e| format!("Help agent failed: {e}")),
+        res = pm.generate(actual_model, &full_prompt, images, false) => res.map_err(|e| format!("Help agent failed: {e}")),
         _ = rx => Err("Generation cancelled by user.".to_string()),
     };
 
@@ -1806,4 +1852,218 @@ pub async fn run_terminal_agent(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn launch_autoagent_cli() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new("cmd");
+        if let Ok(cwd) = std::env::current_dir() {
+            if cwd.ends_with("src-tauri") {
+                if let Some(parent) = cwd.parent() {
+                    cmd.current_dir(parent);
+                }
+            }
+        }
+        cmd.args([
+            "/c",
+            "start",
+            "cmd",
+            "/k",
+            "cargo run --bin autoagent"
+        ]);
+        match cmd.spawn() {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("Failed to launch AutoAgent CLI: {}", e)),
+        }
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("AutoAgent CLI is only supported on Windows currently.".into())
+    }
+}
+
+#[tauri::command]
+pub fn register_startup_agent(app: tauri::AppHandle, agent_name: String) -> Result<String, String> {
+    let base_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to get app dir: {e}"))?;
+    let agent_path = base_dir.join("agents").join(format!("{}.json", agent_name));
+    
+    if !agent_path.exists() {
+        return Err(format!("Agent '{}' not found.", agent_name));
+    }
+
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    let reg_key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+    let val_name = format!("HybridHub-{}", agent_name.replace(' ', "_"));
+    
+    let command = format!(
+        r#"reg add "{}" /v "{}" /t REG_SZ /d "\"{}\" run \"{}\"" /f"#,
+        reg_key,
+        val_name,
+        exe_path.to_string_lossy(),
+        agent_path.to_string_lossy()
+    );
+
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &command])
+        .output()
+        .map_err(|e| format!("Failed to run reg add: {e}"))?;
+    
+    if output.status.success() {
+        Ok(format!("Agent '{}' registered for startup.", agent_name))
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Registry error: {}", err))
+    }
+}
+
+#[tauri::command]
+pub fn remove_startup_agent(agent_name: String) -> Result<String, String> {
+    let reg_key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+    let val_name = format!("HybridHub-{}", agent_name.replace(' ', "_"));
+    
+    let command = format!(r#"reg delete "{}" /v "{}" /f"#, reg_key, val_name);
+    
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &command])
+        .output()
+        .map_err(|e| format!("Failed to run reg delete: {e}"))?;
+        
+    if output.status.success() {
+        Ok(format!("Removed startup registration for {}.", agent_name))
+    } else {
+        Err("Failed to remove startup agent (it may not exist).".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn register_scheduled_agent(app: tauri::AppHandle, agent_name: String, time: String) -> Result<String, String> {
+    let base_dir = app.path().app_local_data_dir()
+        .map_err(|e| format!("Failed to get app dir: {e}"))?;
+    let agent_path = base_dir.join("agents").join(format!("{}.json", agent_name));
+    
+    if !agent_path.exists() {
+        return Err(format!("Agent '{}' not found.", agent_name));
+    }
+
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    let task_name = format!("HybridHub-Sched-{}", agent_name.replace(' ', "_"));
+    
+    let command = format!(
+        r#"schtasks /create /tn "{}" /tr "\"{}\" run \"{}\"" /sc daily /st {} /f"#,
+        task_name,
+        exe_path.to_string_lossy(),
+        agent_path.to_string_lossy(),
+        time
+    );
+
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &command])
+        .output()
+        .map_err(|e| format!("Failed to run schtasks: {e}"))?;
+    
+    if output.status.success() {
+        Ok(format!("Agent '{}' scheduled daily at {}.", agent_name, time))
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Task Scheduler error: {}", err))
+    }
+}
+
+#[tauri::command]
+pub fn remove_scheduled_agent(agent_name: String) -> Result<String, String> {
+    let task_name = format!("HybridHub-Sched-{}", agent_name.replace(' ', "_"));
+    let command = format!(r#"schtasks /delete /tn "{}" /f"#, task_name);
+    
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &command])
+        .output()
+        .map_err(|e| format!("Failed to run schtasks: {e}"))?;
+        
+    if output.status.success() {
+        Ok(format!("Removed schedule for {}.", agent_name))
+    } else {
+        Err("Failed to remove scheduled agent (it may not exist).".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn unregister_agent_task(agent_name: String, task_type: String) -> Result<String, String> {
+    if task_type == "startup" {
+        return remove_startup_agent(agent_name);
+    }
+
+    let prefix = "HybridHub-Sched";
+    let task_name = format!("{}-{}", prefix, agent_name.replace(' ', "_"));
+
+    let command = format!(r#"schtasks /delete /tn "{}" /f"#, task_name);
+
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &command])
+        .output()
+        .map_err(|e| format!("Failed to run schtasks: {e}"))?;
+
+    if output.status.success() {
+        Ok(format!("Agent task '{}' removed.", agent_name))
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to remove task: {}", err))
+    }
+}
+
+#[tauri::command]
+pub fn list_agent_tasks() -> Result<Vec<serde_json::Value>, String> {
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command",
+               "schtasks /query /fo csv /nh | ConvertFrom-Csv -Header TaskName,NextRun,Status,LogonMode | Where-Object { $_.TaskName -like '*HybridHub*' } | ConvertTo-Json"])
+        .output()
+        .map_err(|e| format!("Failed to query tasks: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if stdout.trim().is_empty() || stdout.trim() == "null" {
+        return Ok(vec![]);
+    }
+
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap_or(serde_json::json!([]));
+    if let Some(arr) = parsed.as_array() {
+        Ok(arr.clone())
+    } else {
+        Ok(vec![parsed])
+    }
+}
+
+#[tauri::command]
+pub fn speak_text(text: String, rate: Option<i32>) -> Result<(), String> {
+    let rate_val = rate.unwrap_or(0);
+    let ps_script = format!(
+        "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Rate = {}; $s.Speak('{}')",
+        rate_val,
+        text.replace('\'', " ")
+    );
+
+    std::process::Command::new("powershell")
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_script])
+        .spawn()
+        .map_err(|e| format!("Failed to speak: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn test_microphone() -> Result<String, String> {
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command",
+               "Get-PnpDevice -Class AudioEndpoint -Status OK | Select-Object -First 3 FriendlyName | ConvertTo-Json"])
+        .output()
+        .map_err(|e| format!("Failed to check microphone: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if stdout.trim().is_empty() || stdout.trim() == "null" {
+        return Err("No microphone detected.".to_string());
+    }
+
+    Ok(format!("Microphone detected: {}", stdout.trim()))
 }

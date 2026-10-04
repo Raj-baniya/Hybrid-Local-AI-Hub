@@ -44,6 +44,7 @@ async fn main() {
     });
 
     let config = ExecutorConfig {
+        agents_dir: None,
         is_offline: true,
         ollama_url: "http://localhost:11434".into(),
         chroma_url: "http://localhost:8000".into(),
@@ -52,6 +53,7 @@ async fn main() {
         failure_policy: hybrid_local_ai_hub::executor::FailurePolicy::HaltOnFailure,
         online_keys: vec![],
         suppress_actions: false,
+        manual_input_rx: None,
     };
 
     println!("Running graph...");

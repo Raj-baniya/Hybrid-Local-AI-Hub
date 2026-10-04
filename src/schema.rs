@@ -45,6 +45,17 @@ pub enum NodeType {
     GetCpuUsageNode(GetCpuUsageConfig),
     GetMemoryUsageNode(GetMemoryUsageConfig),
     ListProcessesNode(ListProcessesConfig),
+    DocumentQaRAGNode(DocumentQaRAGConfig),
+    LocalVisionInterpreterNode(LocalVisionInterpreterConfig),
+    UIActionNode(UIActionConfig),
+    KillProcessNode(KillProcessConfig),
+    NativeWindowControlNode(NativeWindowControlConfig),
+    CallAgentNode(CallAgentConfig),
+    ScreenCaptureNode(ScreenCaptureConfig),
+    MouseKeyboardSimNode(MouseKeyboardSimConfig),
+    LocalOCRNode(LocalOCRConfig),
+    DuckDbQueryNode(DuckDbQueryConfig),
+    WasmSandboxNode(WasmSandboxConfig),
 }
 
 // â”€â”€â”€ Per-variant config structs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -66,6 +77,8 @@ pub struct FileWatcherConfig {
 pub struct TextInputConfig {
     /// Static text content, or a template using `{{node_id.output}}` references.
     pub text: String,
+    /// If true, the execution will pause and ask the user for input in the terminal.
+    pub require_user_prompt: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
@@ -559,4 +572,102 @@ pub struct GetMemoryUsageConfig {}
 pub struct ListProcessesConfig {
     pub sort_by: Option<String>,
     pub limit: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentQaRAGConfig {
+    pub query: Option<String>,
+    #[serde(default = "default_collection")]
+    pub collection_name: String,
+    pub db_path: Option<String>,
+    pub embedding_model: Option<String>,
+    pub n_results: Option<usize>,
+}
+fn default_collection() -> String { "local_docs".to_string() }
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalVisionInterpreterConfig {
+    pub image_path: Option<String>,
+    pub vision_model: Option<String>,
+    pub prompt: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UIActionConfig {
+    pub actions: Vec<UIAction>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UIAction {
+    #[serde(rename = "type")]
+    pub action_type: String,
+    pub x: Option<i32>,
+    pub y: Option<i32>,
+    pub text: Option<String>,
+    pub key: Option<String>,
+    pub duration: Option<f64>,
+    pub delay_after: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct KillProcessConfig {
+    pub process_name: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CallAgentConfig {
+    pub agent_name: String,
+    pub input_override: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeWindowControlConfig {
+    pub target_process: Option<String>,
+    pub window_title_match: Option<String>,
+    pub automation_id: Option<String>,
+    pub action: Option<String>,
+    pub text_payload: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenCaptureConfig {
+    pub output_path: String,
+    pub specific_window_title: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseKeyboardSimConfig {
+    pub action_type: String,
+    pub x: Option<i32>,
+    pub y: Option<i32>,
+    pub payload: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalOCRConfig {
+    pub image_path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DuckDbQueryConfig {
+    pub query: String,
+    pub db_path: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WasmSandboxConfig {
+    pub wasm_module_path: String,
+    pub input_data: Option<String>,
 }

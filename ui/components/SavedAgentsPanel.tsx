@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useWorkflowStore } from '../store/workflowStore';
 import type { Graph } from '../schema/graphSchema';
-import { Bot, X, Download, Play, RefreshCw, Loader2, Edit3, Terminal, Copy, Trash2 } from 'lucide-react';
+import { Bot, X, Download, Play, RefreshCw, Loader2, Edit3, Terminal, Copy, Trash2, Clock, Rocket } from 'lucide-react';
 
 export const SavedAgentsPanel: React.FC = () => {
   const isOfflineMode = useSettingsStore(s => s.isOfflineMode);
@@ -13,9 +13,14 @@ export const SavedAgentsPanel: React.FC = () => {
 
   const [agents, setAgents] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [renamingAgent, setRenamingAgent] = useState<{oldName: string, newName: string} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewingOutput, setViewingOutput] = useState<{name: string, text: string, isPlaceholder?: boolean} | null>(null);
   const [cliCommand, setCliCommand] = useState<{name: string, command: string} | null>(null);
+  const [scheduleDialog, setScheduleDialog] = useState<{name: string} | null>(null);
+  const [schedTime, setSchedTime] = useState('21:00');
+  const [automationMsg, setAutomationMsg] = useState<{name: string, msg: string} | null>(null);
+  const { agentTriggers, setAgentTrigger } = useSettingsStore();
 
   const fetchAgents = async (currentMode: boolean) => {
     setLoading(true);
@@ -51,6 +56,47 @@ export const SavedAgentsPanel: React.FC = () => {
     }
   };
 
+  const handleRemoveStartup = async (name: string) => {
+    try {
+      const msg = await invoke<string>('remove_startup_agent', { agentName: name });
+      setAutomationMsg({ name, msg: `✅ ${msg}` });
+    } catch (e) {
+      setAutomationMsg({ name, msg: `❌ ${String(e)}` });
+    }
+    setTimeout(() => setAutomationMsg(null), 4000);
+  };
+
+  const handleRemoveSchedule = async (name: string) => {
+    try {
+      const msg = await invoke<string>('remove_scheduled_agent', { agentName: name });
+      setAutomationMsg({ name, msg: `✅ ${msg}` });
+    } catch (e) {
+      setAutomationMsg({ name, msg: `❌ ${String(e)}` });
+    }
+    setTimeout(() => setAutomationMsg(null), 4000);
+  };
+
+  const handleRegisterStartup = async (name: string) => {
+    try {
+      const msg = await invoke<string>('register_startup_agent', { agentName: name });
+      setAutomationMsg({ name, msg: `✅ ${msg}` });
+    } catch (e) {
+      setAutomationMsg({ name, msg: `❌ ${String(e)}` });
+    }
+    setTimeout(() => setAutomationMsg(null), 4000);
+  };
+
+  const handleRegisterSchedule = async (name: string) => {
+    try {
+      const msg = await invoke<string>('register_scheduled_agent', { agentName: name, time: schedTime });
+      setAutomationMsg({ name, msg: `✅ ${msg}` });
+      setScheduleDialog(null);
+    } catch (e) {
+      setAutomationMsg({ name, msg: `❌ ${String(e)}` });
+    }
+    setTimeout(() => setAutomationMsg(null), 4000);
+  };
+
   const handleRunAgent = async (name: string) => {
     try {
       await handleOpenInCanvas(name);
@@ -75,6 +121,19 @@ export const SavedAgentsPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  
+  const isValidHotkey = (key: string) => {
+    if (!key || key.trim() === '') return true;
+    const parts = key.toLowerCase().split('+');
+    if (parts.length < 2) return false;
+    const modifiers = ['ctrl', 'alt', 'shift', 'meta', 'win', 'cmd'];
+    return parts.some(p => modifiers.includes(p.trim()));
+  };
+  const isValidWakeWord = (word: string) => {
+    if (!word || word.trim() === '') return true;
+    return word.trim().length >= 3;
   };
 
   const handleRenameAgent = async (oldName: string) => {
@@ -134,7 +193,7 @@ export const SavedAgentsPanel: React.FC = () => {
   if (viewingOutput) {
     return (
       <div className="animate-slide-in-right" style={{ width: '100%', height: '100%', background: 'var(--bg-card)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--neo-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Terminal size={18} color="var(--accent-cyan)" />
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Output: {viewingOutput.name}</span>
@@ -197,14 +256,14 @@ export const SavedAgentsPanel: React.FC = () => {
             No agents saved yet.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 24 }}>
             {agents.map((agent) => (
               <div 
                 key={agent} 
                 className="group"
                 style={{ 
                   background: 'var(--bg-card)', 
-                  border: '1px solid var(--border-subtle)', 
+                  border: '1px solid var(--neo-border)', 
                   borderRadius: 16, 
                   padding: 20, 
                   display: 'flex', 
@@ -223,7 +282,7 @@ export const SavedAgentsPanel: React.FC = () => {
                 onMouseOut={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
                   e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
-                  e.currentTarget.style.border = '1px solid var(--border-subtle)';
+                  e.currentTarget.style.border = '1px solid var(--neo-border)';
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -245,8 +304,81 @@ export const SavedAgentsPanel: React.FC = () => {
                     <Edit3 size={14} /> Edit
                   </button>
                 </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: 1, justifyContent: 'center', fontSize: 12, padding: '5px 0', gap: 4 }}
+                    title="Schedule this agent to run daily at a set time"
+                    onClick={() => { setScheduleDialog({ name: agent }); setSchedTime('21:00'); }}
+                  >
+                    <Clock size={12} /> Schedule
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: 1, justifyContent: 'center', fontSize: 12, padding: '5px 0', gap: 4 }}
+                    title="Run this agent every time Windows starts"
+                    onClick={() => handleRegisterStartup(agent)}
+                  >
+                    <Rocket size={12} /> Startup
+                  </button>
+                </div>
+                {automationMsg?.name === agent && (
+                  <div style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, marginTop: 2,
+                    background: automationMsg.msg.startsWith('✅') ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)',
+                    color: automationMsg.msg.startsWith('✅') ? 'var(--accent-emerald)' : 'var(--accent-rose)' }}>
+                    {automationMsg.msg}
+                  </div>
+                )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+                
+                {/* Per-Agent Triggers */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 60 }}>Wake:</span>
+                    <input
+                      type="text"
+                      id={`wake-${agent}`}
+                      placeholder="e.g. Hey Jarvis"
+                      defaultValue={agentTriggers[agent]?.wakeWord || ''}
+                      style={{ flex: 1, background: 'transparent', border: '1px solid var(--neo-border)', borderBottom: '1px solid var(--accent-cyan)', fontSize: 12, color: 'var(--text-primary)', padding: '4px 6px', outline: 'none' }}
+                    />
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, minWidth: 40 }} onClick={() => {
+                      const val = (document.getElementById(`wake-${agent}`) as HTMLInputElement).value.trim();
+                      if (val && val.length < 3) return alert('Wake word must be at least 3 characters long.');
+                      if (val && Object.entries(agentTriggers).some(([k, v]) => k !== agent && v.wakeWord?.toLowerCase() === val.toLowerCase())) return alert(`Wake word "${val}" is already used!`);
+                      setAgentTrigger(agent, { wakeWord: val });
+                      alert('Wake word saved!');
+                    }}>Save</button>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 60 }}>Hotkey:</span>
+                    <input
+                      type="text"
+                      id={`hotkey-${agent}`}
+                      placeholder="e.g. Ctrl+Alt+1"
+                      defaultValue={agentTriggers[agent]?.hotkey || ''}
+                      style={{ flex: 1, background: 'transparent', border: '1px solid var(--neo-border)', borderBottom: '1px solid var(--accent-cyan)', fontSize: 12, color: 'var(--text-primary)', padding: '4px 6px', outline: 'none' }}
+                    />
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, minWidth: 40 }} onClick={() => {
+                      const val = (document.getElementById(`hotkey-${agent}`) as HTMLInputElement).value.trim();
+                      if (val) {
+                        const parts = val.toLowerCase().split('+');
+                        const modifiers = ['ctrl', 'alt', 'shift', 'meta', 'win', 'cmd'];
+                        if (parts.length < 2 || !parts.some(p => modifiers.includes(p.trim()))) {
+                          return alert('Invalid hotkey. Please use modifiers like Ctrl+Alt+1. Avoid single keys.');
+                        }
+                        if (val.toLowerCase().includes('win') && val.toLowerCase().includes('shift') && val.toLowerCase().includes('s')) {
+                          return alert("Cannot use Win+Shift+S (System Screenshot shortcut)!");
+                        }
+                      }
+                      if (val && Object.entries(agentTriggers).some(([k, v]) => k !== agent && v.hotkey?.toLowerCase() === val.toLowerCase())) return alert(`Hotkey "${val}" is already used!`);
+                      setAgentTrigger(agent, { hotkey: val });
+                      alert('Hotkey saved!');
+                    }}>Save</button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 16, borderTop: '1px solid var(--neo-border)' }}>
                   <button onClick={() => handleViewOutput(agent)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }} onMouseOver={e => e.currentTarget.style.color='var(--text-primary)'} onMouseOut={e => e.currentTarget.style.color='var(--text-secondary)'}>
                     <Terminal size={14} /> Output
                   </button>
@@ -269,16 +401,92 @@ export const SavedAgentsPanel: React.FC = () => {
         )}
       </div>
 
+      {/* Schedule Dialog */}
+      {scheduleDialog && (
+        <div className="modal-overlay" onClick={(e) => { if(e.target === e.currentTarget) setScheduleDialog(null); }}>
+          <div className="modal-box" style={{ width: 380 }}>
+            <button className="modal-close-btn" onClick={() => setScheduleDialog(null)} title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <h3 style={{ margin: '0 0 8px 0', color: 'var(--text-primary)', fontSize: 16, fontWeight: 700 }}>
+              ⏰ Schedule Daily Run
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
+              Run <strong>{scheduleDialog.name}</strong> every day at a specific time, even if this app is closed.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Time:</span>
+              <input
+                type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
+                style={{ flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--neo-border)', color: 'var(--text-primary)', padding: '8px 12px', borderRadius: 8, fontSize: 14 }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => setScheduleDialog(null)} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => handleRegisterSchedule(scheduleDialog.name)} style={{ flex: 1, justifyContent: 'center' }}>
+                <Clock size={13} /> Register Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      
+      {/* Rename Modal */}
+      {renamingAgent && (
+        <div className="modal-overlay" onClick={(e) => { if(e.target === e.currentTarget) setRenamingAgent(null); }}>
+          <div className="modal-box" style={{ width: 400 }}>
+            <button className="modal-close-btn" onClick={() => setRenamingAgent(null)} title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-primary)', fontSize: 18, fontWeight: 700 }}>Rename Agent</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
+              Enter a new name for <strong>{renamingAgent.oldName}</strong>:
+            </p>
+            <input
+              type="text"
+              className="nodrag"
+              value={renamingAgent.newName}
+              onChange={(e) => setRenamingAgent({ ...renamingAgent, newName: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitRename();
+                if (e.key === 'Escape') setRenamingAgent(null);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--neo-border)',
+                background: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 14,
+                outline: 'none',
+                marginBottom: 20
+              }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button className="btn btn-secondary" onClick={() => setRenamingAgent(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitRename}>Rename</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CLI Command Modal */}
       {cliCommand && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ background: 'var(--bg-panel)', padding: 24, borderRadius: 12, width: 500, border: '1px solid var(--border-medium)' }}>
-            <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-primary)' }}>Run via Terminal</h3>
+        <div className="modal-overlay" onClick={(e) => { if(e.target === e.currentTarget) setCliCommand(null); }}>
+          <div className="modal-box" style={{ width: 520 }}>
+            <button className="modal-close-btn" onClick={() => setCliCommand(null)} title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-primary)', fontSize: 18, fontWeight: 700 }}>Run via terminal</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
               You can run this agent autonomously from your terminal without opening the GUI.<br/><br/>
               <span style={{ color: 'var(--text-muted)' }}>We have auto-generated the exact command you need to run, pointing directly to the compiled executable and your saved agent file:</span>
             </p>
-            <div style={{ background: 'var(--bg-card)', padding: 12, borderRadius: 6, border: '1px solid var(--border-subtle)', fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-cyan)', wordBreak: 'break-all', marginBottom: 16 }}>
+            <div style={{ background: 'var(--bg-card)', padding: 12, borderRadius: 6, border: '1px solid var(--neo-border)', fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-cyan)', wordBreak: 'break-all', marginBottom: 16 }}>
               {cliCommand.command}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
@@ -286,13 +494,19 @@ export const SavedAgentsPanel: React.FC = () => {
               <button className="btn btn-secondary" onClick={async () => {
                 try {
                   const path = await invoke<string>('get_agent_path', { offlineMode: useSettingsStore.getState().isOfflineMode, name: cliCommand.name });
-                  await invoke('cmd_load_in_terminal', { agentPath: path });
+                  // Try external terminal first, fallback to in-app terminal panel
+                  try {
+                    await invoke('cmd_load_in_terminal', { agentPath: path });
+                  } catch (_extErr) {
+                    const { useWorkflowStore } = await import('../store/workflowStore');
+                    useWorkflowStore.getState().setActivePanel('terminalAgent');
+                  }
                   setCliCommand(null);
                 } catch (err: any) {
                   alert(typeof err === 'string' ? err : "Failed to launch terminal: " + err.message);
                 }
               }}>
-                <Play size={14}/> Load in Terminal
+                <Play size={14}/> Load in terminal
               </button>
               <button className="btn btn-primary" onClick={async () => { 
                 try {

@@ -6,7 +6,15 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useWorkflowStore } from '../store/workflowStore';
 
 export const TerminalAgentPanel: React.FC = () => {
-  const activeGraph = useWorkflowStore(s => s.getActiveGraph)();
+  const activeTabId = useWorkflowStore(s => s.activeTabId);
+  const tabs = useWorkflowStore(s => s.tabs);
+  const activeTab = tabs.find(t => t.id === activeTabId);
+  const activeGraph = activeTab ? {
+    version: 1,
+    name: activeTab.title,
+    nodes: activeTab.nodes.map(n => ({ id: n.id, position: n.position, data: n.data })),
+    edges: activeTab.edges.map(e => ({ id: e.id, source: e.source, source_handle: e.sourceHandle || null, target: e.target, target_handle: e.targetHandle || null }))
+  } : undefined;
   const running = useWorkflowStore(s => s.terminalRunning);
   const setRunning = useWorkflowStore(s => s.setTerminalRunning);
   const logs = useWorkflowStore(s => s.terminalLogs);
@@ -18,6 +26,7 @@ export const TerminalAgentPanel: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const model = useSettingsStore(s => s.ollamaModel);
   const [isPaused, setIsPaused] = useState(false);
+  const [terminalInput, setTerminalInput] = useState('');
 
   const handleStop = async () => {
     try {
@@ -76,7 +85,7 @@ export const TerminalAgentPanel: React.FC = () => {
   }, [logs]);
 
   const handleRunGraph = async () => {
-    if (!activeGraph) {
+    if ((!activeGraph || !activeGraph.nodes || activeGraph.nodes.length === 0)) {
       appendLog(`[ERROR] No active agent found on the canvas.`);
       return;
     }
@@ -218,33 +227,114 @@ export const TerminalAgentPanel: React.FC = () => {
 
         {/* Input/Control Area */}
         <div style={{ padding: '20px 24px', background: '#1e293b', borderTop: '1px solid #334155' }}>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <button
               id="terminal-run-btn"
               onClick={handleRunGraph}
-              disabled={running || !activeGraph}
+              disabled={running || (!activeGraph || !activeGraph.nodes || activeGraph.nodes.length === 0)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
                 padding: '12px 24px',
-                background: running || !activeGraph ? '#334155' : '#0284c7',
-                color: running || !activeGraph ? '#94a3b8' : 'white',
+                background: running || (!activeGraph || !activeGraph.nodes || activeGraph.nodes.length === 0) ? '#334155' : '#0284c7',
+                color: running || (!activeGraph || !activeGraph.nodes || activeGraph.nodes.length === 0) ? '#94a3b8' : 'white',
                 border: 'none',
                 borderRadius: 4,
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: running || !activeGraph ? 'not-allowed' : 'pointer',
-                transition: 'background 0.2s'
+                cursor: running || (!activeGraph || !activeGraph.nodes || activeGraph.nodes.length === 0) ? 'not-allowed' : 'pointer',
+                transition: 'background 0.2s',
+                flexShrink: 0
               }}
             >
               {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
               {running ? 'Executing Agent...' : 'Execute Agent in Terminal'}
             </button>
-            {!activeGraph && (
+            
+            {running && (
+              <form 
+                style={{ flex: 1, display: 'flex', gap: 8 }}
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!terminalInput.trim()) return;
+                  appendLog(`\n> ${terminalInput}`);
+                  try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    await invoke('send_manual_input', { input: terminalInput });
+                  } catch (err) {
+                    appendLog(`\n[ERROR] Failed to send input: ${err}`);
+                  }
+                  setTerminalInput('');
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Type a message to the agent..."
+                  value={terminalInput}
+                  onChange={e => setTerminalInput(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: 4,
+                    padding: '10px 16px',
+                    color: '#fff',
+                    fontFamily: '"Fira Code", monospace',
+                    fontSize: 13,
+                    outline: 'none'
+                  }}
+                  autoFocus
+                />
+                <button 
+                  type="submit"
+                  style={{
+                    background: '#38bdf8',
+                    color: '#0f172a',
+                    border: 'none',
+                    borderRadius: 4,
+                    padding: '0 16px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Send
+                </button>
+              </form>
+            )}
+
+            {(!activeGraph || !activeGraph.nodes || activeGraph.nodes.length === 0) && (
                <div style={{ display: 'flex', alignItems: 'center', color: '#ef4444', fontSize: 13 }}>
                   No agent is currently loaded. Go to the canvas or library to load an agent.
                </div>
+            )}
+            
+            {(activeGraph && activeGraph.nodes && activeGraph.nodes.length > 0) && !running && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginLeft: 12 }}>
+                <span style={{ fontSize: 12, color: '#94a3b8', marginRight: 4 }}>Agent Actions:</span>
+                {Array.from(new Set(activeGraph.nodes.map(n => n.data?.label || n.type))).slice(0, 5).map((actionName: any, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      appendLog(`\n> Triggering action: ${actionName}...`);
+                    }}
+                    style={{
+                      background: '#1e293b',
+                      border: '1px solid #38bdf8',
+                      color: '#38bdf8',
+                      padding: '4px 12px',
+                      borderRadius: 16,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)'}
+                    onMouseOut={e => e.currentTarget.style.background = '#1e293b'}
+                  >
+                    {actionName}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </div>

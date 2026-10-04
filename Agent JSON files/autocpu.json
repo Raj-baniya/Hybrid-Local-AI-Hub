@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "name": null,
+  "nodes": [
+    {
+      "id": "trigger_node",
+      "position": {
+        "x": 0.0,
+        "y": 210.0
+      },
+      "data": {
+        "type": "ScheduleNode",
+        "cronExpression": "*/10 * * * * *"
+      }
+    },
+    {
+      "id": "cpu_node",
+      "position": {
+        "x": 370.0,
+        "y": 420.0
+      },
+      "data": {
+        "type": "GetCpuUsageNode",
+        "averageOverSeconds": 1
+      }
+    },
+    {
+      "id": "mem_node",
+      "position": {
+        "x": 370.0,
+        "y": 210.0
+      },
+      "data": {
+        "type": "GetMemoryUsageNode"
+      }
+    },
+    {
+      "id": "proc_node",
+      "position": {
+        "x": 370.0,
+        "y": 0.0
+      },
+      "data": {
+        "type": "ListProcessesNode",
+        "sortBy": "cpu",
+        "limit": 5
+      }
+    },
+    {
+      "id": "merge_node",
+      "position": {
+        "x": 740.0,
+        "y": 210.0
+      },
+      "data": {
+        "type": "TemplateFormatterNode",
+        "template": "System Health:\nCPU Usage: {cpu_node}%\nMemory Usage: {mem_node}%\nTop Processes:\n{proc_node}"
+      }
+    },
+    {
+      "id": "ai_planner",
+      "position": {
+        "x": 1110.0,
+        "y": 305.0
+      },
+      "data": {
+        "type": "OllamaSelectorNode",
+        "model": "llama3.2",
+        "promptTemplate": "You are a local autonomous system controller. Below is the system state:\n\n{merge_node}\n\nIf the CPU usage is above 80 or Memory is above 90, respond strictly with \"ACTION: ALERT\". Otherwise, respond strictly with \"ACTION: ALL_GOOD\". Do not explain.",
+        "jsonMode": false
+      }
+    },
+    {
+      "id": "router",
+      "position": {
+        "x": 1480.0,
+        "y": 305.0
+      },
+      "data": {
+        "type": "ConditionalRouterNode",
+        "condition": "ALERT",
+        "trueTarget": "format_log",
+        "falseTarget": "all_good_notify"
+      }
+    },
+    {
+      "id": "format_log",
+      "position": {
+        "x": 1850.0,
+        "y": 105.0
+      },
+      "data": {
+        "type": "TemplateFormatterNode",
+        "template": "--- ALERT ---\n{merge_node}\n"
+      }
+    },
+    {
+      "id": "save_log",
+      "position": {
+        "x": 2220.0,
+        "y": 105.0
+      },
+      "data": {
+        "type": "LocalFileWriterNode",
+        "outputPath": "system_alert_log.txt",
+        "append": true
+      }
+    },
+    {
+      "id": "alert_notify",
+      "position": {
+        "x": 2590.0,
+        "y": 105.0
+      },
+      "data": {
+        "type": "NotifyDesktopNode",
+        "title": "System Alert!",
+        "body": "High CPU or Memory detected. Top processes saved to system_alert_log.txt."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "trigger_node",
+      "sourceHandle": null,
+      "target": "cpu_node",
+      "targetHandle": null
+    },
+    {
+      "id": "e2",
+      "source": "trigger_node",
+      "sourceHandle": null,
+      "target": "mem_node",
+      "targetHandle": null
+    },
+    {
+      "id": "e3",
+      "source": "trigger_node",
+      "sourceHandle": null,
+      "target": "proc_node",
+      "targetHandle": null
+    },
+    {
+      "id": "e_m1",
+      "source": "cpu_node",
+      "sourceHandle": null,
+      "target": "merge_node",
+      "targetHandle": null
+    },
+    {
+      "id": "e_m2",
+      "source": "mem_node",
+      "sourceHandle": null,
+      "target": "merge_node",
+      "targetHandle": null
+    },
+    {
+      "id": "e_m3",
+      "source": "proc_node",
+      "sourceHandle": null,
+      "target": "merge_node",
+      "targetHandle": null
+    },
+    {
+      "id": "e_llm",
+      "source": "merge_node",
+      "sourceHandle": null,
+      "target": "ai_planner",
+      "targetHandle": null
+    },
+    {
+      "id": "e_router",
+      "source": "ai_planner",
+      "sourceHandle": null,
+      "target": "router",
+      "targetHandle": null
+    },
+    {
+      "id": "e_route_t",
+      "source": "router",
+      "sourceHandle": null,
+      "target": "format_log",
+      "targetHandle": null
+    },
+    {
+      "id": "e_format_dep",
+      "source": "merge_node",
+      "sourceHandle": null,
+      "target": "format_log",
+      "targetHandle": null
+    },
+    {
+      "id": "e_save",
+      "source": "format_log",
+      "sourceHandle": null,
+      "target": "save_log",
+      "targetHandle": null
+    },
+    {
+      "id": "e_notify",
+      "source": "save_log",
+      "sourceHandle": null,
+      "target": "alert_notify",
+      "targetHandle": null
+    }
+  ],
+  "goal": null
+}

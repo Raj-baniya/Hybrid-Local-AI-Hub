@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   Connection,
   ReactFlowInstance,
   BackgroundVariant,
@@ -56,15 +55,6 @@ export const GraphCanvas: React.FC = () => {
         redo();
         e.preventDefault();
       }
-      
-      // Delete
-      else if (key === 'delete' || key === 'backspace') {
-        const selected = activeTab.nodes.filter(n => n.selected);
-        if (selected.length > 0) {
-           pushHistory();
-           deleteNodes(selected.map(n => n.id));
-        }
-      }
 
       // Copy
       else if ((e.ctrlKey || e.metaKey) && key === 'c') {
@@ -78,9 +68,9 @@ export const GraphCanvas: React.FC = () => {
       else if ((e.ctrlKey || e.metaKey) && key === 'v') {
          if (clipboard.length > 0) {
             pushHistory();
-            const newNodes = clipboard.map((n, i) => {
+            const newNodes = clipboard.map((n) => {
                 const nodeType = (n.data as any).type || 'unknown';
-                const newId = `${nodeType.toLowerCase().replace('node', '')}_${Date.now().toString().slice(-4)}${i}`;
+                const newId = `${nodeType.toLowerCase().replace('node', '')}_${crypto.randomUUID().slice(0, 8)}`;
                 return {
                    ...n,
                    id: newId,
@@ -150,7 +140,7 @@ export const GraphCanvas: React.FC = () => {
         onInit={setRfInstance}
         onPaneClick={() => setSelectedNodeId(null)}
         onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-        onNodesDelete={(nodes) => deleteNodes(nodes.map((n) => n.id))}
+        onNodesDelete={(nodes) => { pushHistory(); deleteNodes(nodes.map((n) => n.id)); }}
         onNodeDragStart={() => pushHistory()}
         deleteKeyCode={["Backspace", "Delete"]}
         fitView
@@ -205,23 +195,7 @@ export const GraphCanvas: React.FC = () => {
               overflow: 'hidden'
            }} 
         />
-        <MiniMap 
-          nodeColor={(node) => {
-            switch (node.type) {
-              case 'ScheduleNode': return '#f59e0b';
-              case 'TextInputNode': return '#3b82f6';
-              case 'AiPlanNode': return '#e11d48';
-              default: return theme === 'dark' ? '#475569' : '#cbd5e1';
-            }
-          }}
-          maskColor={theme === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.7)'}
-          style={{ 
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-medium)',
-            borderRadius: 8,
-            overflow: 'hidden'
-          }} 
-        />
+
       </ReactFlow>
     </div>
   );

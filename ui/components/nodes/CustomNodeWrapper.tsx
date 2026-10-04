@@ -30,6 +30,7 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
   const status = useWorkflowStore((s) => s.nodeStatusMap[id]);
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
 
+
   const getStatusBadge = () => {
     if (!status || status.status === 'idle') return null;
 
@@ -70,13 +71,14 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
       <NodeToolbar isVisible={selected && selectedNodeId === id} position={Position.Bottom} offset={15}>
         <NodeInspector />
       </NodeToolbar>
+      <div style={{ position: 'relative' }}>
       <div
       className="custom-node-card"
       style={{
         width: 280,
         borderRadius: 12,
         background: 'var(--bg-secondary)',
-        border: `1.5px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-subtle)'}`,
+        border: `1.5px solid ${selected ? 'var(--accent-cyan)' : 'var(--neo-border)'}`,
         boxShadow: selected
           ? 'var(--shadow-glow)'
           : status?.status === 'running'
@@ -85,6 +87,8 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
         transition: 'all 0.15s ease',
         cursor: 'pointer',
         overflow: 'hidden',
+        position: 'relative',
+        zIndex: 1,
       }}
     >
       {/* Target Handle */}
@@ -104,7 +108,7 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
           justifyContent: 'space-between',
           padding: '10px 14px',
           background: `linear-gradient(135deg, ${headerColor}22 0%, var(--bg-card) 100%)`,
-          borderBottom: '1px solid var(--border-subtle)',
+          borderBottom: '1px solid var(--neo-border)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -146,6 +150,7 @@ export const CustomNodeWrapper: React.FC<CustomNodeWrapperProps> = ({
           />
         </div>
       ))}
+    </div>
     </div>
     </>
   );

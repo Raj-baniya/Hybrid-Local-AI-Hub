@@ -21,7 +21,7 @@ export const ChatHistorySidebar: React.FC = () => {
       width: '260px',
       height: '100%',
       background: 'var(--bg-glass)',
-      borderRight: '1px solid var(--border-subtle)',
+      borderRight: '1px solid var(--neo-border)',
       display: 'flex',
       flexDirection: 'column',
       padding: '16px',
@@ -68,7 +68,7 @@ export const ChatHistorySidebar: React.FC = () => {
                   justifyContent: 'space-between',
                   padding: '12px',
                   background: isActive ? 'rgba(6, 182, 212, 0.1)' : 'var(--bg-card)',
-                  border: isActive ? '1px solid rgba(6, 182, 212, 0.3)' : '1px solid var(--border-subtle)',
+                  border: isActive ? '1px solid rgba(6, 182, 212, 0.3)' : '1px solid var(--neo-border)',
                   borderRadius: '8px',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
@@ -79,7 +79,7 @@ export const ChatHistorySidebar: React.FC = () => {
                   e.currentTarget.style.background = isActive ? 'rgba(6, 182, 212, 0.15)' : 'var(--bg-card-hover)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = isActive ? 'rgba(6, 182, 212, 0.3)' : 'var(--border-subtle)';
+                  e.currentTarget.style.borderColor = isActive ? 'rgba(6, 182, 212, 0.3)' : 'var(--neo-border)';
                   e.currentTarget.style.background = isActive ? 'rgba(6, 182, 212, 0.1)' : 'var(--bg-card)';
                 }}
               >

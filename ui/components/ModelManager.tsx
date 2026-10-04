@@ -173,7 +173,7 @@ export const ModelManager: React.FC = () => {
 
         {/* Pull progress */}
         {pullingModel && (
-          <div style={{ padding: 14, background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 10 }}>
+          <div style={{ padding: 14, background: 'var(--bg-glass)', border: '1px solid var(--neo-border)', borderRadius: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontWeight: 600, fontSize: 12 }}>
                 <Loader2 size={14} className="spinning" />
@@ -184,7 +184,7 @@ export const ModelManager: React.FC = () => {
               </button>
             </div>
             {/* Progress bar */}
-            <div style={{ height: 6, background: 'var(--border-subtle)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+            <div style={{ height: 6, background: 'var(--neo-border)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
               {progressPercent !== null ? (
                 <div style={{ height: '100%', width: `${progressPercent}%`, background: 'var(--accent-cyan)', borderRadius: 99, transition: 'width 0.3s ease' }} />
               ) : (
@@ -206,7 +206,7 @@ export const ModelManager: React.FC = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {models.map((m) => (
-                <div key={m.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 6, fontSize: 12 }}>
+                <div key={m.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-glass)', border: '1px solid var(--neo-border)', borderRadius: 6, fontSize: 12 }}>
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{m.name}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(m.size)}</span>
@@ -231,7 +231,7 @@ export const ModelManager: React.FC = () => {
             {RECOMMENDED_MODELS.map((rec) => {
               const installed = isInstalled(rec.name);
               return (
-                <div key={rec.name} style={{ padding: '10px 12px', background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div key={rec.name} style={{ padding: '10px 12px', background: 'var(--bg-glass)', border: '1px solid var(--neo-border)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ maxWidth: 260 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12, fontFamily: 'monospace' }}>{rec.name}</span>

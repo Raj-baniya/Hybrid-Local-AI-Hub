@@ -31,6 +31,10 @@ impl ProviderManager {
         self.is_offline
     }
 
+    pub fn ollama_client(&self) -> &OllamaClient {
+        &self.ollama
+    }
+
     /// Resolve API key checking OS credential store first, fallback to `online_keys`.
     fn get_api_key(&self, provider_name: &str, fallback_key: &str) -> String {
         if let Ok(entry) = keyring::Entry::new("hybrid-local-ai-hub", provider_name) {
@@ -48,32 +52,64 @@ impl ProviderManager {
         images: Vec<String>,
         json_mode: bool,
     ) -> Result<String> {
-        if self.is_offline {
-            // Strict offline mode, fallback directly to local Ollama
-            return self.ollama.generate(model_selection, prompt, images, json_mode).await;
+        let is_nemotron = model_selection == "NEMOTRON_SUPER" || model_selection == "API|NVIDIA|nvidia/nemotron-3-super-120b-a12b";
+        
+        #[cfg(not(debug_assertions))]
+        {
+            if self.is_offline {
+                // In production build, offline mode is strictly offline (no API keys, no exceptions)
+                return self.ollama.generate(model_selection, prompt, images, json_mode).await;
+            }
+        }
+        #[cfg(debug_assertions)]
+        {
+            if self.is_offline && !is_nemotron {
+                // In development mode, allow the superfast exception for fast demos
+                return self.ollama.generate(model_selection, prompt, images, json_mode).await;
+            }
         }
 
-        if model_selection.starts_with("API|") {
-            let parts: Vec<&str> = model_selection.split('|').collect();
+        let actual_model = if is_nemotron {
+            "API|NVIDIA|nvidia/nemotron-3-super-120b-a12b"
+        } else {
+            model_selection
+        };
+
+        if actual_model.starts_with("API|") {
+            let parts: Vec<&str> = actual_model.split('|').collect();
             if parts.len() >= 3 {
                 let provider_name = parts[1];
                 let api_model = parts[2];
                 
-                if let Some(config) = self.online_keys.iter().find(|k| k.name == provider_name) {
+                let mut api_key = self.online_keys.iter().find(|k| k.name.to_lowercase() == provider_name.to_lowercase()).map(|k| k.key.clone()).unwrap_or_default();
+                
+                #[cfg(debug_assertions)]
+                {
+                    if api_key.is_empty() && provider_name == "NVIDIA" {
+                        api_key = "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".to_string();
+                    }
+                }
+                
+                if api_key.is_empty() {
+                    return Err(anyhow::anyhow!("No API key found for provider '{}'. Please add your API key in Settings > Providers.", provider_name));
+                }
+                
+                if !api_key.is_empty() {
                     if !images.is_empty() {
-                        return Err(anyhow::anyhow!("Online provider {} does not currently support image inputs in ProviderManager.", config.name));
+                        return Err(anyhow::anyhow!("Online provider {} does not currently support image inputs in ProviderManager.", provider_name));
                     }
 
                     let url = match provider_name.to_lowercase().as_str() {
                         "groq" => "https://api.groq.com/openai/v1/chat/completions",
                         "nvidia" => "https://integrate.api.nvidia.com/v1/chat/completions",
+                        "pollinations" => "https://text.pollinations.ai/openai/v1/chat/completions",
                         _ => "https://api.openai.com/v1/chat/completions" // Default to OpenAI
                     };
 
                     let mut request_body = serde_json::json!({
                         "model": api_model,
                         "messages": [{ "role": "user", "content": prompt }],
-                        "max_tokens": 1024,
+                        "max_tokens": 8192,
                         "temperature": 0.2
                     });
 
@@ -81,7 +117,7 @@ impl ProviderManager {
                         request_body["response_format"] = serde_json::json!({ "type": "json_object" });
                     }
 
-                    let actual_key = self.get_api_key(&config.name, &config.key);
+                    let actual_key = self.get_api_key(provider_name, &api_key);
                     let res = self.client.post(url)
                         .header("Authorization", format!("Bearer {}", actual_key))
                         .header("Content-Type", "application/json")
@@ -91,12 +127,14 @@ impl ProviderManager {
 
                     match res {
                         Ok(response) if response.status().is_success() => {
-                            if let Ok(json) = response.json::<serde_json::Value>().await {
+                            let raw_text = response.text().await.unwrap_or_default();
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw_text) {
                                 if let Some(content) = json["choices"][0]["message"]["content"].as_str() {
                                     return Ok(content.to_string());
                                 }
+                                return Err(anyhow::anyhow!("Invalid JSON structure from provider: {}", raw_text));
                             }
-                            return Err(anyhow::anyhow!("Invalid JSON response from provider"));
+                            return Err(anyhow::anyhow!("Failed to parse JSON from provider: {}", raw_text));
                         }
                         Ok(response) => {
                             let status = response.status();

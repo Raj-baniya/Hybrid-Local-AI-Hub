@@ -106,9 +106,9 @@ pub async fn chat(args: ChatArgs) -> Result<()> {
         }
 
         let raw_output = client
-            .generate(&args.model, &prompt, vec![], false)
+            .generate(&args.model, &prompt, vec![], true)
             .await
-            .map_err(|e| anyhow!("LLM failed: {e}"))?;
+            .map_err(|e| anyhow!("LLM generation request failed: {e}"))?;
 
         // Extract JSON from the response (model may wrap it in prose).
         let json_str = extract_json(&raw_output);

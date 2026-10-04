@@ -47,6 +47,12 @@ keyring = "3.6.1"
 blake3 = "1.8.7"
 dialoguer = "0.11"
 console = "0.15"
+async-recursion = "1.1.1"
+enigo = "0.2"
+xcap = "0.0.12"
+duckdb = { version = "1.0", features = ["bundled"] }
+wasmtime = "24.0"
+rusty-tesseract = "1.1.9"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

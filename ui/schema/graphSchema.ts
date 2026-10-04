@@ -168,6 +168,86 @@ export const ListProcessesConfigSchema = z.object({
   limit: z.number().int().positive().optional().nullable(),
 });
 
+export const DocumentQaRAGConfigSchema = z.object({
+  type: z.literal('DocumentQaRAGNode'),
+  query: z.string().optional().nullable(),
+  collectionName: z.string().default('local_docs'),
+  dbPath: z.string().optional().nullable(),
+  embeddingModel: z.string().optional().nullable(),
+  nResults: z.number().int().positive().optional().nullable(),
+});
+
+export const LocalVisionInterpreterConfigSchema = z.object({
+  type: z.literal('LocalVisionInterpreterNode'),
+  imagePath: z.string().optional().nullable(),
+  visionModel: z.string().optional().nullable(),
+  prompt: z.string().optional().nullable(),
+});
+
+export const UIActionConfigSchema = z.object({
+  type: z.literal('UIActionNode'),
+  actions: z.array(z.object({
+    type: z.string(),
+    x: z.number().int().optional().nullable(),
+    y: z.number().int().optional().nullable(),
+    text: z.string().optional().nullable(),
+    key: z.string().optional().nullable(),
+    duration: z.number().optional().nullable(),
+    delayAfter: z.number().optional().nullable(),
+  })).default([]),
+});
+
+export const KillProcessConfigSchema = z.object({
+  type: z.literal('KillProcessNode'),
+  processName: z.string().optional().nullable(),
+});
+
+export const CallAgentConfigSchema = z.object({
+  type: z.literal('CallAgentNode'),
+  agent_name: z.string().default(''),
+  input_override: z.string().optional(),
+});
+
+export const NativeWindowControlConfigSchema = z.object({
+  type: z.literal('NativeWindowControlNode'),
+  targetProcess: z.string().optional().nullable(),
+  windowTitleMatch: z.string().optional().nullable(),
+  automationId: z.string().optional().nullable(),
+  action: z.string().optional().nullable(),
+  textPayload: z.string().optional().nullable(),
+});
+
+export const ScreenCaptureConfigSchema = z.object({
+  type: z.literal('ScreenCaptureNode'),
+  outputPath: z.string().default(''),
+  specificWindowTitle: z.string().optional().nullable(),
+});
+
+export const MouseKeyboardSimConfigSchema = z.object({
+  type: z.literal('MouseKeyboardSimNode'),
+  actionType: z.string().default('click'),
+  x: z.number().int().optional().nullable(),
+  y: z.number().int().optional().nullable(),
+  payload: z.string().optional().nullable(),
+});
+
+export const LocalOCRConfigSchema = z.object({
+  type: z.literal('LocalOCRNode'),
+  imagePath: z.string().default(''),
+});
+
+export const DuckDbQueryConfigSchema = z.object({
+  type: z.literal('DuckDbQueryNode'),
+  query: z.string().default(''),
+  dbPath: z.string().optional().nullable(),
+});
+
+export const WasmSandboxConfigSchema = z.object({
+  type: z.literal('WasmSandboxNode'),
+  wasmModulePath: z.string().default(''),
+  inputData: z.string().optional().nullable(),
+});
+
 export const NodeTypeSchema = z.discriminatedUnion('type', [
   FileWatcherConfigSchema,
   TextInputConfigSchema,
@@ -198,6 +278,17 @@ export const NodeTypeSchema = z.discriminatedUnion('type', [
   GetCpuUsageConfigSchema,
   GetMemoryUsageConfigSchema,
   ListProcessesConfigSchema,
+  DocumentQaRAGConfigSchema,
+  LocalVisionInterpreterConfigSchema,
+  UIActionConfigSchema,
+  KillProcessConfigSchema,
+  NativeWindowControlConfigSchema,
+  CallAgentConfigSchema,
+  ScreenCaptureConfigSchema,
+  MouseKeyboardSimConfigSchema,
+  LocalOCRConfigSchema,
+  DuckDbQueryConfigSchema,
+  WasmSandboxConfigSchema,
 ]);
 
 export const GraphNodeSchema = z.object({
@@ -275,6 +366,17 @@ export type AiPlanConfig = z.infer<typeof AiPlanConfigSchema>;
 export type GetCpuUsageConfig = z.infer<typeof GetCpuUsageConfigSchema>;
 export type GetMemoryUsageConfig = z.infer<typeof GetMemoryUsageConfigSchema>;
 export type ListProcessesConfig = z.infer<typeof ListProcessesConfigSchema>;
+export type DocumentQaRAGConfig = z.infer<typeof DocumentQaRAGConfigSchema>;
+export type LocalVisionInterpreterConfig = z.infer<typeof LocalVisionInterpreterConfigSchema>;
+export type UIActionConfig = z.infer<typeof UIActionConfigSchema>;
+export type KillProcessConfig = z.infer<typeof KillProcessConfigSchema>;
+export type NativeWindowControlConfig = z.infer<typeof NativeWindowControlConfigSchema>;
+export type CallAgentConfig = z.infer<typeof CallAgentConfigSchema>;
+export type ScreenCaptureConfig = z.infer<typeof ScreenCaptureConfigSchema>;
+export type MouseKeyboardSimConfig = z.infer<typeof MouseKeyboardSimConfigSchema>;
+export type LocalOCRConfig = z.infer<typeof LocalOCRConfigSchema>;
+export type DuckDbQueryConfig = z.infer<typeof DuckDbQueryConfigSchema>;
+export type WasmSandboxConfig = z.infer<typeof WasmSandboxConfigSchema>;
 
 export type NodeType = z.infer<typeof NodeTypeSchema>;
 export type GraphNode = z.infer<typeof GraphNodeSchema>;

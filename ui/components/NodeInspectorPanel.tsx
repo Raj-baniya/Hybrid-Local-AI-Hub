@@ -79,7 +79,7 @@ export const NodeInspectorPanel: React.FC = () => {
             background: 'var(--bg-primary)', 
             padding: 12, 
             borderRadius: 6, 
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--neo-border)',
             fontSize: 12,
             color: 'var(--text-secondary)',
             whiteSpace: 'pre-wrap',
@@ -90,7 +90,7 @@ export const NodeInspectorPanel: React.FC = () => {
           </pre>
         </div>
 
-        <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--neo-border)' }}>
           <button 
             className="btn btn-primary" 
             style={{ width: '100%', justifyContent: 'center' }}

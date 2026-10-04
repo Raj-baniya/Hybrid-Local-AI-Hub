@@ -3,7 +3,6 @@ import { useWorkflowStore } from '../store/workflowStore';
 import { NodeType } from '../schema/graphSchema';
 import { Trash2, X, Activity, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
-
 const nodeDescriptions: Record<string, string> = {
   FileWatcherNode: "Monitors a directory for file changes (create, modify, delete) matching a specific pattern. Often used to trigger workflows when a new file arrives.",
   TextInputNode: "Provides a static text block or a template. You can reference previous node outputs using {{node_id.output}}.",
@@ -460,6 +459,85 @@ export const NodeInspector: React.FC = () => {
             <input type="text" value={data.modelRole || 'planner'} onChange={(e) => updateNodeData(selectedNode.id, { modelRole: e.target.value })} style={inputStyle} />
           </>
         );
+      case 'DocumentQaRAGNode':
+        return (
+          <>
+            <label style={labelStyle}>Query (optional)</label>
+            <input type="text" value={data.query || ''} onChange={(e) => updateNodeData(selectedNode.id, { query: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>Collection Name</label>
+            <input type="text" value={data.collectionName || 'local_docs'} onChange={(e) => updateNodeData(selectedNode.id, { collectionName: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>Results count</label>
+            <input type="number" value={data.nResults ?? 3} onChange={(e) => { const val = parseInt(e.target.value, 10); updateNodeData(selectedNode.id, { nResults: isNaN(val) ? undefined : val }); }} style={inputStyle} />
+          </>
+        );
+      case 'LocalVisionInterpreterNode':
+        return (
+          <>
+            <label style={labelStyle}>Image Path</label>
+            <input type="text" value={data.imagePath || ''} onChange={(e) => updateNodeData(selectedNode.id, { imagePath: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>Prompt</label>
+            <input type="text" value={data.prompt || ''} onChange={(e) => updateNodeData(selectedNode.id, { prompt: e.target.value })} style={inputStyle} />
+          </>
+        );
+      case 'KillProcessNode':
+        return (
+          <>
+            <label style={labelStyle}>Process Name</label>
+            <input type="text" value={data.processName || ''} onChange={(e) => updateNodeData(selectedNode.id, { processName: e.target.value })} style={inputStyle} />
+          </>
+        );
+      case 'ScreenCaptureNode':
+        return (
+          <>
+            <label style={labelStyle}>Output Path</label>
+            <input type="text" value={data.outputPath || ''} onChange={(e) => updateNodeData(selectedNode.id, { outputPath: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>Specific Window Title (optional)</label>
+            <input type="text" value={data.specificWindowTitle || ''} onChange={(e) => updateNodeData(selectedNode.id, { specificWindowTitle: e.target.value })} style={inputStyle} />
+          </>
+        );
+      case 'MouseKeyboardSimNode':
+        return (
+          <>
+            <label style={labelStyle}>Action Type (click, type, move)</label>
+            <input type="text" value={data.actionType || 'click'} onChange={(e) => updateNodeData(selectedNode.id, { actionType: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>X Coordinate</label>
+            <input type="number" value={data.x || 0} onChange={(e) => updateNodeData(selectedNode.id, { x: parseInt(e.target.value) || 0 })} style={inputStyle} />
+            <label style={labelStyle}>Y Coordinate</label>
+            <input type="number" value={data.y || 0} onChange={(e) => updateNodeData(selectedNode.id, { y: parseInt(e.target.value) || 0 })} style={inputStyle} />
+            <label style={labelStyle}>Payload (for typing)</label>
+            <input type="text" value={data.payload || ''} onChange={(e) => updateNodeData(selectedNode.id, { payload: e.target.value })} style={inputStyle} />
+          </>
+        );
+      case 'LocalOCRNode':
+        return (
+          <>
+            <label style={labelStyle}>Image Path</label>
+            <input type="text" value={data.imagePath || ''} onChange={(e) => updateNodeData(selectedNode.id, { imagePath: e.target.value })} style={inputStyle} />
+          </>
+        );
+      case 'DuckDbQueryNode':
+        return (
+          <>
+            <label style={labelStyle}>DuckDB SQL Query</label>
+            <AutoResizeTextarea rows={3} value={data.query || ''} onChange={(e) => updateNodeData(selectedNode.id, { query: e.target.value })} style={textareaStyle} />
+            <label style={labelStyle}>Database Path (optional)</label>
+            <input type="text" value={data.dbPath || ''} onChange={(e) => updateNodeData(selectedNode.id, { dbPath: e.target.value })} style={inputStyle} />
+          </>
+        );
+      case 'WasmSandboxNode':
+        return (
+          <>
+            <label style={labelStyle}>WASM Module Path</label>
+            <input type="text" value={data.wasmModulePath || ''} onChange={(e) => updateNodeData(selectedNode.id, { wasmModulePath: e.target.value })} style={inputStyle} />
+            <label style={labelStyle}>Input Data (JSON/Text)</label>
+            <input type="text" value={data.inputData || ''} onChange={(e) => updateNodeData(selectedNode.id, { inputData: e.target.value })} style={inputStyle} />
+          </>
+        );
+      case 'UIActionNode':
+        return <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Configured via code.</p>;
+      case 'NativeWindowControlNode':
+      case 'CallAgentNode':
+        return <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Configured via code.</p>;
     }
   };
 
@@ -473,12 +551,13 @@ export const NodeInspector: React.FC = () => {
         flexDirection: 'column',
         userSelect: 'text',
         cursor: 'auto',
+        padding: 0, // Reset padding from spotlight card default
       }}
     >
       <div
         style={{
           padding: '14px 16px',
-          borderBottom: '1px solid var(--border-subtle)',
+          borderBottom: '1px solid var(--neo-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -489,7 +568,10 @@ export const NodeInspector: React.FC = () => {
           <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>ID: {selectedNode.id}</div>
         </div>
         <button
-          onClick={() => setSelectedNodeId(null)}
+          onClick={() => {
+            setSelectedNodeId(null);
+            useWorkflowStore.getState().onNodesChange([{ id: selectedNode.id, type: 'select', selected: false }]);
+          }}
           style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
         >
           <X size={16} />
@@ -497,7 +579,7 @@ export const NodeInspector: React.FC = () => {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5, padding: "12px", background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border-subtle)" }}>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5, padding: "12px", background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--neo-border)" }}>
           {nodeDescriptions[data.type] || "A custom workflow node."}
         </div>
         {renderFields()}
@@ -524,7 +606,9 @@ export const NodeInspector: React.FC = () => {
                 {selectedNodeStatus.status === 'success' && <CheckCircle size={10} />}
                 {selectedNodeStatus.status === 'failed' && <AlertCircle size={10} />}
                 {selectedNodeStatus.status === 'running' && <Clock size={10} />}
-                {selectedNodeStatus.status.charAt(0).toUpperCase() + selectedNodeStatus.status.slice(1)}
+                <span>
+                  {selectedNodeStatus.status.charAt(0).toUpperCase() + selectedNodeStatus.status.slice(1)}
+                </span>
               </span>
             </div>
             
@@ -579,7 +663,7 @@ export const NodeInspector: React.FC = () => {
         )}
       </div>
 
-      <div style={{ padding: 14, borderTop: '1px solid var(--border-subtle)' }}>
+      <div style={{ padding: 14, borderTop: '1px solid var(--neo-border)' }}>
         <button
           className="btn btn-danger"
           style={{ width: '100%', justifyContent: 'center' }}

@@ -110,6 +110,12 @@ async fn run_compiler_loop(
         let json_str = extract_json(&raw_output);
         last_json = json_str.to_string();
 
+        if let Ok(err_response) = serde_json::from_str::<serde_json::Value>(json_str) {
+            if let Some(error_msg) = err_response.get("error").and_then(|v| v.as_str()) {
+                return Err(error_msg.to_string());
+            }
+        }
+
         let parsed: Graph = match serde_json::from_str(json_str) {
             Ok(g) => g,
             Err(e) => {
@@ -143,10 +149,15 @@ async fn run_compiler_loop(
     }
 
     // Step 26: Return detailed validation errors instead of generic failure
+    let err_str = last_errors.join("\n- ");
+    if err_str.contains("unknown variant") {
+        return Err("This type of automation can't be created.".to_string());
+    }
+    
     Err(format!(
         "Failed to generate a valid workflow after {} attempts.\n\nThe AI model couldn't fix these issues:\n- {}",
         MAX_REPAIR_ROUNDS + 1,
-        last_errors.join("\n- ")
+        err_str
     ))
 }
 

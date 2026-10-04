@@ -13,14 +13,16 @@ export const SavePromptModal: React.FC = () => {
   const tab = tabs.find(t => t.id === tabToClose);
   if (!tab) return null;
 
+  const [saveName, setSaveName] = useState("");
+
   const handleSaveAndClose = async () => {
     let nameToSave = tab.title;
     if (nameToSave.startsWith('Untitled')) {
-      const userInput = window.prompt("Enter a name for your agent:");
-      if (!userInput || userInput.trim() === '') {
-        return; // User cancelled the save
+      if (!saveName || saveName.trim() === '') {
+        setError("Please enter a name for your agent.");
+        return;
       }
-      nameToSave = userInput.trim();
+      nameToSave = saveName.trim();
     }
 
     setIsSaving(true);

@@ -10,6 +10,7 @@ fn text_node(id: &str) -> GraphNode {
         position: None,
         data: NodeType::TextInputNode(TextInputConfig {
             text: "Hello world".to_string(),
+            require_user_prompt: Some(false),
         }),
     }
 }
@@ -308,7 +309,7 @@ fn graph_json_round_trips() {
         text_node("t1"),
         GraphNode {
             id: "img1".to_string(),
-            position: Some((10.0, 20.0)),
+            position: Some(Position { x: 10.0, y: 20.0 }),
             data: NodeType::ImageInputNode(ImageInputConfig {
                 image_path: "./photo.jpg".to_string(),
             }),

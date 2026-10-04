@@ -1,4 +1,4 @@
-//! Execution engine: topological sort Ã¢â€ â€™ concurrent node execution via Kahn's algorithm.
+//! Execution engine: topological sort ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ concurrent node execution via Kahn's algorithm.
 //!
 //! Failure policy:
 //!   - Default (`FailurePolicy::HaltOnFailure`): any node failure immediately skips
@@ -20,7 +20,7 @@ use crate::interpolation;
 use crate::providers::ProviderManager;
 use crate::schema::{AgentDefinition, Graph, NodeType};
 
-// â”€â”€â”€ Permission Broker Stub â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Permission Broker Stub Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 pub struct PermissionBroker;
 
@@ -38,7 +38,7 @@ impl PermissionBroker {
 }
 
 
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Public API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Public API ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FailurePolicy {
@@ -58,13 +58,16 @@ pub struct ExecutorConfig {
     pub llm_timeout_secs: u64,
     pub is_offline: bool,
     pub online_keys: Vec<crate::providers::ApiKeyConfig>,
+    pub agents_dir: Option<std::path::PathBuf>,
     /// When true, side-effecting nodes log intent but do not actually perform actions.
     pub suppress_actions: bool,
+    pub manual_input_rx: Option<std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<String>>>>,
 }
 
 impl Default for ExecutorConfig {
     fn default() -> Self {
         Self {
+            agents_dir: None,
             ollama_url: "http://127.0.0.1:11434".to_string(),
             chroma_url: "http://localhost:8000".to_string(),
             failure_policy: FailurePolicy::HaltOnFailure,
@@ -73,6 +76,7 @@ impl Default for ExecutorConfig {
             is_offline: true,
             online_keys: vec![],
             suppress_actions: false,
+            manual_input_rx: None,
         }
     }
 }
@@ -80,6 +84,7 @@ impl Default for ExecutorConfig {
 /// Run a graph end-to-end.
 ///
 /// Returns the `ExecutionRecord` describing what happened (saved to disk on completion).
+#[async_recursion::async_recursion]
 pub async fn run_graph(
     graph: &Graph,
     agent: Option<&AgentDefinition>,
@@ -303,6 +308,9 @@ pub async fn run_graph(
                 _ => sp_count > 0,
             };
 
+            let node_config = config.clone();
+            let node_cancel = cancel_flag.clone();
+            let node_pause = pause_flag.clone();
             let handle = tokio::spawn(async move {
                 if should_skip {
                     return (node_id.clone(), Err::<String, anyhow::Error>(anyhow!("SKIP")));
@@ -347,6 +355,9 @@ pub async fn run_graph(
                     run_id_clone,
                     state_store.clone(),
                     suppress_actions,
+                    node_config,
+                    node_cancel.unwrap_or_else(|| std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))),
+                    node_pause.unwrap_or_else(|| std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))),
                 );
                 let result = timeout(Duration::from_secs(timeout_secs), fut).await;
 
@@ -562,7 +573,7 @@ pub async fn run_graph(
     Ok(record)
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Internals Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Internals ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 fn build_adj_and_indegree(
     graph: &Graph,
@@ -628,10 +639,17 @@ fn node_type_name(data: &NodeType) -> &'static str {
         NodeType::GetCpuUsageNode(_) => "GetCpuUsageNode",
         NodeType::GetMemoryUsageNode(_) => "GetMemoryUsageNode",
         NodeType::ListProcessesNode(_) => "ListProcessesNode",
+        NodeType::ScreenCaptureNode(_) => "ScreenCaptureNode",
+        NodeType::MouseKeyboardSimNode(_) => "MouseKeyboardSimNode",
+        NodeType::LocalOCRNode(_) => "LocalOCRNode",
+        NodeType::DuckDbQueryNode(_) => "DuckDbQueryNode",
+        NodeType::WasmSandboxNode(_) => "WasmSandboxNode",
+        _ => "UnknownNode",
     }
 }
 
 /// Execute a single node. Returns its string output.
+#[async_recursion::async_recursion]
 async fn execute_node(
     node_id: String,
     node_data: NodeType,
@@ -644,23 +662,43 @@ async fn execute_node(
     run_id: String,
     state_store: crate::state_store::StateStore,
     suppress_actions: bool,
+    config: ExecutorConfig,
+    cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pause_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<String> {
     match node_data {
-        // â”€â”€ TextInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ TextInputNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::TextInputNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
             
-            let text_val = cfg.text.clone();
-            if text_val.trim().is_empty() && predecessors.is_empty() {
-                return Err(anyhow!("TextInputNode '{}': text is empty", node_id));
+            let mut text_val = cfg.text.clone();
+            
+            if cfg.require_user_prompt.unwrap_or(false) {
+                drop(locked);
+                if let Some(rx_mutex) = &config.manual_input_rx {
+                    let mut rx = rx_mutex.lock().await;
+                    if let Some(input) = rx.recv().await {
+                        text_val = input;
+                    } else {
+                        return Err(anyhow!("TextInputNode '{}': input channel closed", node_id));
+                    }
+                } else {
+                    return Err(anyhow!("TextInputNode '{}': require_user_prompt is true but no input channel provided", node_id));
+                }
+            } else {
+                if text_val.trim().is_empty() && predecessors.is_empty() {
+                    return Err(anyhow!("TextInputNode '{}': text is empty", node_id));
+                }
             }
 
+            // If we dropped locked, re-acquire it for resolve
+            let locked = outputs.lock().await;
             let resolved = interpolation::resolve(&text_val, &locked, single.as_deref())?;
             Ok(resolved)
         }
 
-        // â”€â”€ FileWatcherNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ FileWatcherNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::FileWatcherNode(cfg) => {
             let mut target_path = None;
             if trigger_source.starts_with("watch:") {
@@ -709,7 +747,7 @@ async fn execute_node(
             }
         }
 
-        // â”€â”€ ScheduleNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ ScheduleNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::ScheduleNode(_cfg) => {
             if trigger_source.starts_with("cron:") {
                 Ok(trigger_source.to_string())
@@ -719,7 +757,7 @@ async fn execute_node(
             }
         }
 
-        // â”€â”€ Phase 2 Deterministic Analytics Nodes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ Phase 2 Deterministic Analytics Nodes Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::SourceFileNode(cfg) => {
             let path = std::path::Path::new(&cfg.path);
             if !path.exists() {
@@ -951,7 +989,7 @@ async fn execute_node(
                 .map_err(|e| anyhow!("AiPlanNode '{}': {e}", node_id))
         }
 
-        // â”€â”€ ImageInputNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ ImageInputNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::ImageInputNode(cfg) => {
             // Read image bytes and base64-encode them for downstream LLM nodes.
             let bytes = tokio::fs::read(&cfg.image_path).await.map_err(|e| {
@@ -962,7 +1000,7 @@ async fn execute_node(
             Ok(format!("<image>{}</image>", b64))
         }
 
-        // â”€â”€ PDFExtractorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ PDFExtractorNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::PDFExtractorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -976,7 +1014,7 @@ async fn execute_node(
             extract_pdf_text(&node_id, &pdf_path, cfg.page_range)
         }
 
-        // â”€â”€ OllamaSelectorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ OllamaSelectorNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::OllamaSelectorNode(cfg) => {
             let locked = outputs.lock().await;
             let single = single_input_value(&predecessors, &locked);
@@ -1013,14 +1051,14 @@ async fn execute_node(
                 .map_err(|e| anyhow!("OllamaSelectorNode '{}': {e}", node_id))
         }
 
-        // â”€â”€ LocalEmbedderNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ LocalEmbedderNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::LocalEmbedderNode(cfg) => {
             let prompt = single_input_value(&predecessors, &*outputs.lock().await).unwrap_or_default();
             let embedding = ollama.embed(&cfg.model, &prompt).await?;
             Ok(serde_json::to_string(&embedding).unwrap_or_default())
         }
 
-        // â”€â”€ ChromaDbStoreNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ ChromaDbStoreNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::ChromaDbStoreNode(cfg) => {
             let locked = outputs.lock().await;
 
@@ -1057,7 +1095,7 @@ async fn execute_node(
             Ok(format!("Stored document '{}' in collection '{}'", id, cfg.collection_name))
         }
 
-        // â”€â”€ ConditionalRouterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬ ConditionalRouterNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         // Fix #8: handle empty condition and empty target edge cases
         NodeType::ConditionalRouterNode(cfg) => {
             // Validate targets first
@@ -1094,7 +1132,7 @@ async fn execute_node(
             Ok(format!("routed:{}", routed_to))
         }
 
-                // â”€â”€ LocalFileWriterNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // Ã¢â€â‚¬Ã¢â€â‚¬ LocalFileWriterNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         // Fix #3: idempotency check before writing
         // Fix #4: dry-run support
         NodeType::LocalFileWriterNode(cfg) => {
@@ -1334,7 +1372,7 @@ async fn execute_node(
             }
         }
 
-                // â”€â”€ RegexExtractorNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // Ã¢â€â‚¬Ã¢â€â‚¬ RegexExtractorNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         NodeType::RegexExtractorNode(cfg) => {
             let locked = outputs.lock().await;
             let content_raw = single_input_value(&predecessors, &locked)
@@ -1517,6 +1555,52 @@ async fn execute_node(
             };
             Ok(format!("{:.2}", percentage))
         }
+        NodeType::KillProcessNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let p_name = if let Some(n) = &cfg.process_name {
+                interpolation::resolve(n, &locked, single.as_deref())?
+            } else if let Some(s) = single {
+                s.clone()
+            } else {
+                return Err(anyhow::anyhow!("Process name not provided for KillProcessNode"));
+            };
+            drop(locked);
+
+            let lower = p_name.to_lowercase();
+            let protected = ["hybrid-hub", "hybrid_local_ai_hub", "node.exe", "tauri.exe", "autoagent.exe", "cargo.exe", "npm.cmd", "code.exe"];
+            
+            for p in protected.iter() {
+                if lower.contains(p) {
+                    return Err(anyhow::anyhow!("Security Exception: Cannot kill protected system or app process: {}", p));
+                }
+            }
+
+            if suppress_actions {
+                return Ok(format!("[DRY-RUN] Would kill process: {}", p_name));
+            }
+
+            let exe_name = if p_name.ends_with(".exe") { p_name.clone() } else { format!("{}.exe", p_name) };
+            
+            #[cfg(target_os = "windows")]
+            let status = tokio::process::Command::new("taskkill")
+                .args(["/F", "/IM", &exe_name])
+                .status()
+                .await?;
+                
+            #[cfg(not(target_os = "windows"))]
+            let status = tokio::process::Command::new("pkill")
+                .args(["-f", &p_name])
+                .status()
+                .await?;
+
+            if status.success() {
+                Ok(format!("Process {} killed successfully", p_name))
+            } else {
+                Err(anyhow::anyhow!("Failed to kill process {}", p_name))
+            }
+        }
+
         NodeType::ListProcessesNode(cfg) => {
             let mut sys = sysinfo::System::new();
             // Initial refresh to populate the process list
@@ -1545,6 +1629,181 @@ async fn execute_node(
             }).collect();
             Ok(serde_json::to_string(&out)?)
         }
+        NodeType::NativeWindowControlNode(_) => {
+            if suppress_actions { return Ok("NativeWindowControlNode action suppressed".to_string()); }
+            Ok("NativeWindowControlNode executed (mocked)".to_string())
+        }
+        NodeType::CallAgentNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let agent_name = interpolation::resolve(&cfg.agent_name, &locked, single.as_deref())?;
+            let mut input_override = None;
+            if let Some(io) = &cfg.input_override {
+                input_override = Some(interpolation::resolve(io, &locked, single.as_deref())?);
+            }
+            drop(locked);
+
+            if suppress_actions {
+                return Ok(format!("[DRY-RUN] Would call agent: {}", agent_name));
+            }
+
+            let base_dir = dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+            let base = base_dir.join("hybrid-local-ai-hub");
+            let agents_dir = if config.is_offline { base.join("agents") } else { base.join("online_agents") };
+            
+            let agent_path = agents_dir.join(format!("{}.json", agent_name));
+            if !agent_path.exists() {
+                return Err(anyhow::anyhow!("Agent {} not found at {}", agent_name, agent_path.display()));
+            }
+
+            let content = tokio::fs::read_to_string(&agent_path).await?;
+            let mut subgraph: crate::schema::Graph = serde_json::from_str(&content)?;
+
+            // If input_override is provided, inject it into all TextInputNodes
+            if let Some(input_val) = input_override {
+                for node in subgraph.nodes.iter_mut() {
+                    if let crate::schema::NodeType::TextInputNode(tcfg) = &mut node.data {
+                        tcfg.text = input_val.clone();
+                    }
+                }
+            }
+
+            let sub_config = config.clone();
+            let trigger = format!("Called by CallAgentNode");
+            
+            let sub_record = run_graph(
+                &subgraph,
+                None, // agent definition
+                sub_config,
+                &trigger,
+                None, // event_sender
+                None, // resume_id
+                Some(cancel_flag.clone()),
+                Some(pause_flag.clone()),
+            ).await?;
+
+            if sub_record.overall_status != crate::execution_record::ExecutionStatus::Success {
+                return Err(anyhow::anyhow!("Sub-agent {} failed", agent_name));
+            }
+
+            let mut out_map = serde_json::Map::new();
+            for n in sub_record.nodes {
+                if let Some(out) = n.output_preview {
+                    if !out.is_empty() {
+                        out_map.insert(n.node_id, serde_json::Value::String(out));
+                    }
+                }
+            }
+            Ok(serde_json::to_string(&out_map)?)
+        }
+        NodeType::ScreenCaptureNode(cfg) => {
+            if suppress_actions { return Ok("[DRY-RUN] ScreenCaptureNode action suppressed".to_string()); }
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let path = interpolation::resolve(&cfg.output_path, &locked, single.as_deref())?;
+            let window_title = cfg.specific_window_title.as_ref().map(|t| interpolation::resolve(t, &locked, single.as_deref()).unwrap_or_default());
+            drop(locked);
+            
+            if let Some(title) = window_title {
+                let windows = xcap::Window::all().map_err(|e| anyhow::anyhow!("Failed to list windows: {}", e))?;
+                let window = windows.into_iter().find(|w| w.title() == title || w.title().contains(&title))
+                    .ok_or_else(|| anyhow::anyhow!("No window found with title containing '{}'", title))?;
+                let image = window.capture_image().map_err(|e| anyhow::anyhow!("Failed to capture window: {}", e))?;
+                image.save(&path).map_err(|e| anyhow::anyhow!("Failed to save image to {}: {}", path, e))?;
+            } else {
+                let monitors = xcap::Monitor::all().map_err(|e| anyhow::anyhow!("Failed to list monitors: {}", e))?;
+                let monitor = monitors.iter().find(|m| m.is_primary()).cloned().or_else(|| monitors.first().cloned()).ok_or_else(|| anyhow::anyhow!("No active monitors found"))?;
+                let image = monitor.capture_image().map_err(|e| anyhow::anyhow!("Failed to capture screen: {}", e))?;
+                image.save(&path).map_err(|e| anyhow::anyhow!("Failed to save image to {}: {}", path, e))?;
+            }
+            Ok(path)
+        }
+        NodeType::MouseKeyboardSimNode(cfg) => {
+            use enigo::{Mouse, Keyboard, Settings, Coordinate, Direction};
+            if suppress_actions { return Ok(format!("[DRY-RUN] MouseKeyboardSimNode {} suppressed", cfg.action_type)); }
+            let mut enigo = enigo::Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("Enigo error: {:?}", e))?;
+            
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let action = interpolation::resolve(&cfg.action_type, &locked, single.as_deref())?;
+            let payload = cfg.payload.as_ref().map(|p| interpolation::resolve(p, &locked, single.as_deref()).unwrap_or_default());
+            drop(locked);
+            
+            match action.as_str() {
+                "click" => {
+                    if let (Some(x), Some(y)) = (cfg.x, cfg.y) {
+                        enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                    }
+                    enigo.button(enigo::Button::Left, Direction::Click).map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                }
+                "type" => {
+                    if let Some(text) = payload {
+                        enigo.text(&text).map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                    }
+                }
+                "move" => {
+                    if let (Some(x), Some(y)) = (cfg.x, cfg.y) {
+                        enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                    }
+                }
+                _ => return Err(anyhow::anyhow!("Unknown mouse/keyboard action: {}", action))
+            }
+            Ok(format!("Simulated action: {}", action))
+        }
+        NodeType::LocalOCRNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let path = interpolation::resolve(&cfg.image_path, &locked, single.as_deref())?;
+            drop(locked);
+            
+            let img = rusty_tesseract::Image::from_path(&path).map_err(|e| anyhow::anyhow!("Failed to load image for OCR: {}", e))?;
+            let args = rusty_tesseract::Args::default();
+            let text = rusty_tesseract::image_to_string(&img, &args).map_err(|e| anyhow::anyhow!("OCR failed: {}", e))?;
+            Ok(text.trim().to_string())
+        }
+        NodeType::DuckDbQueryNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let q = interpolation::resolve(&cfg.query, &locked, single.as_deref())?;
+            let db_path = cfg.db_path.as_ref().map(|p| interpolation::resolve(p, &locked, single.as_deref()).unwrap_or_default());
+            drop(locked);
+            
+            let conn = if let Some(path) = db_path {
+                duckdb::Connection::open(&path).map_err(|e| anyhow::anyhow!("DuckDB open error: {}", e))?
+            } else {
+                duckdb::Connection::open_in_memory().map_err(|e| anyhow::anyhow!("DuckDB memory error: {}", e))?
+            };
+            
+            let wrapped_query = format!("SELECT CAST(row_to_json(tbl) AS VARCHAR) FROM ({}) AS tbl", q);
+            let mut stmt = conn.prepare(&wrapped_query).map_err(|e| anyhow::anyhow!("Query prepare error: {}", e))?;
+            let mut rows = stmt.query([]).map_err(|e| anyhow::anyhow!("Query execute error: {}", e))?;
+            
+            let mut results = vec![];
+            while let Some(row) = rows.next().map_err(|e| anyhow::anyhow!("Row fetch error: {}", e))? {
+                let json_str: String = row.get(0).unwrap_or_default();
+                results.push(json_str);
+            }
+            Ok(format!("[{}]", results.join(",")))
+        }
+        NodeType::WasmSandboxNode(cfg) => {
+            let locked = outputs.lock().await;
+            let single = single_input_value(&predecessors, &locked);
+            let path = interpolation::resolve(&cfg.wasm_module_path, &locked, single.as_deref())?;
+            drop(locked);
+            
+            let engine = wasmtime::Engine::default();
+            let module = wasmtime::Module::from_file(&engine, &path).map_err(|e| anyhow::anyhow!("Failed to load WASM module: {}", e))?;
+            let mut store = wasmtime::Store::new(&engine, ());
+            let instance = wasmtime::Instance::new(&mut store, &module, &[]).map_err(|e| anyhow::anyhow!("Failed to instantiate WASM: {}", e))?;
+            
+            let run = instance.get_typed_func::<(), ()>(&mut store, "run")
+                .or_else(|_| instance.get_typed_func::<(), ()>(&mut store, "_start"))
+                .map_err(|e| anyhow::anyhow!("Could not find exported 'run' or '_start' function: {}", e))?;
+            
+            run.call(&mut store, ()).map_err(|e| anyhow::anyhow!("Failed to execute WASM: {}", e))?;
+            Ok(format!("Executed WASM module at {}", path))
+        }
+        _ => Err(anyhow::anyhow!("Node type not implemented in executor")),
     }
 }
 

@@ -227,11 +227,21 @@ const PALETTE_ITEMS: PaletteItem[] = [
   {
     type: 'MergeNode', label: 'Merge Inputs', category: 'Routing & Storage', icon: <GitFork size={16} />, color: '#0891b2', desc: 'Merge inputs into a JSON object',
   },
+  {
+    type: 'DocumentQaRAGNode', label: 'Document QA (RAG)', category: 'AI & Processing', icon: <Sparkles size={16} />, color: '#10b981', desc: 'Query ChromaDB with RAG',
+  },
+  {
+    type: 'LocalVisionInterpreterNode', label: 'Vision Interpreter', category: 'AI & Processing', icon: <ImageIcon size={16} />, color: '#8b5cf6', desc: 'Process images using a Vision model',
+  },
+  {
+    type: 'KillProcessNode', label: 'Kill Process', category: 'Routing & Storage', icon: <Terminal size={16} />, color: '#ef4444', desc: 'Terminate an OS process',
+  },
 ];
 
 export const NodePalette: React.FC = () => {
   const addNode = useWorkflowStore((s) => s.addNode);
   const [search, setSearch] = useState('');
+  const [expandedType, setExpandedType] = useState<string | null>(null);
 
   const isOfflineMode = useSettingsStore((s) => s.isOfflineMode);
   const filtered = PALETTE_ITEMS.filter((item) =>
@@ -258,7 +268,7 @@ export const NodePalette: React.FC = () => {
         height: '100%',
       }}
     >
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--neo-border)' }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
           Node Palette
         </div>
@@ -292,19 +302,21 @@ export const NodePalette: React.FC = () => {
                 {items.map((item) => (
                   <div
                     key={item.type}
-                    draggable
+                    draggable={true}
                     onDragStart={(e) => onDragStart(e, item.type)}
-                    onClick={() => addNode(item.type)}
+                    onClick={() => setExpandedType(expandedType === item.type ? null : item.type)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '8px 10px',
                       background: 'var(--bg-glass)',
-                      border: '1px solid var(--border-subtle)',
+                      border: '1px solid var(--neo-border)',
                       borderRadius: 8,
                       cursor: 'grab',
                       transition: 'all 0.15s ease',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.background = 'var(--bg-card-hover)';
@@ -312,7 +324,7 @@ export const NodePalette: React.FC = () => {
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = 'var(--bg-glass)';
-                      e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                      e.currentTarget.style.borderColor = 'var(--neo-border)';
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -320,12 +332,15 @@ export const NodePalette: React.FC = () => {
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           {item.label}
-
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.desc}</div>
+                        {expandedType === item.type && (
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{item.desc}</div>
+                        )}
                       </div>
                     </div>
-                    <Plus size={14} style={{ color: 'var(--text-muted)' }} />
+                    <button aria-label={`Add ${item.label}`} title={`Add ${item.label}`} onClick={(e) => { e.stopPropagation(); addNode(item.type); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Plus size={14} style={{ color: 'var(--text-primary)' }} />
+                    </button>
                   </div>
                 ))}
               </div>

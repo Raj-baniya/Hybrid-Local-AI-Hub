@@ -62,7 +62,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-  }, []);
+  }, [theme]);
 
   useEffect(() => {
     const completed = localStorage.getItem('onboarding_complete');
@@ -181,12 +181,12 @@ export const App: React.FC = () => {
                   style={{
                     width: 4,
                     cursor: 'col-resize',
-                    background: 'var(--border-subtle)',
+                    background: 'var(--neo-border)',
                     zIndex: 50,
                     transition: 'background 0.2s',
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-blue)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--border-subtle)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--neo-border)'}
                 />
               </>
             )}
@@ -209,12 +209,12 @@ export const App: React.FC = () => {
                   style={{
                     width: 4,
                     cursor: 'col-resize',
-                    background: 'var(--border-subtle)',
+                    background: 'var(--neo-border)',
                     zIndex: 50,
                     transition: 'background 0.2s',
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-blue)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--border-subtle)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--neo-border)'}
                 />
                 <div style={{ width: rightWidth, height: '100%', background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
                   <AgentOutputPanel />

@@ -82,7 +82,7 @@ const wizardCard: React.CSSProperties = {
 
 const headerStyle: React.CSSProperties = {
   padding: '28px 32px 20px',
-  borderBottom: '1px solid var(--border-subtle)',
+  borderBottom: '1px solid var(--neo-border)',
 };
 
 const bodyStyle: React.CSSProperties = {
@@ -207,7 +207,7 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
       {[1, 2, 3].map(s => (
         <div key={s} style={{
           width: s === step ? 24 : 8, height: 8, borderRadius: 4,
-          background: s === step ? 'var(--accent-cyan)' : s < step ? 'var(--accent-emerald)' : 'var(--border-subtle)',
+          background: s === step ? 'var(--accent-cyan)' : s < step ? 'var(--accent-emerald)' : 'var(--neo-border)',
           transition: 'all 0.3s ease',
         }} />
       ))}
@@ -220,7 +220,7 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
       {[1, 2, 3, 4, 5].map(i => (
         <div key={i} style={{
           width: 6, height: 6, borderRadius: '50%',
-          background: i <= rating ? color : 'var(--border-subtle)',
+          background: i <= rating ? color : 'var(--neo-border)',
         }} />
       ))}
     </div>
@@ -362,7 +362,7 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontWeight: 600, fontSize: 12, marginBottom: 8 }}>
                     <Loader2 size={14} className="spinning" /> Downloading {pullingModel}...
                   </div>
-                  <div style={{ height: 6, background: 'var(--border-subtle)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+                  <div style={{ height: 6, background: 'var(--neo-border)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
                     {progressPercent !== null ? (
                       <div style={{ height: '100%', width: `${progressPercent}%`, background: 'linear-gradient(90deg, var(--accent-blue), var(--accent-cyan))', borderRadius: 99, transition: 'width 0.3s ease' }} />
                     ) : (
@@ -399,7 +399,7 @@ export const SetupWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }
                           <span style={{ fontWeight: 700, color: rec.isBest ? 'var(--accent-cyan)' : 'var(--text-primary)', fontSize: 13, fontFamily: 'monospace' }}>{rec.name}</span>
                           <span style={{
                             fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                            background: rec.isBest ? 'rgba(6,182,212,0.2)' : 'var(--border-subtle)',
+                            background: rec.isBest ? 'rgba(6,182,212,0.2)' : 'var(--neo-border)',
                             color: rec.isBest ? 'var(--accent-cyan)' : 'var(--text-secondary)',
                           }}>{rec.tag}</span>
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{rec.sizeLabel}</span>

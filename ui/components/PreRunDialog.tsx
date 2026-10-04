@@ -71,7 +71,7 @@ export const PreRunDialog: React.FC<{ onConfirm: () => void; onCancel: () => voi
 
         <div style={{ overflowY: 'auto', flex: 1, paddingRight: 8, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {inputNodes.map((node) => (
-            <div key={node.id} style={{ background: 'var(--bg-secondary)', padding: 12, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+            <div key={node.id} style={{ background: 'var(--bg-secondary)', padding: 12, borderRadius: 8, border: '1px solid var(--neo-border)' }}>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
                 Input Node: <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{node.id}</span>
               </label>
@@ -97,7 +97,7 @@ export const PreRunDialog: React.FC<{ onConfirm: () => void; onCancel: () => voi
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--neo-border)' }}>
           <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
           <button className="btn btn-primary" onClick={handleProceed}><Play size={14}/> Confirm & Run</button>
         </div>

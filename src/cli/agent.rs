@@ -152,9 +152,7 @@ pub async fn run(args: AgentArgs) {
     }
 
     let mut goal: Option<Goal> = None;
-    let mut working_dir = std::env::current_dir()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| ".".to_string());
+    let working_dir;
 
     if let Some(wf_path) = args.workflow {
         match std::fs::read_to_string(&wf_path) {

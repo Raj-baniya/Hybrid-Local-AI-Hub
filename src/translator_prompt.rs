@@ -94,11 +94,12 @@ You must output ONLY valid JSON matching this schema — no prose, no markdown f
 { "type": "ImageInputNode", "imagePath": "./photo.jpg" }
 ```
 
-**OllamaSelectorNode** — calls a local LLM
+**OllamaSelectorNode** — calls an AI model to process text or data
 ```json
-{ "type": "OllamaSelectorNode", "model": "llama3.2",
+{ "type": "OllamaSelectorNode", "model": "NEMOTRON_SUPER",
   "promptTemplate": "Summarize: {{input}}", "jsonMode": false }
 ```
+CRITICAL: `model` MUST always be "NEMOTRON_SUPER" (for fast API processing) or "llama3.2" (for strict local execution). NEVER use other API names like GPT/Claude/Gemini here.
 (Use `{{input}}` only when this node has exactly ONE incoming edge; otherwise use `{{node_id.output}}`)
 
 **LocalEmbedderNode** — generates embeddings via Ollama
@@ -343,6 +344,9 @@ Rules:
 10. Make reasonable assumptions for unspecified details (model name, output paths, etc.).
 11. Do not use node types outside the 25 available node types defined above. The analytics and notification nodes are available.
 12. CRITICAL - EXPERT PROMPTING: When configuring OllamaSelectorNode, ALWAYS act as an expert Prompt Engineer. Write complex, comprehensive `promptTemplate` values with persona, step-by-step instructions, and formatting rules.
+19. CRITICAL - AI MODEL SELECTION: The `model` field in OllamaSelectorNode MUST ALWAYS be "NEMOTRON_SUPER" (for fast processing) or "llama3.2" (for local processing). ALWAYS prefer "NEMOTRON_SUPER" by default to make processing fast. NEVER use other API-based models (GPT, Claude, Gemini, etc.).
+20. CRITICAL - JSON VALIDITY: Every node id referenced in edges MUST exactly match an id in the nodes array. Double-check all edge source/target values before outputting.
+21. CRITICAL - NO MARKDOWN: Output ONLY the raw JSON object. NO ```json fences, NO explanation text before or after, NO markdown of any kind.
 13. For AiPlanNode, always make sure the upstream data dependencies are properly connected.
 14. MULTI-STEP PIPELINES: For complex automation, chain multiple OllamaSelectorNode instances where each handles one specific task (extract ? classify ? summarize ? route). Never try to do everything in one prompt.
 15. NOTIFICATIONS: Always end long automation pipelines with a NotifyDesktopNode so the user knows the task completed.

@@ -63,6 +63,7 @@ pub struct ScheduledTaskState {
 pub struct ManualRunState {
     pub cancel_flag: Arc<AtomicBool>,
     pub pause_flag: Arc<AtomicBool>,
+    pub manual_input_tx: Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::Sender<String>>>>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -175,28 +176,39 @@ pub async fn launch_terminal_interact(
 pub fn cmd_load_in_terminal(agent_path: String) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?
         .parent().ok_or("no exe dir")?.join(if cfg!(windows) { "hybrid-hub.exe" } else { "hybrid-hub" });
-    let exe = exe.to_string_lossy().to_string();
-    let display_cmd = format!("\"{}\" agent \"{}\"", exe, agent_path);
-
+    
     #[cfg(target_os = "windows")]
-    let r = std::process::Command::new("cmd")
-        .args(["/C", "start", "Hybrid Hub Agent", "cmd", "/K", &display_cmd])
-        .spawn();
+    {
+        let exe_path = exe.to_string_lossy().to_string();
+        let script = format!("& '{}' agent '{}'", exe_path.replace("'", "''"), agent_path.replace("'", "''"));
+        let r = std::process::Command::new("powershell")
+            .arg("-Command")
+            .arg(format!("Start-Process powershell -ArgumentList '-NoExit', '-Command', "{}"", script.replace(""", "\"")))
+            .spawn();
+        return r.map(|_| ()).map_err(|e| format!("Could not open terminal: {}", e));
+    }
 
     #[cfg(target_os = "macos")]
-    let r = std::process::Command::new("osascript")
-        .args(["-e", &format!("tell application \"Terminal\" to do script \"{}\"",
-            display_cmd.replace('\\', "\\\\").replace('"', "\\\""))])
-        .spawn();
+    {
+        let exe_str = exe.to_string_lossy().to_string();
+        let display_cmd = format!("\"{}\" agent \"{}\"", exe_str, agent_path);
+        let r = std::process::Command::new("osascript")
+            .args(["-e", &format!("tell application \"Terminal\" to do script \"{}\"", display_cmd)])
+            .spawn();
+        return r.map(|_| ()).map_err(|e| format!("Could not open terminal: {}", e));
+    }
 
     #[cfg(target_os = "linux")]
-    let r = ["x-terminal-emulator", "gnome-terminal", "konsole", "xterm"].iter()
-        .find_map(|t| std::process::Command::new(t)
-            .args(if *t == "gnome-terminal" { vec!["--", "sh", "-c", &display_cmd] } else { vec!["-e", &display_cmd] })
-            .spawn().ok())
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no terminal found"));
-
-    r.map(|_| ()).map_err(|e| format!("Could not open a terminal ({}). Run this yourself:\n{}", e, display_cmd))
+    {
+        let exe_str = exe.to_string_lossy().to_string();
+        let display_cmd = format!("\"{}\" agent \"{}\"", exe_str, agent_path);
+        let r = ["x-terminal-emulator", "gnome-terminal", "konsole", "xterm"].iter()
+            .find_map(|t| std::process::Command::new(t)
+                .args(if *t == "gnome-terminal" { vec!["--", "sh", "-c", &display_cmd] } else { vec!["-e", &display_cmd] })
+                .spawn().ok())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no terminal found"));
+        return r.map(|_| ()).map_err(|e| format!("Could not open terminal: {}", e));
+    }
 }
 
 #[tauri::command]
@@ -288,6 +300,13 @@ pub async fn run_graph(
     // Validate first before executing.
     validate::validate_graph(&graph).map_err(|errs| errs.join("\n"))?;
 
+    let (input_tx, input_rx) = tokio::sync::mpsc::channel(1);
+    {
+        let mut guard = state.manual_input_tx.lock().await;
+        *guard = Some(input_tx);
+    }
+    let manual_input_rx = Some(std::sync::Arc::new(tokio::sync::Mutex::new(input_rx)));
+
     let default_cfg = ExecutorConfig::default();
     let executor_cfg = if let Some(c) = config {
         ExecutorConfig {
@@ -305,11 +324,14 @@ pub async fn run_graph(
             suppress_actions: c.suppress_actions.unwrap_or(false),
             is_offline,
             online_keys,
+            manual_input_rx: manual_input_rx.clone(),
+            ..default_cfg
         }
     } else {
         ExecutorConfig {
             is_offline,
             online_keys,
+            manual_input_rx: manual_input_rx.clone(),
             ..default_cfg
         }
     };
@@ -1373,6 +1395,22 @@ pub async fn cancel_manual_graph(
 }
 
 #[tauri::command]
+pub async fn send_manual_input(
+    state: State<'_, ManualRunState>,
+    input: String,
+) -> Result<(), String> {
+    let mut tx_guard = state.manual_input_tx.lock().await;
+    if let Some(tx) = tx_guard.as_ref() {
+        if tx.send(input).await.is_err() {
+            return Err("Input channel closed".into());
+        }
+    } else {
+        return Err("No active prompt waiting for input".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn pause_manual_graph(
     state: State<'_, ManualRunState>,
 ) -> Result<(), String> {
@@ -1388,21 +1426,6 @@ pub async fn resume_manual_graph(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn pause_manual_graph(
-    state: State<'_, ManualRunState>,
-) -> Result<(), String> {
-    state.pause_flag.store(true, Ordering::Relaxed);
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn resume_manual_graph(
-    state: State<'_, ManualRunState>,
-) -> Result<(), String> {
-    state.pause_flag.store(false, Ordering::Relaxed);
-    Ok(())
-}
 
 #[tauri::command]
 pub async fn stop_scheduled_graph(
@@ -1761,9 +1784,17 @@ pub async fn run_terminal_agent(
     max_steps: u32,
     ollama_url: String,
     is_offline_mode: bool,
+    workflow_path: Option<String>,
 ) -> Result<(), String> {
-    if is_offline_mode && !ollama_url.contains("localhost") && !ollama_url.contains("127.0.0.1") {
-        return Err("Offline mode is active. Cannot use non-local Ollama URL.".to_string());
+    if is_offline_mode {
+        let parsed = reqwest::Url::parse(&ollama_url).map_err(|_| "Invalid Ollama URL".to_string())?;
+        if let Some(host) = parsed.host_str() {
+            if host != "localhost" && host != "127.0.0.1" && host != "[::1]" {
+                return Err("Offline mode is active. Cannot use non-local Ollama URL.".to_string());
+            }
+        } else {
+            return Err("Offline mode is active. Cannot use non-local Ollama URL.".to_string());
+        }
     }
     let exe_dir = std::env::current_exe().map_err(|e| e.to_string())?.parent().unwrap().to_path_buf();
     let mut bin_path = exe_dir.join("hybrid-hub.exe");
@@ -1783,7 +1814,12 @@ pub async fn run_terminal_agent(
         .arg("--task").arg(task)
         .arg("--model").arg(model)
         .arg("--max-steps").arg(max_steps.to_string())
-        .arg("--ollama-url").arg(ollama_url)
+        .arg("--ollama-url").arg(ollama_url);
+    
+    if let Some(wf) = workflow_path {
+        child.arg("--workflow").arg(wf);
+    }
+    let mut child = child
         .arg("--yes")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

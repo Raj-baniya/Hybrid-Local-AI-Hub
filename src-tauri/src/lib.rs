@@ -9,8 +9,10 @@ pub fn run() {
         .manage(commands::ScheduledTaskState::default())
         .manage(commands::ManualRunState::default())
         .invoke_handler(tauri::generate_handler![
+            commands::launch_autoagent_cli,
             commands::run_graph,
             commands::cancel_manual_graph,
+            commands::send_manual_input,
             commands::pause_manual_graph,
             commands::resume_manual_graph,
             commands::run_graph_scheduled,
@@ -52,6 +54,12 @@ pub fn run() {
             commands::save_provider,
             commands::delete_provider,
             commands::run_terminal_agent,
+            commands::register_startup_agent,
+            commands::register_scheduled_agent,
+            commands::unregister_agent_task,
+            commands::list_agent_tasks,
+            commands::speak_text,
+            commands::test_microphone,
         ])
         .run(tauri::generate_context!());
 

@@ -1,0 +1,136 @@
+﻿{
+  "version": 1,
+  "metadata": {
+    "name": "WhatsApp Windows Automation",
+    "description": "Controls the WhatsApp Windows desktop app to send messages, make voice calls and video calls, triggered by schedule or voice command.",
+    "author": "Hybrid Local AI Hub",
+    "tags": ["whatsapp", "windows", "automation", "schedule", "voice", "call"]
+  },
+  "nodes": [
+    {
+      "id": "voice_trigger",
+      "position": { "x": 60, "y": 60 },
+      "data": {
+        "type": "TextInputNode",
+        "label": "Voice / Text Command Input",
+        "text": "send whatsapp message to +919876543210: Hey! Meeting at 5pm today.",
+        "description": "Type or paste a command here. Supports: 'send message to <phone>: <text>', 'call <phone>', 'video call <phone>'. For voice: pipe your microphone transcript here."
+      }
+    },
+    {
+      "id": "schedule_trigger",
+      "position": { "x": 60, "y": 260 },
+      "data": {
+        "type": "ScheduleNode",
+        "label": "Scheduled Message Trigger",
+        "cron": "0 9 * * *",
+        "description": "Fires every day at 9:00 AM. Customize the cron expression. When fired, passes the TextInputNode value as the scheduled message."
+      }
+    },
+    {
+      "id": "merge_triggers",
+      "position": { "x": 360, "y": 160 },
+      "data": {
+        "type": "MergeNode",
+        "label": "Merge Triggers",
+        "description": "Whichever trigger fires first (voice command or schedule) passes through to the AI parser."
+      }
+    },
+    {
+      "id": "ai_parse_command",
+      "position": { "x": 620, "y": 160 },
+      "data": {
+        "type": "OllamaSelectorNode",
+        "label": "AI: Parse User Command",
+        "model": "llama3.2",
+        "temperature": 0.1,
+        "jsonMode": true,
+        "promptTemplate": "You are a WhatsApp automation assistant running on Windows. Parse the user command and extract intent.\n\nUser Command: {{input}}\n\nReturn ONLY a valid JSON object with these exact fields:\n{\n  \"action\": \"send_message\" OR \"voice_call\" OR \"video_call\",\n  \"phone\": \"<international format phone number, e.g. +919876543210>\",\n  \"message\": \"<message text, empty string if action is a call>\"\n}\n\nIf the command says 'call' without specifying video, use voice_call.\nIf it says 'video call', use video_call.\nIf it says 'send', 'text', 'message', use send_message.\nOnly return the JSON."
+      }
+    },
+    {
+      "id": "conditional_action",
+      "position": { "x": 920, "y": 160 },
+      "data": {
+        "type": "ConditionalRouterNode",
+        "label": "Route: Message or Call?",
+        "condition": "input.contains(\"send_message\")",
+        "description": "If action is send_message, routes to message branch (true). Otherwise routes to call branch (false)."
+      }
+    },
+    {
+      "id": "execute_wa_message",
+      "position": { "x": 1180, "y": 60 },
+      "data": {
+        "type": "ShellCommandNode",
+        "label": "Send WhatsApp Message (Windows)",
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-Command",
+          "$raw = '{{input}}'; $data = $raw | ConvertFrom-Json; $phone = $data.phone -replace '\\+',''; $msg = [System.Uri]::EscapeDataString($data.message); Start-Process \"whatsapp://send?phone=$phone&text=$msg\"; Start-Sleep -Seconds 3; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('%{ENTER}'); Write-Host \"Message sent to $($data.phone): $($data.message)\""
+        ],
+        "workingDir": null,
+        "description": "Opens WhatsApp Windows app via its whatsapp:// URI scheme to the chat with the contact and pre-fills the message. Then presses Alt+Enter to send. Requires WhatsApp for Windows to be installed."
+      }
+    },
+    {
+      "id": "execute_wa_voice_call",
+      "position": { "x": 1180, "y": 280 },
+      "data": {
+        "type": "ShellCommandNode",
+        "label": "WhatsApp Voice / Video Call (Windows)",
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-Command",
+          "$raw = '{{input}}'; $data = $raw | ConvertFrom-Json; $phone = $data.phone -replace '\\+',''; $action = $data.action; if ($action -eq 'video_call') { Start-Process \"whatsapp://videocall?phone=$phone\"; Write-Host \"Video call initiated to $($data.phone)\" } else { Start-Process \"whatsapp://call?phone=$phone\"; Write-Host \"Voice call initiated to $($data.phone)\" }"
+        ],
+        "workingDir": null,
+        "description": "Uses WhatsApp Windows deep links to start a voice or video call. whatsapp://call?phone=NUMBER for voice. whatsapp://videocall?phone=NUMBER for video."
+      }
+    },
+    {
+      "id": "notify_message",
+      "position": { "x": 1460, "y": 60 },
+      "data": {
+        "type": "NotifyDesktopNode",
+        "label": "Notify: Message Sent",
+        "title": "WhatsApp Automation",
+        "body": "{{input}}"
+      }
+    },
+    {
+      "id": "notify_call",
+      "position": { "x": 1460, "y": 280 },
+      "data": {
+        "type": "NotifyDesktopNode",
+        "label": "Notify: Call Started",
+        "title": "WhatsApp Automation",
+        "body": "{{input}}"
+      }
+    },
+    {
+      "id": "log_activity",
+      "position": { "x": 1720, "y": 160 },
+      "data": {
+        "type": "LocalFileWriterNode",
+        "label": "Log All Activity",
+        "outputPath": "./logs/whatsapp_log.txt",
+        "append": true
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "voice_trigger", "sourceHandle": null, "target": "merge_triggers", "targetHandle": null },
+    { "id": "e2", "source": "schedule_trigger", "sourceHandle": null, "target": "merge_triggers", "targetHandle": null },
+    { "id": "e3", "source": "merge_triggers", "sourceHandle": null, "target": "ai_parse_command", "targetHandle": null },
+    { "id": "e4", "source": "ai_parse_command", "sourceHandle": null, "target": "conditional_action", "targetHandle": null },
+    { "id": "e5", "source": "conditional_action", "sourceHandle": "true", "target": "execute_wa_message", "targetHandle": null },
+    { "id": "e6", "source": "conditional_action", "sourceHandle": "false", "target": "execute_wa_voice_call", "targetHandle": null },
+    { "id": "e7", "source": "execute_wa_message", "sourceHandle": null, "target": "notify_message", "targetHandle": null },
+    { "id": "e8", "source": "execute_wa_voice_call", "sourceHandle": null, "target": "notify_call", "targetHandle": null },
+    { "id": "e9", "source": "notify_message", "sourceHandle": null, "target": "log_activity", "targetHandle": null },
+    { "id": "e10", "source": "notify_call", "sourceHandle": null, "target": "log_activity", "targetHandle": null }
+  ]
+}

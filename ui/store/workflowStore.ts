@@ -137,7 +137,7 @@ function graphToCanvas(graph: Graph): { nodes: Node[]; edges: Edge[] } {
       id: n.id,
       type: type,
       position: n.position
-        ? { x: n.position[0], y: n.position[1] }
+        ? (Array.isArray(n.position) ? { x: n.position[0], y: n.position[1] } : { x: n.position.x, y: n.position.y })
         : { x: 100 + idx * 300, y: 150 + (idx % 2) * 50 },
       data: data,
     };
@@ -160,8 +160,8 @@ export function canvasToGraph(nodes: Node[], edges: Edge[]): any {
     version: 1,
     nodes: nodes.map((n) => ({
       id: n.id,
-      position: [Math.round(n.position.x), Math.round(n.position.y)],
-      ...n.data,
+      position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+      data: n.data,
     })),
     edges: edges.map((e) => ({
       id: e.id,

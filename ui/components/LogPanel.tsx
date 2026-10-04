@@ -93,7 +93,7 @@ export const LogPanel: React.FC = () => {
       <div
         style={{
           padding: '14px 18px',
-          borderBottom: '1px solid var(--border-subtle)',
+          borderBottom: '1px solid var(--neo-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -198,7 +198,7 @@ export const LogPanel: React.FC = () => {
                   style={{
                     padding: 12,
                     background: 'var(--bg-glass)',
-                    border: '1px solid var(--border-subtle)',
+                    border: '1px solid var(--neo-border)',
                     borderRadius: 8,
                     fontSize: 12,
                   }}

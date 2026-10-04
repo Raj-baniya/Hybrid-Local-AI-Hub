@@ -330,6 +330,17 @@ fn build_readme(graph: &Graph, manifest: &BundleManifest, source_path: &std::pat
                 NodeType::GetCpuUsageNode(_) => "GetCpuUsageNode",
                 NodeType::GetMemoryUsageNode(_) => "GetMemoryUsageNode",
                 NodeType::ListProcessesNode(_) => "ListProcessesNode",
+                NodeType::DocumentQaRAGNode(_) => "DocumentQaRAGNode",
+                NodeType::LocalVisionInterpreterNode(_) => "LocalVisionInterpreterNode",
+                NodeType::UIActionNode(_) => "UIActionNode",
+                NodeType::KillProcessNode(_) => "KillProcessNode",
+                NodeType::NativeWindowControlNode(_) => "NativeWindowControlNode",
+                NodeType::CallAgentNode(_) => "CallAgentNode",
+                NodeType::ScreenCaptureNode(_) => "ScreenCaptureNode",
+                NodeType::MouseKeyboardSimNode(_) => "MouseKeyboardSimNode",
+                NodeType::LocalOCRNode(_) => "LocalOCRNode",
+                NodeType::DuckDbQueryNode(_) => "DuckDbQueryNode",
+                NodeType::WasmSandboxNode(_) => "WasmSandboxNode",
             };
             format!("- **{}** ({})", n.id, type_name)
         })

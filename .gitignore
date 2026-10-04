@@ -33,3 +33,6 @@ output/
 # samples/ is intentionally tracked (workflow examples for users)
 
 src-tauri/logs/
+
+vite.config.ts.timestamp-*.mjs
+src-tauri/system_alert_log.txt

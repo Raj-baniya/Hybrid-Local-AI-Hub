@@ -308,7 +308,7 @@ export const Navbar: React.FC = () => {
       style={{
         height: 56,
         background: 'var(--bg-card)',
-        borderBottom: '1px solid var(--border-subtle)',
+        borderBottom: '1px solid var(--neo-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
